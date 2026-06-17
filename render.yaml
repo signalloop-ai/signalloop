@@ -12,6 +12,8 @@ services:
     envVars:
       - key: SIGNALLOOP_ENV
         value: pilot
+      - key: PYTHON_VERSION
+        value: 3.13.4
       - key: DATABASE_URL
         sync: false
       - key: PUBLIC_BASE_URL
