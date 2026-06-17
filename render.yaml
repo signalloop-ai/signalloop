@@ -24,6 +24,8 @@ services:
         value: gpt-5
       - key: CLERK_SECRET_KEY
         sync: false
+      - key: EXECUTION_BACKEND
+        value: http_worker
       - key: EXECUTION_WORKER_URL
         sync: false
       - key: ASSESSMENT_RUNTIME_IMAGE
@@ -32,6 +34,30 @@ services:
         value: "90"
       - key: WORKER_REQUEST_RETRIES
         value: "1"
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_ECS_CLUSTER
+        sync: false
+      - key: AWS_ECS_RUNNER_TASK_DEFINITION
+        sync: false
+      - key: AWS_ECS_RUNNER_CONTAINER
+        value: runner
+      - key: AWS_ECS_SUBNET_IDS
+        sync: false
+      - key: AWS_ECS_SECURITY_GROUP_IDS
+        sync: false
+      - key: AWS_ECS_ASSIGN_PUBLIC_IP
+        value: DISABLED
+      - key: AWS_ECS_WAITER_DELAY_SECONDS
+        value: "6"
+      - key: AWS_ECS_WAITER_MAX_ATTEMPTS
+        value: "20"
+      - key: SIGNALLOOP_RUN_BUCKET
+        sync: false
       - key: RATE_LIMIT_ENABLED
         value: "true"
       - key: RATE_LIMIT_PER_MINUTE

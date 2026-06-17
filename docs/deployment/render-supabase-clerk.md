@@ -107,6 +107,7 @@ CORS_ORIGINS=https://YOUR-WEB-SERVICE.onrender.com
 OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-5
 CLERK_SECRET_KEY=...
+EXECUTION_BACKEND=http_worker
 EXECUTION_WORKER_URL=https://YOUR-EXECUTION-RUNTIME
 ASSESSMENT_RUNTIME_IMAGE=signalloop-python-assessment:3.11
 WORKER_REQUEST_TIMEOUT_SECONDS=90
@@ -115,10 +116,11 @@ RATE_LIMIT_ENABLED=true
 RATE_LIMIT_PER_MINUTE=120
 ```
 
-For a controlled hosted smoke before ECS integration, `EXECUTION_WORKER_URL` can point
-to a trusted staging worker. Do not expose a raw worker as the long-term production
-candidate execution path. Production execution should use the ECS/Fargate runner path
-described in `docs/deployment/aws-ecs-fargate-execution.md`.
+For a controlled hosted smoke before AWS resources are ready, keep
+`EXECUTION_BACKEND=http_worker` and point `EXECUTION_WORKER_URL` to a trusted staging
+worker. Do not expose a raw worker as the long-term production candidate execution path.
+For production execution, set `EXECUTION_BACKEND=ecs_fargate` and use the ECS/Fargate
+runner path described in `docs/deployment/aws-ecs-fargate-execution.md`.
 
 ## Render Web Service
 

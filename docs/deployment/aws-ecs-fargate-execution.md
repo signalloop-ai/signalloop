@@ -17,14 +17,11 @@ Implemented scaffolding:
 - `infra/aws/ecs/task-definition.runner.template.json`
 - `infra/aws/ecs/run-task-overrides.example.json`
 - `infra/aws/ecs/README.md`
+- `apps/api/signalloop_api/execution.py` with `EXECUTION_BACKEND=ecs_fargate`
 
-Not implemented yet:
-
-- API provider that uploads payloads to S3, calls ECS `RunTask`, waits for completion,
-  reads output JSON, and persists the existing `TestRun` result shape.
-
-Until that API provider exists, hosted Render/API can only run candidate tests through a
-trusted HTTP worker configured by `EXECUTION_WORKER_URL`.
+Local development still defaults to `EXECUTION_BACKEND=http_worker`. Hosted production can
+switch to ECS/Fargate after the AWS resources below exist and the Render API env vars are
+set.
 
 ## AWS Values Needed
 
@@ -42,6 +39,8 @@ AWS_ECS_RUNNER_CONTAINER=runner
 AWS_ECS_SUBNET_IDS=subnet-abc,subnet-def
 AWS_ECS_SECURITY_GROUP_IDS=sg-abc
 AWS_ECS_ASSIGN_PUBLIC_IP=DISABLED
+AWS_ECS_WAITER_DELAY_SECONDS=6
+AWS_ECS_WAITER_MAX_ATTEMPTS=20
 SIGNALLOOP_RUN_BUCKET=
 ```
 
@@ -111,18 +110,25 @@ Expected result shape:
 }
 ```
 
-## API Integration To Add Next
+## Enable In Render API
 
-Add an execution provider in `apps/api` with this behavior:
+After AWS resources are ready, set the Render API service:
 
-1. Create a run id.
-2. Write input payload JSON to `s3://$SIGNALLOOP_RUN_BUCKET/runs/$RUN_ID/input.json`.
-3. Call ECS `RunTask` with overrides for:
-   - `SIGNALLOOP_RUNNER_INPUT`
-   - `SIGNALLOOP_RUNNER_OUTPUT`
-4. Wait for task completion with a timeout.
-5. Read `runs/$RUN_ID/output.json` from S3.
-6. Return the same result object currently produced by the local HTTP worker.
-7. Persist the result as the existing public or hidden `TestRun`.
+```env
+EXECUTION_BACKEND=ecs_fargate
+AWS_REGION=...
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_ECS_CLUSTER=...
+AWS_ECS_RUNNER_TASK_DEFINITION=signalloop-assessment-runner
+AWS_ECS_RUNNER_CONTAINER=runner
+AWS_ECS_SUBNET_IDS=subnet-abc,subnet-def
+AWS_ECS_SECURITY_GROUP_IDS=sg-abc
+AWS_ECS_ASSIGN_PUBLIC_IP=DISABLED
+SIGNALLOOP_RUN_BUCKET=...
+```
 
-Keep the local HTTP worker path as the default for development.
+The API writes payload JSON to S3, calls ECS `RunTask`, waits for task completion, reads
+the runner output JSON, and persists the result as the existing public or hidden `TestRun`.
+
+Keep `EXECUTION_BACKEND=http_worker` for local development.

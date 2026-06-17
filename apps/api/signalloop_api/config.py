@@ -36,6 +36,12 @@ def parse_int(value: str | None, *, default: int) -> int:
         return default
 
 
+def parse_csv(value: str | None) -> list[str]:
+    if value is None:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 class Settings:
     def __init__(self) -> None:
         api_dir = Path(__file__).resolve().parents[1]
@@ -51,10 +57,21 @@ class Settings:
         self.repo_root = Path(getenv("SIGNALLOOP_REPO_ROOT", str(repo_root))).resolve()
         self.assessment_packs_root = self.repo_root / "assessment_packs"
         self.public_base_url = getenv("PUBLIC_BASE_URL", "http://localhost:3000")
+        self.execution_backend = getenv("EXECUTION_BACKEND", "http_worker")
         self.execution_worker_url = getenv("EXECUTION_WORKER_URL", "http://localhost:9000")
         self.assessment_runtime_image = getenv("ASSESSMENT_RUNTIME_IMAGE", "signalloop-python-assessment:3.11")
         self.worker_request_timeout_seconds = parse_int(getenv("WORKER_REQUEST_TIMEOUT_SECONDS"), default=90)
         self.worker_request_retries = parse_int(getenv("WORKER_REQUEST_RETRIES"), default=1)
+        self.aws_region = getenv("AWS_REGION")
+        self.aws_ecs_cluster = getenv("AWS_ECS_CLUSTER")
+        self.aws_ecs_runner_task_definition = getenv("AWS_ECS_RUNNER_TASK_DEFINITION")
+        self.aws_ecs_runner_container = getenv("AWS_ECS_RUNNER_CONTAINER", "runner")
+        self.aws_ecs_subnet_ids = parse_csv(getenv("AWS_ECS_SUBNET_IDS"))
+        self.aws_ecs_security_group_ids = parse_csv(getenv("AWS_ECS_SECURITY_GROUP_IDS"))
+        self.aws_ecs_assign_public_ip = getenv("AWS_ECS_ASSIGN_PUBLIC_IP", "DISABLED")
+        self.aws_ecs_waiter_delay_seconds = parse_int(getenv("AWS_ECS_WAITER_DELAY_SECONDS"), default=6)
+        self.aws_ecs_waiter_max_attempts = parse_int(getenv("AWS_ECS_WAITER_MAX_ATTEMPTS"), default=20)
+        self.signalloop_run_bucket = getenv("SIGNALLOOP_RUN_BUCKET")
         self.openai_api_key = getenv("OPENAI_API_KEY")
         self.openai_model = getenv("OPENAI_MODEL", "gpt-5")
         self.clerk_secret_key = getenv("CLERK_SECRET_KEY")

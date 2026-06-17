@@ -11,7 +11,7 @@ from signalloop_api.assessment_files import load_candidate_files
 from signalloop_api.audit import record_audit_event
 from signalloop_api.config import settings
 from signalloop_api.database import get_session
-import httpx
+from signalloop_api.execution import execution_error_result, get_execution_provider
 from signalloop_api.models import AssessmentAttempt, AssessmentPack, CodeSnapshot, TestRun
 from signalloop_api.schemas import (
     AssessmentMetadata,
@@ -268,15 +268,9 @@ def run_public_tests(
     session.flush()
 
     try:
-        worker_response = httpx.post(
-            f"{settings.execution_worker_url}/run-public-tests",
-            json={"files": payload.files},
-            timeout=60,
-        )
-        worker_response.raise_for_status()
-        result = worker_response.json()
-    except (httpx.HTTPError, Exception) as exc:
-        result = {"status": "error", "exit_code": None, "stdout": "", "stderr": str(exc), "duration_ms": 0}
+        result = get_execution_provider().run_public(payload.files)
+    except Exception as exc:
+        result = execution_error_result(str(exc))
 
     test_run = TestRun(
         attempt_id=attempt.id,

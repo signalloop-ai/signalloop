@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,8 +9,8 @@ from sqlalchemy.orm import Session
 from signalloop_api.assessment_files import load_hidden_test_files
 from signalloop_api.attempts import resolve_repo_path
 from signalloop_api.audit import record_audit_event
-from signalloop_api.config import settings
 from signalloop_api.database import get_session
+from signalloop_api.execution import HTTPWorkerExecutionProvider, execution_error_result
 from signalloop_api.models import AssessmentAttempt, CodeSnapshot, FinalSubmission, TestRun
 from signalloop_api.schemas import FinalSubmissionRequest, FinalSubmissionResponse
 
@@ -26,40 +25,17 @@ class HiddenTestRunner(Protocol):
 
 class HTTPHiddenTestRunner:
     def run(self, files: dict[str, str], hidden_tests: dict[str, str]) -> dict:
-        last_error: httpx.HTTPError | None = None
-        for _ in range(settings.worker_request_retries + 1):
-            try:
-                response = httpx.post(
-                    f"{settings.execution_worker_url.rstrip('/')}/run-hidden-tests",
-                    json={
-                        "files": files,
-                        "hidden_tests": hidden_tests,
-                        "runtime_image": settings.assessment_runtime_image,
-                        "timeout_seconds": 60,
-                    },
-                    timeout=settings.worker_request_timeout_seconds,
-                )
-                response.raise_for_status()
-                return dict(response.json())
-            except httpx.HTTPError as exc:
-                last_error = exc
-        if last_error is not None:
-            raise last_error
-        raise RuntimeError("Worker request failed without an error")
+        return HTTPWorkerExecutionProvider().run_hidden(files, hidden_tests)
 
 
 def get_hidden_test_runner() -> HiddenTestRunner:
-    return HTTPHiddenTestRunner()
+    from signalloop_api.execution import get_execution_provider
+
+    return get_execution_provider()
 
 
 def hidden_test_error_result(message: str) -> dict:
-    return {
-        "status": "error",
-        "exit_code": None,
-        "stdout": "",
-        "stderr": message,
-        "duration_ms": 0,
-    }
+    return execution_error_result(message)
 
 
 def hidden_test_files_for_attempt(attempt: AssessmentAttempt) -> dict[str, str]:
@@ -138,7 +114,7 @@ def submit_final_attempt(
     try:
         hidden_tests = hidden_test_files_for_attempt(attempt)
         hidden_result = hidden_test_runner.run(payload.files, hidden_tests)
-    except (FileNotFoundError, httpx.HTTPError, ValueError) as exc:
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
         hidden_result = hidden_test_error_result(str(exc))
 
     hidden_test_run = persist_hidden_test_run(session, attempt, snapshot, hidden_result)

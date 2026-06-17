@@ -25,6 +25,7 @@ Phase 12: Documentation and Handoff.
 - ADR 0008 documenting the deterministic six-category MVP scoring rubric.
 - Render Blueprint scaffold for web/API deployment.
 - AWS ECS/Fargate runner scaffold for future production execution.
+- API-side execution provider switch with `EXECUTION_BACKEND=http_worker` for local/staging and `EXECUTION_BACKEND=ecs_fargate` for AWS ECS/Fargate.
 - Assessment design documentation.
 - Prompt policy documentation.
 - Report structure documentation.
@@ -61,7 +62,7 @@ Phase 12: Documentation and Handoff.
 ## What does not exist yet
 
 - Hosted Render/Supabase/Clerk integration test.
-- API-side AWS ECS/Fargate execution provider that uploads payloads to S3, starts ECS tasks, waits for completion, and reads runner output.
+- Hosted Render/Supabase/Clerk/AWS integration test.
 
 ## Next task
 
@@ -83,7 +84,7 @@ After local validation, continue with hosted deployment work using:
 
 `docs/deployment/render-supabase-clerk.md`
 
-ECS/Fargate runner scaffolding exists in `apps/runner` and `infra/aws/ecs`, but the API still defaults to `EXECUTION_WORKER_URL`. Do not rely on a raw public worker for production candidate execution; add the API-side ECS provider before production pilots with real candidates.
+ECS/Fargate runner scaffolding exists in `apps/runner` and `infra/aws/ecs`, and the API can switch to it with `EXECUTION_BACKEND=ecs_fargate`. Keep `EXECUTION_BACKEND=http_worker` locally. Do not rely on a raw public worker for production candidate execution.
 
 ## Notes for next coding agent
 

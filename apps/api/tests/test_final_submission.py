@@ -152,8 +152,8 @@ def test_http_hidden_test_runner_retries_transient_worker_errors(monkeypatch) ->
             raise httpx.ConnectError("temporary worker connection failure")
         return FakeResponse()
 
-    monkeypatch.setattr("signalloop_api.submissions.settings.worker_request_retries", 1)
-    monkeypatch.setattr("signalloop_api.submissions.httpx.post", fake_post)
+    monkeypatch.setattr("signalloop_api.execution.settings.worker_request_retries", 1)
+    monkeypatch.setattr("signalloop_api.execution.httpx.post", fake_post)
 
     result = HTTPHiddenTestRunner().run({"task_api/main.py": ""}, {"test_hidden.py": ""})
 

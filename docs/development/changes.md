@@ -53,8 +53,47 @@ for production execution without Docker-in-Docker.
 - Push the repo to GitHub and connect Render to that GitHub repository.
 - Create Supabase, Clerk, and Render service env vars from `.env.render-supabase.example`.
 - Create AWS ECR/S3/ECS/IAM resources.
-- Implement the API-side ECS execution provider before using Fargate for production
-  candidate execution.
+- Run hosted integration testing after AWS ECR/S3/ECS/IAM resources are created.
+
+---
+
+## 2026-06-17 — API ECS/Fargate Execution Provider
+
+**Why:** The deployment scaffold needed the API-side execution provider before production
+candidate execution can use AWS ECS/Fargate instead of a raw HTTP worker.
+
+**What changed:**
+
+- Added `apps/api/signalloop_api/execution.py` with a shared execution provider boundary.
+- Local/staging default remains `EXECUTION_BACKEND=http_worker`.
+- Production can use `EXECUTION_BACKEND=ecs_fargate`, which writes run payloads to S3,
+  calls ECS `RunTask`, waits for completion, reads runner output JSON from S3, and
+  returns the existing public/hidden test result shape.
+- Public and hidden test paths now use the shared provider.
+- Added AWS ECS env vars to templates and Render Blueprint.
+- Added a fake-client unit test for ECS provider behavior.
+
+**Files changed:**
+- `apps/api/signalloop_api/execution.py`
+- `apps/api/signalloop_api/config.py`
+- `apps/api/signalloop_api/attempts.py`
+- `apps/api/signalloop_api/submissions.py`
+- `apps/api/tests/test_execution.py`
+- `apps/api/tests/test_final_submission.py`
+- `apps/api/pyproject.toml`
+- `apps/api/uv.lock`
+- `.env.example`
+- `.env.local.example`
+- `.env.render-supabase.example`
+- `render.yaml`
+- `docs/deployment/aws-ecs-fargate-execution.md`
+- `docs/deployment/render-supabase-clerk.md`
+- `CURRENT_STATE.md`
+
+**Validation:**
+- `cd apps/api && uv run pytest` — 35 passed.
+- `cd apps/web && npm run typecheck` — passed.
+- `cd apps/web && npm run lint` — passed.
 
 ---
 
