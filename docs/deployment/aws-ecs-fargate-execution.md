@@ -64,10 +64,10 @@ aws ecr create-repository \
 aws ecr get-login-password --region "$AWS_REGION" \
   | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
 
-docker build -t signalloop-assessment-runner:latest apps/runner
-docker tag signalloop-assessment-runner:latest \
-  "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/signalloop-assessment-runner:latest"
-docker push "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/signalloop-assessment-runner:latest"
+docker buildx build --platform linux/amd64 \
+  -t "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/signalloop-assessment-runner:latest" \
+  --push \
+  apps/runner
 ```
 
 ## Validate Runner Locally
