@@ -37,8 +37,8 @@
       "Condition": {
         "StringLike": {
           "s3:prefix": [
-            "runner",
-            "runner/*"
+            "runs",
+            "runs/*"
           ]
         }
       }
@@ -52,7 +52,7 @@
         "s3:GetObjectAttributes",
         "s3:PutObject"
       ],
-      "Resource": "arn:aws:s3:::SIGNALLOOP_RUN_BUCKET/runner/*"
+      "Resource": "arn:aws:s3:::SIGNALLOOP_RUN_BUCKET/runs/*"
     }
   ]
 }

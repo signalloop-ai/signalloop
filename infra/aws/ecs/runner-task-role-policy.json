@@ -1,0 +1,30 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListRunnerRunsPrefixOnly",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::SIGNALLOOP_RUN_BUCKET",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "runs",
+            "runs/*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "ReadWriteRunnerRunObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:DeleteObject",
+        "s3:GetObject",
+        "s3:GetObjectAttributes",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::SIGNALLOOP_RUN_BUCKET/runs/*"
+    }
+  ]
+}
