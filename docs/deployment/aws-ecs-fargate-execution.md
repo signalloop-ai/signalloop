@@ -28,24 +28,24 @@ set.
 Ask AWS for or create:
 
 ```env
-AWS_REGION=
-AWS_ACCOUNT_ID=
+AWS_REGION=ap-south-1
+AWS_ACCOUNT_ID=ACCOUNT_ID
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
 AWS_ECR_RUNNER_REPOSITORY=signalloop-assessment-runner
-AWS_ECS_CLUSTER=
+AWS_ECS_CLUSTER=signalloop
 AWS_ECS_RUNNER_TASK_DEFINITION=signalloop-assessment-runner
 AWS_ECS_RUNNER_CONTAINER=runner
-AWS_ECS_SUBNET_IDS=subnet-abc,subnet-def
-AWS_ECS_SECURITY_GROUP_IDS=sg-abc
-AWS_ECS_ASSIGN_PUBLIC_IP=DISABLED
+AWS_ECS_SUBNET_IDS=subnet-REPLACE_ME,subnet-REPLACE_ME,subnet-REPLACE_ME
+AWS_ECS_SECURITY_GROUP_IDS=sg-REPLACE_ME
+AWS_ECS_ASSIGN_PUBLIC_IP=ENABLED
 AWS_ECS_WAITER_DELAY_SECONDS=6
 AWS_ECS_WAITER_MAX_ATTEMPTS=20
-SIGNALLOOP_RUN_BUCKET=
+SIGNALLOOP_RUN_BUCKET=signalloop-runner-payloads
 ```
 
-If the task runs in private subnets, add either NAT egress or VPC endpoints for ECR,
-CloudWatch Logs, and S3.
+The configured subnets are public default VPC subnets. The runner task security group has
+no inbound rules and uses outbound internet access for ECR, CloudWatch Logs, and S3.
 
 Use a narrowly scoped IAM user/access key for Render only if an OIDC-based integration is
 not available for your account. The policy should allow only the required ECS `RunTask`,
@@ -119,13 +119,13 @@ EXECUTION_BACKEND=ecs_fargate
 AWS_REGION=...
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
-AWS_ECS_CLUSTER=...
+AWS_ECS_CLUSTER=signalloop
 AWS_ECS_RUNNER_TASK_DEFINITION=signalloop-assessment-runner
 AWS_ECS_RUNNER_CONTAINER=runner
-AWS_ECS_SUBNET_IDS=subnet-abc,subnet-def
-AWS_ECS_SECURITY_GROUP_IDS=sg-abc
-AWS_ECS_ASSIGN_PUBLIC_IP=DISABLED
-SIGNALLOOP_RUN_BUCKET=...
+AWS_ECS_SUBNET_IDS=subnet-REPLACE_ME,subnet-REPLACE_ME,subnet-REPLACE_ME
+AWS_ECS_SECURITY_GROUP_IDS=sg-REPLACE_ME
+AWS_ECS_ASSIGN_PUBLIC_IP=ENABLED
+SIGNALLOOP_RUN_BUCKET=signalloop-runner-payloads
 ```
 
 The API writes payload JSON to S3, calls ECS `RunTask`, waits for task completion, reads
