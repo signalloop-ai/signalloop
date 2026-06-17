@@ -1,0 +1,17 @@
+{
+  "containerOverrides": [
+    {
+      "name": "runner",
+      "environment": [
+        {
+          "name": "SIGNALLOOP_RUNNER_INPUT",
+          "value": "s3://SIGNALLOOP_RUN_BUCKET/runs/RUN_ID/input.json"
+        },
+        {
+          "name": "SIGNALLOOP_RUNNER_OUTPUT",
+          "value": "s3://SIGNALLOOP_RUN_BUCKET/runs/RUN_ID/output.json"
+        }
+      ]
+    }
+  ]
+}

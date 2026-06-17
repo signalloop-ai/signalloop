@@ -1,0 +1,49 @@
+.venv/
+.venv-*/
+node_modules/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.playwright/
+playwright-report/
+test-results/
+.next/
+dist/
+build/
+*.tsbuildinfo
+.env
+.env.local
+.env.production
+.env.*.local
+.DS_Store
+*.pyc
+*.pyo
+*.pyd
+
+# Local agent/tooling state
+.claude/
+.opencode/
+.codex/
+.agents/
+
+# Logs and editor noise
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.idea/
+.vscode/
+
+# Test coverage and local databases
+.coverage
+coverage/
+htmlcov/
+*.db
+*.sqlite
+*.sqlite3
+
+# Local archives and generated handoff bundles
+*.zip
+*.tar
+*.tar.gz

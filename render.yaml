@@ -1,0 +1,52 @@
+services:
+  - type: web
+    name: signalloop-api
+    runtime: python
+    plan: starter
+    region: oregon
+    buildCommand: cd apps/api && pip install uv && uv sync --frozen
+    preDeployCommand: cd apps/api && uv run alembic upgrade head
+    startCommand: cd apps/api && uv run uvicorn signalloop_api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: SIGNALLOOP_ENV
+        value: pilot
+      - key: DATABASE_URL
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: EXECUTION_WORKER_URL
+        sync: false
+      - key: ASSESSMENT_RUNTIME_IMAGE
+        value: signalloop-python-assessment:3.11
+      - key: WORKER_REQUEST_TIMEOUT_SECONDS
+        value: "90"
+      - key: WORKER_REQUEST_RETRIES
+        value: "1"
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "120"
+
+  - type: web
+    name: signalloop-web
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: cd apps/web && npm ci && npm run build
+    startCommand: cd apps/web && npm run start -- -H 0.0.0.0 -p $PORT
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+        sync: false

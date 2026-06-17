@@ -1,0 +1,161 @@
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Protocol
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from signalloop_api.assessment_files import load_hidden_test_files
+from signalloop_api.attempts import resolve_repo_path
+from signalloop_api.audit import record_audit_event
+from signalloop_api.config import settings
+from signalloop_api.database import get_session
+from signalloop_api.models import AssessmentAttempt, CodeSnapshot, FinalSubmission, TestRun
+from signalloop_api.schemas import FinalSubmissionRequest, FinalSubmissionResponse
+
+
+router = APIRouter()
+
+
+class HiddenTestRunner(Protocol):
+    def run(self, files: dict[str, str], hidden_tests: dict[str, str]) -> dict:
+        ...
+
+
+class HTTPHiddenTestRunner:
+    def run(self, files: dict[str, str], hidden_tests: dict[str, str]) -> dict:
+        last_error: httpx.HTTPError | None = None
+        for _ in range(settings.worker_request_retries + 1):
+            try:
+                response = httpx.post(
+                    f"{settings.execution_worker_url.rstrip('/')}/run-hidden-tests",
+                    json={
+                        "files": files,
+                        "hidden_tests": hidden_tests,
+                        "runtime_image": settings.assessment_runtime_image,
+                        "timeout_seconds": 60,
+                    },
+                    timeout=settings.worker_request_timeout_seconds,
+                )
+                response.raise_for_status()
+                return dict(response.json())
+            except httpx.HTTPError as exc:
+                last_error = exc
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Worker request failed without an error")
+
+
+def get_hidden_test_runner() -> HiddenTestRunner:
+    return HTTPHiddenTestRunner()
+
+
+def hidden_test_error_result(message: str) -> dict:
+    return {
+        "status": "error",
+        "exit_code": None,
+        "stdout": "",
+        "stderr": message,
+        "duration_ms": 0,
+    }
+
+
+def hidden_test_files_for_attempt(attempt: AssessmentAttempt) -> dict[str, str]:
+    evaluator_path = resolve_repo_path(attempt.assessment_pack.evaluator_path)
+    return load_hidden_test_files(Path(evaluator_path))
+
+
+def persist_hidden_test_run(
+    session: Session,
+    attempt: AssessmentAttempt,
+    snapshot: CodeSnapshot,
+    result: dict,
+) -> TestRun:
+    test_run = TestRun(
+        attempt_id=attempt.id,
+        code_snapshot_id=snapshot.id,
+        run_type="hidden",
+        status=str(result.get("status", "error")),
+        results=result,
+        stdout=result.get("stdout"),
+        stderr=result.get("stderr"),
+        duration_ms=result.get("duration_ms"),
+    )
+    session.add(test_run)
+    session.commit()
+    session.refresh(test_run)
+    return test_run
+
+
+@router.post(
+    "/candidate/invites/{invite_token}/submit",
+    response_model=FinalSubmissionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def submit_final_attempt(
+    invite_token: str,
+    payload: FinalSubmissionRequest,
+    session: Session = Depends(get_session),
+    hidden_test_runner: HiddenTestRunner = Depends(get_hidden_test_runner),
+) -> FinalSubmissionResponse:
+    attempt = session.scalar(
+        select(AssessmentAttempt).where(AssessmentAttempt.invite_token == invite_token)
+    )
+    if attempt is None:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    if attempt.status == "submitted" or attempt.final_submission is not None:
+        raise HTTPException(status_code=409, detail="Final submission is immutable")
+
+    submitted_at = datetime.now(timezone.utc)
+    snapshot = CodeSnapshot(attempt_id=attempt.id, kind="final_submission", files=payload.files)
+    session.add(snapshot)
+    session.flush()
+
+    final_submission = FinalSubmission(
+        attempt_id=attempt.id,
+        code_snapshot_id=snapshot.id,
+        final_explanation=payload.final_explanation,
+        decision_log=payload.decision_log,
+        submitted_at=submitted_at,
+    )
+    attempt.status = "submitted"
+    attempt.submitted_at = submitted_at
+    session.add(final_submission)
+    record_audit_event(
+        session,
+        "submission.created",
+        actor_type="candidate",
+        attempt_id=attempt.id,
+        event_metadata={"file_count": len(payload.files)},
+    )
+    session.commit()
+    session.refresh(snapshot)
+    session.refresh(final_submission)
+    session.refresh(attempt)
+
+    try:
+        hidden_tests = hidden_test_files_for_attempt(attempt)
+        hidden_result = hidden_test_runner.run(payload.files, hidden_tests)
+    except (FileNotFoundError, httpx.HTTPError, ValueError) as exc:
+        hidden_result = hidden_test_error_result(str(exc))
+
+    hidden_test_run = persist_hidden_test_run(session, attempt, snapshot, hidden_result)
+    record_audit_event(
+        session,
+        "hidden_tests.completed",
+        actor_type="system",
+        attempt_id=attempt.id,
+        event_metadata={"status": hidden_test_run.status, "test_run_id": hidden_test_run.id},
+    )
+    session.commit()
+
+    return FinalSubmissionResponse(
+        attempt_id=attempt.id,
+        status=attempt.status,
+        submission_id=final_submission.id,
+        snapshot_id=snapshot.id,
+        hidden_test_run_id=hidden_test_run.id,
+        hidden_test_status=hidden_test_run.status,
+    )

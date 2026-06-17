@@ -1,0 +1,34 @@
+{
+  "name": "signalloop-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^7.5.3",
+    "@monaco-editor/react": "4.7.0",
+    "lucide-react": "0.468.0",
+    "next": "^16.2.9",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@types/node": "22.10.2",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "9.17.0",
+    "eslint-config-next": "^16.2.9",
+    "typescript": "5.7.2"
+  },
+  "overrides": {
+    "dompurify": "3.4.10",
+    "postcss": "8.5.15"
+  }
+}
