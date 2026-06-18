@@ -8,7 +8,7 @@ services:
     preDeployCommand: cd apps/api && uv run alembic upgrade head
     startCommand: cd apps/api && uv run uvicorn signalloop_api.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
-    autoDeployTrigger: checksPass
+    autoDeployTrigger: commit
     envVars:
       - key: SIGNALLOOP_ENV
         value: pilot
@@ -72,7 +72,7 @@ services:
     region: oregon
     buildCommand: cd apps/web && npm ci && npm run build
     startCommand: cd apps/web && npm run start -- -H 0.0.0.0 -p $PORT
-    autoDeployTrigger: checksPass
+    autoDeployTrigger: commit
     envVars:
       - key: NEXT_PUBLIC_API_URL
         sync: false
