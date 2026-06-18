@@ -28,6 +28,11 @@ class FakeHiddenTestRunner:
         }
 
 
+class RaisingHiddenTestRunner:
+    def run(self, files: dict[str, str], hidden_tests: dict[str, str]) -> dict:
+        raise RuntimeError("ecs hidden run failed")
+
+
 @pytest.fixture()
 def hidden_runner() -> FakeHiddenTestRunner:
     return FakeHiddenTestRunner()
@@ -134,6 +139,47 @@ def test_final_submission_is_immutable_and_blocks_later_snapshots(client: TestCl
     assert second.status_code == 409
     assert second.json()["detail"] == "Final submission is immutable"
     assert snapshot.status_code == 409
+
+
+def test_final_submission_persists_hidden_error_when_runner_raises(
+    session_factory: sessionmaker[Session],
+) -> None:
+    def override_get_session() -> Generator[Session, None, None]:
+        session = session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_hidden_test_runner] = lambda: RaisingHiddenTestRunner()
+
+    with TestClient(app) as client:
+        token = create_attempt(client)
+        response = client.post(
+            f"/candidate/invites/{token}/submit",
+            json={
+                "files": {"task_api/main.py": "print('final')"},
+                "final_explanation": "Submitted with infrastructure failure handled.",
+                "decision_log": "Runner error should be captured.",
+            },
+        )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "submitted"
+    assert body["hidden_test_status"] == "error"
+
+    with session_factory() as session:
+        attempt = session.scalar(select(AssessmentAttempt).where(AssessmentAttempt.invite_token == token))
+        assert attempt is not None
+        hidden_run = session.scalar(select(TestRun).where(TestRun.attempt_id == attempt.id))
+        assert hidden_run is not None
+        assert hidden_run.run_type == "hidden"
+        assert hidden_run.status == "error"
+        assert hidden_run.stderr == "ecs hidden run failed"
 
 
 def test_http_hidden_test_runner_retries_transient_worker_errors(monkeypatch) -> None:

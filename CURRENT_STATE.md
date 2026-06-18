@@ -2,7 +2,7 @@
 
 ## Project status
 
-Phase 12 Documentation and Handoff is complete. The MVP is ready for local end-to-end validation using the handoff docs before moving to hosted Render/Supabase/Clerk deployment and AWS ECS/Fargate execution work.
+Phase 12 Documentation and Handoff is complete. Local end-to-end validation is complete enough to proceed with hosted pilot validation. Render web/API and Supabase are responding. AWS ECS/Fargate public execution is now working end-to-end. Final submission exposed a hosted hidden-evaluation failure path; the API is fixed locally to persist hidden execution errors instead of returning 500 after marking an attempt submitted.
 
 ## Current phase
 
@@ -61,8 +61,7 @@ Phase 12: Documentation and Handoff.
 
 ## What does not exist yet
 
-- Hosted Render/Supabase/Clerk integration test.
-- Hosted Render/Supabase/Clerk/AWS integration test.
+- Successful hosted Render/Supabase/Clerk/AWS final-submission/report test. Hosted public execution now works end-to-end through Render API, S3, ECS/Fargate, runner output, and API persistence. Hosted final submission still returned 500 and left the attempt submitted without a hidden run; the API is fixed locally and must be deployed to Render before rerunning final submission/report validation.
 
 ## Next task
 
@@ -80,11 +79,26 @@ A first automated e2e validation round was completed on 2026-06-17. Three bugs w
 
 All automated checks now pass per the latest validation notes: API tests, worker tests, web typecheck/lint, and 2 Playwright e2e tests pass (1 skipped by design). A follow-up docs/code review on 2026-06-17 confirmed `cd apps/api && uv run pytest` reports 34 passed and `cd apps/worker && uv run pytest` reports 22 passed.
 
-After local validation, continue with hosted deployment work using:
+Hosted deployment work is now in progress using:
 
 `docs/deployment/render-supabase-clerk.md`
 
 ECS/Fargate runner scaffolding exists in `apps/runner` and `infra/aws/ecs`, and the API can switch to it with `EXECUTION_BACKEND=ecs_fargate`. Keep `EXECUTION_BACKEND=http_worker` locally. Do not rely on a raw public worker for production candidate execution.
+
+Hosted smoke on 2026-06-17:
+
+- `https://signalloop-api.onrender.com/health` returned 200.
+- `https://signalloop-web.onrender.com` returned 200.
+- Supabase-backed attempt listing worked.
+- Hosted invite creation and candidate workspace loading worked.
+- Public test execution initially failed with AWS `AccessDenied` for `s3:PutObject` by IAM user `signalloop-render-api` on `s3://SIGNALLOOP_RUN_BUCKET/runs/...`.
+- After fixing the `runs/*` S3 permission, a fresh public test run waited for ECS/Fargate and then failed with S3 `NoSuchKey` while reading `runs/{run_id}/output.json`; check runner task logs and task-role S3 permissions next.
+- After pushing a linux/amd64 image, a fresh public test run returned ECS pytest output but failed with `ModuleNotFoundError: No module named 'fastapi'`; `apps/runner/Dockerfile` now installs `fastapi`, `httpx`, and `uvicorn` to match the local assessment image. Rebuild and push the runner image before the next hosted smoke.
+- After pushing the dependency-fixed runner image, hosted public test execution worked end-to-end. Unchanged starter code returned the expected public result: 2 passed, 2 failed.
+- A hosted submission attempt was marked `submitted`, but hidden evaluation was not persisted after the UI submit wait timed out; generated report showed hidden tests as `missing`.
+- A second hosted submission attempt returned generic 500 after public execution started working. Local hidden runner reproduction returned valid failed hidden-test output, so `apps/api/signalloop_api/submissions.py` now catches all hidden-evaluation exceptions and persists a hidden `error` result instead of leaving submission in a partial state.
+- `cd apps/api && uv run pytest` reports 36 passed with the submission hardening.
+- Employer report rendering worked for the generated report.
 
 ## Notes for next coding agent
 

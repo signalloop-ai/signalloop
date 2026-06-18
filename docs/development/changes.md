@@ -5,6 +5,95 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-06-17 — Hosted Render/Supabase/AWS E2E Smoke Findings
+
+**Why:** First hosted e2e smoke was run against:
+
+- API: `https://signalloop-api.onrender.com`
+- Web: `https://signalloop-web.onrender.com`
+
+**What was verified:**
+
+- API `/health` returned 200.
+- Web root returned 200.
+- API could query the Supabase-backed attempt list.
+- Hosted invite creation worked and generated a web invite URL.
+- Candidate invite opened against the deployed web app with no browser console errors.
+- Candidate workspace loaded assessment files and the rules gate.
+- Employer report page rendered a generated report with no browser console errors.
+
+**Findings:**
+
+1. Production execution is blocked by AWS IAM.
+   - Public test execution returned `AccessDenied` on `s3:PutObject`.
+   - The Render API IAM user `signalloop-render-api` cannot write run payloads to
+     `s3://SIGNALLOOP_RUN_BUCKET/runs/...`.
+   - ECS did not start because the API failed before `RunTask`.
+2. Hosted final submission can leave an attempt submitted without a hidden test run.
+   - The UI submit request timed out while waiting for the hidden evaluation status.
+   - The API attempt state became `submitted`.
+   - Evidence report generation succeeded afterward, but hidden tests showed `missing`.
+   - Follow-up: make submission/hidden evaluation atomic enough for MVP, or store a
+     pending/error hidden test run if execution fails or the request is interrupted.
+
+**Files changed:**
+
+- `docs/development/changes.md`
+- `CURRENT_STATE.md`
+
+**Follow-up items:**
+
+- Add least-privilege S3 permissions for the Render API IAM user.
+- Confirm ECS `RunTask`, `DescribeTasks`, and `iam:PassRole` permissions after S3 is fixed.
+- Confirm the ECS task role can read/write the same S3 run prefix.
+- Re-run hosted public tests, final submission, and report generation.
+
+**Update after S3 input permission fix:**
+
+- A fresh hosted attempt was created and public test execution no longer failed on
+  `s3:PutObject`.
+- The request waited for the ECS/Fargate task path and then failed with S3 `NoSuchKey`
+  while reading the expected `runs/{run_id}/output.json`.
+- This means the API can write the input payload and reach the wait/read stage, but the
+  runner task did not produce the expected output object.
+- Next check CloudWatch logs for `/ecs/signalloop-assessment-runner` and verify the ECS
+  task role can read and write `arn:aws:s3:::SIGNALLOOP_RUN_BUCKET/runs/*`.
+
+**Update after linux/amd64 runner image fix:**
+
+- A fresh hosted attempt was created and public test execution returned a real pytest
+  result from ECS/Fargate.
+- ECS runner output was successfully written to S3 and read by the API.
+- The run failed during pytest collection because the Fargate runner image had `pytest`
+  and `boto3`, but did not include the assessment runtime dependencies:
+  `fastapi`, `httpx`, and `uvicorn`.
+- Fixed `apps/runner/Dockerfile` to install the same candidate runtime dependencies used
+  by the local Docker assessment image.
+- Local Docker smoke with a FastAPI `TestClient` test now passes inside
+  `signalloop-assessment-runner:local`.
+- Follow-up: rebuild and push the runner image with `--platform linux/amd64`, then rerun
+  the hosted public test, final submission, and report flow.
+
+**Update after runner dependency image push:**
+
+- A fresh hosted attempt was created on 2026-06-18.
+- Hosted public test execution now works end-to-end through Render API, S3, ECS/Fargate,
+  runner output, and API persistence.
+- Public test result on unchanged starter code was expected: 2 passed, 2 failed.
+- Final submission still returned a generic API 500 while the attempt was marked
+  `submitted`, leaving no hidden test run/report for that attempt.
+- Local hidden-run reproduction returns a valid failed hidden-test result, so the hosted
+  failure is likely an uncaught AWS/runtime exception in the hidden-evaluation path.
+- Fixed `apps/api/signalloop_api/submissions.py` to convert any hidden-evaluation
+  exception into a persisted hidden test `error` result instead of returning 500 after
+  the attempt is submitted.
+- Added regression coverage in `apps/api/tests/test_final_submission.py`.
+- `cd apps/api && uv run pytest` now reports 36 passed.
+- Follow-up: deploy this API fix to Render, then rerun final submission and report
+  generation on a fresh hosted attempt.
+
+---
+
 ## 2026-06-17 — Hosted Deployment Scaffold: Render, Supabase, and ECS/Fargate
 
 **Why:** Local validation is far enough along to prepare the external deployment path:

@@ -114,7 +114,7 @@ def submit_final_attempt(
     try:
         hidden_tests = hidden_test_files_for_attempt(attempt)
         hidden_result = hidden_test_runner.run(payload.files, hidden_tests)
-    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+    except Exception as exc:
         hidden_result = hidden_test_error_result(str(exc))
 
     hidden_test_run = persist_hidden_test_run(session, attempt, snapshot, hidden_result)
