@@ -92,6 +92,84 @@ post-MVP validation. Read this before touching the files listed under each entry
 - Follow-up: deploy this API fix to Render, then rerun final submission and report
   generation on a fresh hosted attempt.
 
+**Update after Render API redeploy with submission hardening:**
+
+- A fresh hosted attempt was created on 2026-06-18.
+- Hosted public execution still works end-to-end and returned the expected unchanged
+  starter result: 2 passed, 2 failed.
+- Final submission now returns 201 instead of a generic 500.
+- A hidden `TestRun` is persisted and linked to the submission.
+- Evidence report generation succeeds and renders in the hosted employer report page.
+- The hidden run status is currently `error`, not a real hidden pytest `failed` result.
+  The report endpoint does not expose hidden stderr, so the next step is checking Render
+  API logs or adding an internal diagnostics path to identify the hidden-run exception.
+
+**Update after hidden-test path-resolution deploy:**
+
+- A fresh hosted attempt was created on 2026-06-18 after deploying the fix that resolves
+  evaluator hidden tests from the current pack config before falling back to the stored
+  DB path.
+- Hosted public execution still works end-to-end and returned the expected unchanged
+  starter result: 2 passed, 2 failed.
+- Final submission returned 201 and persisted a hidden `TestRun`.
+- Hidden status still persisted as `error`; evidence report generation succeeded but
+  hidden tests still showed `collected: 0`, `passed: 0`, `failed: 0`, `status: error`.
+- The path-resolution fix was therefore not sufficient, or the deployed API still cannot
+  complete the hidden-run setup for another reason. Need Render API logs or an internal
+  diagnostics endpoint/temporary admin check that exposes the hidden-run error for
+  attempt 6/test run 9.
+
+**Update after local DB check and hidden logging patch:**
+
+- Local `.env` points at `localhost:5432/signalloop`, not the hosted Supabase database
+  used by Render, so querying `test_runs.id = 9` locally did not inspect the hosted
+  hidden run. That local row was a public test run.
+- Added Render/API-side logging around hidden test loading and hidden evaluation:
+  configured vs stored evaluator path fallback, hidden test count, runner start,
+  runner completion, and exception traceback before error-result persistence.
+- No hidden test source content is logged.
+- `cd apps/api && uv run pytest` reports 37 passed.
+- Follow-up: deploy this logging patch, submit a fresh hosted attempt, then inspect Render
+  API logs around final submission to identify the exact hidden-run exception.
+
+**Update after hidden runner adapter fix:**
+
+- Root cause found from Render/API logs: `submit_final_attempt()` expected the hidden
+  runner dependency to expose `.run(...)`, but `get_hidden_test_runner()` was returning
+  `ECSFargateExecutionProvider`, which exposes `.run_hidden(...)`.
+- Fix deployed: hidden execution now uses an adapter that calls
+  `get_execution_provider().run_hidden(...)`.
+- Fresh hosted attempt 7 validated the full hosted path:
+  - public ECS/Fargate execution returned expected unchanged-starter result: 2 passed,
+    2 failed,
+  - final submission returned 201 with `hidden_test_status: failed`,
+  - hidden ECS/Fargate execution collected 6 tests, passed 1, failed 5,
+  - evidence report generation returned 201 with score 26 and recommendation
+    `do_not_advance`,
+  - hosted employer report page rendered without browser console errors.
+
+**Full validation round before user pilot testing:**
+
+- Local automated checks:
+  - `cd apps/api && uv run pytest` -> 38 passed,
+  - `cd apps/worker && uv run pytest` -> 22 passed,
+  - `cd apps/web && npm run typecheck` -> passed,
+  - `cd apps/web && npm run lint` -> passed,
+  - `cd apps/web && npm run build` -> passed,
+  - `cd apps/web && npm run test:e2e` -> 2 passed, 1 skipped.
+- Updated stale Playwright assertions to match current UI copy and duplicate report text:
+  candidate hidden status text and employer report summary assertion.
+- Hosted browser-level e2e with fresh attempt 8:
+  - candidate invite loaded,
+  - public tests ran from hosted web UI through ECS/Fargate,
+  - final submission ran hidden tests through ECS/Fargate,
+  - evidence report generated with score 26 and recommendation `do_not_advance`,
+  - hidden summary was collected 6, passed 1, failed 5,
+  - hosted report page rendered without browser console errors.
+- Final hosted checks:
+  - `https://signalloop-api.onrender.com/health` returned 200,
+  - hosted employer portal rendered Clerk sign-in state without browser console errors.
+
 ---
 
 ## 2026-06-17 — Hosted Deployment Scaffold: Render, Supabase, and ECS/Fargate

@@ -103,7 +103,7 @@ test("candidate can open, edit, run tests, and submit locally", async ({ page })
   await page.getByRole("button", { name: "Run Tests" }).click();
   await expect(page.getByText("status: passed")).toBeVisible();
   await expect(page.getByText("1 passed")).toBeVisible();
-  await expect(page.getByText(/6 seeded behaviors evaluated beyond these public tests/)).toBeVisible();
+  await expect(page.getByText(/6 additional behaviors are evaluated beyond these public tests/)).toBeVisible();
 
   await page.getByLabel("Ask about the selected file or public test output").fill("Find all bugs");
   await page.getByRole("button", { name: "Ask", exact: true }).click();
@@ -116,6 +116,6 @@ test("candidate can open, edit, run tests, and submit locally", async ({ page })
   await page.getByLabel("Decision log").fill("Chose explicit authorization behavior.");
   await page.getByRole("button", { name: "Submit" }).click();
   await expect(page.getByText("submitted", { exact: true })).toBeVisible();
-  await expect(page.getByText("Hidden evaluation recorded with status: failed")).toBeVisible();
+  await expect(page.getByText("Some hidden tests failed.").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Run Tests" })).toBeDisabled();
 });

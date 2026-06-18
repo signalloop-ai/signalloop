@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 from typing import Protocol
 
@@ -16,6 +17,7 @@ from signalloop_api.schemas import FinalSubmissionRequest, FinalSubmissionRespon
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class HiddenTestRunner(Protocol):
@@ -49,10 +51,36 @@ def hidden_test_files_for_attempt(attempt: AssessmentAttempt) -> dict[str, str]:
     if configured_path:
         evaluator_path = resolve_repo_path(configured_path)
         if evaluator_path.is_dir():
-            return load_hidden_test_files(evaluator_path)
+            hidden_tests = load_hidden_test_files(evaluator_path)
+            logger.info(
+                "Loaded hidden tests from configured pack path",
+                extra={
+                    "attempt_id": attempt.id,
+                    "assessment_pack_slug": attempt.assessment_pack.slug,
+                    "hidden_test_count": len(hidden_tests),
+                },
+            )
+            return hidden_tests
+        logger.warning(
+            "Configured evaluator path is unavailable; falling back to stored assessment pack path",
+            extra={
+                "attempt_id": attempt.id,
+                "assessment_pack_slug": attempt.assessment_pack.slug,
+                "configured_evaluator_path": str(evaluator_path),
+            },
+        )
 
     evaluator_path = resolve_repo_path(attempt.assessment_pack.evaluator_path)
-    return load_hidden_test_files(Path(evaluator_path))
+    hidden_tests = load_hidden_test_files(Path(evaluator_path))
+    logger.info(
+        "Loaded hidden tests from stored assessment pack path",
+        extra={
+            "attempt_id": attempt.id,
+            "assessment_pack_slug": attempt.assessment_pack.slug,
+            "hidden_test_count": len(hidden_tests),
+        },
+    )
+    return hidden_tests
 
 
 def persist_hidden_test_run(
@@ -125,8 +153,28 @@ def submit_final_attempt(
 
     try:
         hidden_tests = hidden_test_files_for_attempt(attempt)
+        logger.info(
+            "Starting hidden evaluation",
+            extra={
+                "attempt_id": attempt.id,
+                "hidden_test_count": len(hidden_tests),
+                "file_count": len(payload.files),
+            },
+        )
         hidden_result = hidden_test_runner.run(payload.files, hidden_tests)
+        logger.info(
+            "Hidden evaluation completed",
+            extra={
+                "attempt_id": attempt.id,
+                "hidden_status": hidden_result.get("status"),
+                "duration_ms": hidden_result.get("duration_ms"),
+            },
+        )
     except Exception as exc:
+        logger.exception(
+            "Hidden evaluation failed before result persistence",
+            extra={"attempt_id": attempt.id},
+        )
         hidden_result = hidden_test_error_result(str(exc))
 
     hidden_test_run = persist_hidden_test_run(session, attempt, snapshot, hidden_result)

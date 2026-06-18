@@ -184,7 +184,7 @@ test("employer can log in locally, create an invite, and view a report", async (
 
   await page.getByRole("link", { name: "View" }).nth(0).click();
   await expect(page.getByRole("heading", { name: "Evidence Report" })).toBeVisible();
-  await expect(page.getByText("Candidate fixed core validation")).toBeVisible();
+  await expect(page.getByText("Candidate fixed core validation").first()).toBeVisible();
   await expect(page.getByText("Public test coverage")).toBeVisible();
   await expect(page.getByText("Public test results")).toBeVisible();
   await expect(page.getByText("How did you choose the authorization response behavior?")).toBeVisible();

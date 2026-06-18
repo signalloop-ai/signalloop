@@ -2,7 +2,7 @@
 
 ## Project status
 
-Phase 12 Documentation and Handoff is complete. Local end-to-end validation is complete enough to proceed with hosted pilot validation. Render web/API and Supabase are responding. AWS ECS/Fargate public execution is now working end-to-end. Final submission exposed a hosted hidden-evaluation failure path; the API is fixed locally to persist hidden execution errors instead of returning 500 after marking an attempt submitted.
+Phase 12 Documentation and Handoff is complete. Local and hosted MVP validation are complete enough for pilot use. Render web/API, Supabase persistence, Clerk-gated employer portal, and AWS ECS/Fargate public/hidden execution have been validated end-to-end, including a hosted browser-level candidate submission and employer report flow.
 
 ## Current phase
 
@@ -61,7 +61,7 @@ Phase 12: Documentation and Handoff.
 
 ## What does not exist yet
 
-- Successful hosted Render/Supabase/Clerk/AWS final-submission/report test. Hosted public execution now works end-to-end through Render API, S3, ECS/Fargate, runner output, and API persistence. Hosted final submission still returned 500 and left the attempt submitted without a hidden run; the API is fixed locally and must be deployed to Render before rerunning final submission/report validation.
+- Production hardening beyond pilot scope: hosted public execution, final submission, hidden execution, report generation, and employer report rendering now work end-to-end. Remaining work is polish/hardening rather than unblocking the MVP flow.
 
 ## Next task
 
@@ -98,6 +98,13 @@ Hosted smoke on 2026-06-17:
 - A hosted submission attempt was marked `submitted`, but hidden evaluation was not persisted after the UI submit wait timed out; generated report showed hidden tests as `missing`.
 - A second hosted submission attempt returned generic 500 after public execution started working. Local hidden runner reproduction returned valid failed hidden-test output, so `apps/api/signalloop_api/submissions.py` now catches all hidden-evaluation exceptions and persists a hidden `error` result instead of leaving submission in a partial state.
 - `cd apps/api && uv run pytest` reports 36 passed with the submission hardening.
+- After Render API redeploy, hosted final submission returned 201 with `hidden_test_status: error`, report generation returned 201 with score 21 and recommendation `do_not_advance`, and the hosted employer report page rendered without console errors.
+- After deploying the hidden-test path-resolution fix, a fresh hosted attempt still returned `hidden_test_status: error`; report generation returned 201 with hidden summary `collected: 0`, `passed: 0`, `failed: 0`, `status: error`.
+- Local `.env` currently points at `localhost:5432/signalloop`, so direct local SQL queries do not inspect the hosted Supabase database used by Render.
+- Added logging around hidden test path resolution, hidden test count, hidden runner start/completion, and hidden exception tracebacks. Deploy this logging patch and inspect Render API logs on the next fresh hosted submission.
+- Root cause was the hidden runner dependency: `submit_final_attempt()` expected `.run(...)`, while `ECSFargateExecutionProvider` exposes `.run_hidden(...)`. After deploying the adapter fix, fresh hosted attempt 7 returned `hidden_test_status: failed` with hidden summary `collected: 6`, `passed: 1`, `failed: 5`.
+- Hosted report generation for attempt 7 returned score 26 and recommendation `do_not_advance`; the hosted employer report page rendered without browser console errors.
+- Full pre-user-testing validation on 2026-06-18 passed: API tests 38 passed, worker tests 22 passed, web typecheck/lint/build passed, Playwright e2e 2 passed/1 skipped, hosted browser-level attempt 8 completed public tests, final submission, hidden tests, report generation, and hosted report rendering with no browser console errors.
 - Employer report rendering worked for the generated report.
 
 ## Notes for next coding agent
