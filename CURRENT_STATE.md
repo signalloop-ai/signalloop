@@ -105,6 +105,7 @@ Hosted smoke on 2026-06-17:
 - Root cause was the hidden runner dependency: `submit_final_attempt()` expected `.run(...)`, while `ECSFargateExecutionProvider` exposes `.run_hidden(...)`. After deploying the adapter fix, fresh hosted attempt 7 returned `hidden_test_status: failed` with hidden summary `collected: 6`, `passed: 1`, `failed: 5`.
 - Hosted report generation for attempt 7 returned score 26 and recommendation `do_not_advance`; the hosted employer report page rendered without browser console errors.
 - Full pre-user-testing validation on 2026-06-18 passed: API tests 38 passed, worker tests 22 passed, web typecheck/lint/build passed, Playwright e2e 2 passed/1 skipped, hosted browser-level attempt 8 completed public tests, final submission, hidden tests, report generation, and hosted report rendering with no browser console errors.
+- UX follow-up: public test/final submit latency is expected from the per-run ECS/Fargate task lifecycle. The web app now shows non-blocking inline progress messages while tests/submission are running, and the root route redirects directly to `/employer` to remove the extra landing screen before Clerk login.
 - Employer report rendering worked for the generated report.
 
 ## Notes for next coding agent

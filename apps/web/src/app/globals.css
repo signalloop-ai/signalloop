@@ -486,7 +486,8 @@ button:disabled {
 
 .submission-status,
 .submission-error,
-.submission-help {
+.submission-help,
+.operation-status {
   font-size: 13px;
   line-height: 1.45;
   margin: 0;
@@ -494,6 +495,15 @@ button:disabled {
 
 .submission-status {
   color: var(--accent-dark);
+}
+
+.operation-status {
+  background: #eef6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  color: #1d4ed8;
+  max-width: 520px;
+  padding: 6px 8px;
 }
 
 .submission-error {

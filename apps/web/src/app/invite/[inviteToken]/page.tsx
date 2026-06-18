@@ -172,6 +172,13 @@ export default function CandidateWorkspace() {
     window.setTimeout(() => finalExplanationRef.current?.focus(), 0);
   }
 
+  const publicRunMessage = running
+    ? "Running public tests in an isolated AWS task. This usually takes 20-30 seconds; the result applies to the code snapshot from when you clicked Run Tests."
+    : null;
+  const submissionMessage = submitting
+    ? "Submitting final code and running hidden evaluation in an isolated AWS task. This usually takes 20-30 seconds; keep this tab open until the result appears."
+    : null;
+
   function startHorizontalResize(
     event: PointerEvent<HTMLDivElement>,
     panel: "files" | "assistant",
@@ -424,6 +431,8 @@ export default function CandidateWorkspace() {
                 : "Some hidden tests failed."}
             </span>
           ) : null}
+          {publicRunMessage ? <span className="operation-status">{publicRunMessage}</span> : null}
+          {submissionMessage ? <span className="operation-status">{submissionMessage}</span> : null}
           <button className="command-button primary" disabled={running || submitted} onClick={runPublicTests}>
             <Play size={17} aria-hidden="true" />
             {running ? "Running" : "Run Tests"}
@@ -584,6 +593,7 @@ export default function CandidateWorkspace() {
               Note: {attempt.assessment.seeded_issue_count} additional behaviors are evaluated beyond these public tests.
             </p>
           ) : null}
+          {publicRunMessage ? <p className="operation-status">{publicRunMessage}</p> : null}
           <pre className="output">{resultText(testResult, testError)}</pre>
         </div>
 
@@ -608,6 +618,7 @@ export default function CandidateWorkspace() {
                 : "Some hidden tests failed."}
             </p>
           ) : null}
+          {submissionMessage ? <p className="operation-status">{submissionMessage}</p> : null}
           {submitError ? <p className="submission-error">{submitError}</p> : null}
           {saveStatus ? <p className="submission-status">{saveStatus}</p> : null}
           <div className="submission-grid">

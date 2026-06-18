@@ -170,6 +170,22 @@ post-MVP validation. Read this before touching the files listed under each entry
   - `https://signalloop-api.onrender.com/health` returned 200,
   - hosted employer portal rendered Clerk sign-in state without browser console errors.
 
+**UX follow-up after user pilot notes:**
+
+- Observed production test and submit latency is expected from the AWS ECS/Fargate
+  per-run model: API writes input to S3, starts a fresh isolated Fargate task, waits for
+  container startup/test execution, then reads output from S3 and persists the result.
+- Added non-blocking inline progress messages while public tests and final submission are
+  running so candidates see that the isolated job is still in progress.
+- Changed the root web route to redirect directly to `/employer`, removing the extra
+  landing screen before Clerk login for employer users. Candidate access remains invite
+  URL based.
+- Checks after the UX update:
+  - `cd apps/web && npm run typecheck` -> passed,
+  - `cd apps/web && npm run lint` -> passed,
+  - `cd apps/web && npm run build` -> passed,
+  - `cd apps/web && npm run test:e2e` -> 2 passed, 1 skipped.
+
 ---
 
 ## 2026-06-17 — Hosted Deployment Scaffold: Render, Supabase, and ECS/Fargate
