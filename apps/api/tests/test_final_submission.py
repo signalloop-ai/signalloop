@@ -9,7 +9,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from signalloop_api.database import get_session
 from signalloop_api.main import app
 from signalloop_api.models import AssessmentAttempt, AuditEvent, CodeSnapshot, FinalSubmission, TestRun
-from signalloop_api.submissions import HTTPHiddenTestRunner, get_hidden_test_runner, hidden_test_files_for_attempt
+from signalloop_api.submissions import (
+    ExecutionProviderHiddenTestRunner,
+    HTTPHiddenTestRunner,
+    get_hidden_test_runner,
+    hidden_test_files_for_attempt,
+)
 from tests.test_attempt_lifecycle import session_factory as session_factory_fixture
 
 
@@ -198,6 +203,27 @@ def test_hidden_tests_resolve_from_current_pack_config_when_stored_path_is_stale
         hidden_tests = hidden_test_files_for_attempt(attempt)
 
     assert "test_hidden_api.py" in hidden_tests
+
+
+def test_execution_provider_hidden_runner_calls_run_hidden(monkeypatch) -> None:
+    calls = {}
+
+    class FakeExecutionProvider:
+        def run_hidden(self, files: dict[str, str], hidden_tests: dict[str, str]) -> dict:
+            calls["files"] = files
+            calls["hidden_tests"] = hidden_tests
+            return {"status": "passed", "duration_ms": 7}
+
+    monkeypatch.setattr("signalloop_api.execution.get_execution_provider", lambda: FakeExecutionProvider())
+
+    result = ExecutionProviderHiddenTestRunner().run(
+        {"task_api/main.py": "app = None\n"},
+        {"test_hidden_api.py": "def test_hidden():\n    assert True\n"},
+    )
+
+    assert result["status"] == "passed"
+    assert calls["files"] == {"task_api/main.py": "app = None\n"}
+    assert "test_hidden_api.py" in calls["hidden_tests"]
 
 
 def test_http_hidden_test_runner_retries_transient_worker_errors(monkeypatch) -> None:

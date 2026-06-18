@@ -28,10 +28,15 @@ class HTTPHiddenTestRunner:
         return HTTPWorkerExecutionProvider().run_hidden(files, hidden_tests)
 
 
-def get_hidden_test_runner() -> HiddenTestRunner:
-    from signalloop_api.execution import get_execution_provider
+class ExecutionProviderHiddenTestRunner:
+    def run(self, files: dict[str, str], hidden_tests: dict[str, str]) -> dict:
+        from signalloop_api.execution import get_execution_provider
 
-    return get_execution_provider()
+        return get_execution_provider().run_hidden(files, hidden_tests)
+
+
+def get_hidden_test_runner() -> HiddenTestRunner:
+    return ExecutionProviderHiddenTestRunner()
 
 
 def hidden_test_error_result(message: str) -> dict:
