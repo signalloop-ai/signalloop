@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from signalloop_api.database import get_session
 from signalloop_api.main import app
 from signalloop_api.models import AssessmentAttempt, AuditEvent, CodeSnapshot, FinalSubmission, TestRun
-from signalloop_api.submissions import HTTPHiddenTestRunner, get_hidden_test_runner
+from signalloop_api.submissions import HTTPHiddenTestRunner, get_hidden_test_runner, hidden_test_files_for_attempt
 from tests.test_attempt_lifecycle import session_factory as session_factory_fixture
 
 
@@ -180,6 +180,24 @@ def test_final_submission_persists_hidden_error_when_runner_raises(
         assert hidden_run.run_type == "hidden"
         assert hidden_run.status == "error"
         assert hidden_run.stderr == "ecs hidden run failed"
+
+
+def test_hidden_tests_resolve_from_current_pack_config_when_stored_path_is_stale(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+) -> None:
+    token = create_attempt(client)
+
+    with session_factory() as session:
+        attempt = session.scalar(select(AssessmentAttempt).where(AssessmentAttempt.invite_token == token))
+        assert attempt is not None
+        attempt.assessment_pack.evaluator_path = "/tmp/render-old-release/missing/evaluator"
+        session.commit()
+        session.refresh(attempt)
+
+        hidden_tests = hidden_test_files_for_attempt(attempt)
+
+    assert "test_hidden_api.py" in hidden_tests
 
 
 def test_http_hidden_test_runner_retries_transient_worker_errors(monkeypatch) -> None:

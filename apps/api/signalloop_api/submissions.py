@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from signalloop_api.assessment_files import load_hidden_test_files
-from signalloop_api.attempts import resolve_repo_path
+from signalloop_api.attempts import DEFAULT_PACKS, resolve_repo_path
 from signalloop_api.audit import record_audit_event
 from signalloop_api.database import get_session
 from signalloop_api.execution import HTTPWorkerExecutionProvider, execution_error_result
@@ -39,6 +39,13 @@ def hidden_test_error_result(message: str) -> dict:
 
 
 def hidden_test_files_for_attempt(attempt: AssessmentAttempt) -> dict[str, str]:
+    pack_config = DEFAULT_PACKS.get(attempt.assessment_pack.slug)
+    configured_path = pack_config.get("evaluator_path") if pack_config else None
+    if configured_path:
+        evaluator_path = resolve_repo_path(configured_path)
+        if evaluator_path.is_dir():
+            return load_hidden_test_files(evaluator_path)
+
     evaluator_path = resolve_repo_path(attempt.assessment_pack.evaluator_path)
     return load_hidden_test_files(Path(evaluator_path))
 
