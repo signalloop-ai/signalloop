@@ -11,9 +11,9 @@ These are intentional MVP boundaries or unresolved follow-up items.
 
 ## Deployment
 
-- Render/Supabase/Clerk deployment has documentation and env templates, but no hosted integration test has been run from this repo yet.
+- Render/Supabase/Clerk deployment has documentation and env templates, and hosted pilot smoke testing has been completed for the MVP path.
 - Supabase should be configured through `DATABASE_URL`; no Supabase client SDK is used in the app.
-- Clerk is wired into the web app. Backend Clerk authorization enforcement is not yet implemented; Phase 10/11 rely on the employer portal frontend login and local development fallback.
+- Clerk is wired into the web app and employer API routes now enforce backend employer ownership. Local and production employer routes both require Clerk; candidate invite links remain bearer links.
 
 ## Security And Pilot Hardening
 
@@ -26,7 +26,9 @@ These are intentional MVP boundaries or unresolved follow-up items.
 
 - The Engineering Evidence Report uses deterministic MVP heuristics and captured evidence. Manual evaluator review is still required before hiring decisions.
 - The AI collaborator guardrails use LLM-based intent classification (single call returning structured JSON with `allowed`, `policy_tags`, `message`). Pattern matching is a fallback only. The LLM can still be manipulated via subtle multi-turn decomposition.
-- There is one assessment pack: `fastapi_task_api_v1`.
+- There are three FastAPI assessment packs: historical MVP `fastapi_task_api_v1`,
+  Phase 2 standard `fastapi_task_api_standard_v2`, and Phase 2 advanced
+  `fastapi_task_api_advanced_v1`.
 
 ## Product Workflow
 

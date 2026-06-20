@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useParams } from "next/navigation";
 import type { CSSProperties, PointerEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type AssessmentMetadata = {
   slug: string;
@@ -27,6 +27,12 @@ type CandidateAttempt = {
   status: string;
   candidate_email: string | null;
   assessment: AssessmentMetadata;
+  timing_mode: string;
+  duration_minutes: number;
+  started_at: string | null;
+  expires_at: string | null;
+  submitted_at: string | null;
+  submission_mode: string | null;
   files: Record<string, string>;
 };
 
@@ -89,6 +95,14 @@ function statusClass(status: string): string {
   return "warn";
 }
 
+function formatCountdown(msRemaining: number): string {
+  const clamped = Math.max(0, msRemaining);
+  const totalSeconds = Math.ceil(clamped / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
 export default function CandidateWorkspace() {
   const routeParams = useParams<{ inviteToken: string | string[] }>();
   const inviteTokenParam = routeParams.inviteToken;
@@ -103,8 +117,15 @@ export default function CandidateWorkspace() {
   const [running, setRunning] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
-  const [finalExplanation, setFinalExplanation] = useState("");
-  const [decisionLog, setDecisionLog] = useState("");
+  const [initialFiles, setInitialFiles] = useState<Record<string, string>>({});
+  const [submissionReview, setSubmissionReview] = useState({
+    changed: "",
+    tradeoffs: "",
+    verification: "",
+    nextSteps: "",
+    notes: "",
+  });
+  const [confirmingSubmit, setConfirmingSubmit] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -123,10 +144,12 @@ export default function CandidateWorkspace() {
   const [filePanelWidth, setFilePanelWidth] = useState(240);
   const [assistantPanelWidth, setAssistantPanelWidth] = useState(320);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(240);
-  const finalExplanationRef = useRef<HTMLTextAreaElement | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const submissionReviewRef = useRef<HTMLTextAreaElement | null>(null);
   const submissionPanelRef = useRef<HTMLDivElement | null>(null);
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
   const autoSnapshotTimeoutRef = useRef<number | null>(null);
+  const autoSubmittedRef = useRef(false);
 
   useEffect(() => {
     async function loadInvite() {
@@ -140,8 +163,10 @@ export default function CandidateWorkspace() {
         const body = (await response.json()) as CandidateAttempt;
         setAttempt(body);
         setFiles(body.files);
+        setInitialFiles(body.files);
         setActivePath(Object.keys(body.files).sort()[0] ?? "");
         setSubmitted(body.status === "submitted");
+        setAccepted(Boolean(body.started_at) || body.status === "submitted");
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : "Invite load failed");
       } finally {
@@ -163,13 +188,42 @@ export default function CandidateWorkspace() {
     };
   }, []);
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   const sortedFiles = useMemo(() => Object.keys(files).sort(), [files]);
   const activeContent = activePath ? files[activePath] ?? "" : "";
-  const canSubmit = !submitted && finalExplanation.trim().length > 0;
+  const reviewRequiredAnswers = [
+    submissionReview.changed,
+    submissionReview.tradeoffs,
+    submissionReview.verification,
+    submissionReview.nextSteps,
+  ];
+  const reviewAnsweredCount = reviewRequiredAnswers.filter((value) => value.trim().length > 0).length;
+  const candidateTestsAdded = useMemo(
+    () => Object.keys(files).some((path) => path.startsWith("tests/") && files[path] !== initialFiles[path]),
+    [files, initialFiles],
+  );
+  const publicTestsRun = testResult !== null || testError !== null;
+  const canSubmit = !submitted && !submitting && !running;
+  const expiresAtMs = attempt?.expires_at ? Date.parse(attempt.expires_at) : null;
+  const msRemaining = expiresAtMs ? expiresAtMs - nowMs : null;
+  const isTimed = attempt?.timing_mode === "timed" && expiresAtMs !== null;
+  const isExpired = Boolean(isTimed && msRemaining !== null && msRemaining <= 0);
+  const timerWarning =
+    isTimed && msRemaining !== null && msRemaining <= 60_000
+      ? "1 minute remaining"
+      : isTimed && msRemaining !== null && msRemaining <= 5 * 60_000
+        ? "5 minutes remaining"
+        : isTimed && msRemaining !== null && msRemaining <= 10 * 60_000
+          ? "10 minutes remaining"
+          : null;
 
   function focusSubmission() {
     setBottomPanelHeight((current) => Math.max(current, 300));
-    window.setTimeout(() => finalExplanationRef.current?.focus(), 0);
+    window.setTimeout(() => submissionReviewRef.current?.focus(), 0);
   }
 
   const publicRunMessage = running
@@ -263,10 +317,39 @@ export default function CandidateWorkspace() {
     }
   }
 
-  async function submitFinal() {
-    if (!canSubmit) return;
+  async function acceptRules() {
+    try {
+      const response = await fetch(`${apiBaseUrl}/candidate/invites/${inviteToken}/accept`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error(`Accept failed with HTTP ${response.status}`);
+      }
+      const body = (await response.json()) as CandidateAttempt;
+      setAttempt(body);
+      setFiles(body.files);
+      setInitialFiles(body.files);
+      setActivePath(Object.keys(body.files).sort()[0] ?? "");
+      setSubmitted(body.status === "submitted");
+      setAccepted(true);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Accept failed");
+    }
+  }
+
+  const submitFinal = useCallback(async (submissionMode: "manual" | "auto_expired" = "manual") => {
+    if (submissionMode === "manual" && !canSubmit) return;
     setSubmitting(true);
+    setConfirmingSubmit(false);
     setSubmitError(null);
+    const finalExplanation = [
+      `What changed: ${submissionReview.changed.trim() || "Not answered."}`,
+      `Tradeoffs/product decisions: ${submissionReview.tradeoffs.trim() || "Not answered."}`,
+      `Verification: ${submissionReview.verification.trim() || "Not answered."}`,
+      `Improve next: ${submissionReview.nextSteps.trim() || "Not answered."}`,
+      submissionReview.notes.trim() ? `Additional notes: ${submissionReview.notes.trim()}` : "",
+    ].filter(Boolean).join("\n\n");
+    const decisionLog = submissionReview.tradeoffs.trim();
     try {
       const response = await fetch(`${apiBaseUrl}/candidate/invites/${inviteToken}/submit`, {
         method: "POST",
@@ -275,6 +358,7 @@ export default function CandidateWorkspace() {
           files,
           final_explanation: finalExplanation,
           decision_log: decisionLog,
+          submission_mode: submissionMode,
         }),
       });
       if (!response.ok) {
@@ -294,13 +378,24 @@ export default function CandidateWorkspace() {
       const body = (await response.json()) as FinalSubmissionResponse;
       setSubmitted(true);
       setSubmissionResult(body);
-      setAttempt((current) => (current ? { ...current, status: body.status } : current));
+      setAttempt((current) => (current ? {
+        ...current,
+        status: body.status,
+        submitted_at: new Date().toISOString(),
+        submission_mode: submissionMode,
+      } : current));
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Submission failed");
     } finally {
       setSubmitting(false);
     }
-  }
+  }, [canSubmit, files, inviteToken, submissionReview]);
+
+  useEffect(() => {
+    if (!isExpired || submitted || submitting || autoSubmittedRef.current) return;
+    autoSubmittedRef.current = true;
+    void submitFinal("auto_expired");
+  }, [isExpired, submitted, submitting, submitFinal]);
 
   async function sendChatMessage() {
     const message = chatInput.trim();
@@ -392,7 +487,14 @@ export default function CandidateWorkspace() {
             <li>Where requirements are ambiguous, choose a policy and apply it consistently.</li>
             <li>Use public test output as evidence, not as the only source of truth.</li>
           </ul>
-          <button className="command-button primary" onClick={() => setAccepted(true)}>
+          {attempt.timing_mode === "timed" ? (
+            <p>
+              This is a timed attempt. Your {attempt.duration_minutes}-minute timer starts when you accept.
+            </p>
+          ) : (
+            <p>This attempt is untimed. Recommended completion time is {attempt.duration_minutes} minutes.</p>
+          )}
+          <button className="command-button primary" onClick={acceptRules}>
             <CheckCircle2 size={18} aria-hidden="true" />
             Accept rules
           </button>
@@ -424,6 +526,14 @@ export default function CandidateWorkspace() {
           <span className={`status-pill ${statusClass(submitted ? "submitted" : attempt.status)}`}>
             {submitted ? "submitted" : attempt.status}
           </span>
+          {isTimed && msRemaining !== null ? (
+            <span className={`status-pill ${isExpired ? "error" : timerWarning ? "warn" : "ready"}`}>
+              {isExpired ? "Expired" : `Time ${formatCountdown(msRemaining)}`}
+            </span>
+          ) : (
+            <span className="status-pill ready">Recommended {attempt.duration_minutes}m</span>
+          )}
+          {timerWarning && !isExpired ? <span className="operation-status">{timerWarning}</span> : null}
           {submissionResult ? (
             <span className="submission-status">
               {submissionResult.hidden_test_status === "passed"
@@ -441,7 +551,7 @@ export default function CandidateWorkspace() {
             <ClipboardCheck size={17} aria-hidden="true" />
             Submission
           </button>
-          <button className="command-button primary" disabled={!canSubmit || submitting} onClick={submitFinal}>
+          <button className="command-button primary" disabled={!canSubmit} onClick={() => setConfirmingSubmit(true)}>
             <Send size={17} aria-hidden="true" />
             {submitting ? "Submitting" : "Submit"}
           </button>
@@ -461,9 +571,9 @@ export default function CandidateWorkspace() {
               <li>Fix focused issues and add tests where useful.</li>
               <li>Run public tests to gather evidence.</li>
               <li>Use AI for one issue or failing behavior at a time.</li>
-              <li>Fill explanation and decision log, then submit.</li>
+              <li>Complete the submission review, then submit.</li>
             </ol>
-            <p>Tests do not need to pass before submission. Explanation and decision log are optional but count for 5 points.</p>
+            <p>Tests do not need to pass before submission. Review answers are supporting evidence; implementation and verification matter most.</p>
           </div>
           <div className="file-list">
             {sortedFiles.map((path) => (
@@ -608,7 +718,7 @@ export default function CandidateWorkspace() {
           </div>
           {!submitted ? (
             <p className="submission-help">
-              Final explanation is required. Decision log is optional. Tests do not need to pass before submitting.
+              Submission review is supporting evidence. If time expires, the current browser files are submitted automatically.
             </p>
           ) : null}
           {submissionResult ? (
@@ -622,26 +732,70 @@ export default function CandidateWorkspace() {
           {submitError ? <p className="submission-error">{submitError}</p> : null}
           {saveStatus ? <p className="submission-status">{saveStatus}</p> : null}
           <div className="submission-grid">
-            <label htmlFor="final-explanation">Final explanation <span aria-hidden="true" style={{ color: "var(--accent-red, #e05)" }}>*</span></label>
+            <label htmlFor="review-changed">What did you change?</label>
             <textarea
-              id="final-explanation"
-              ref={finalExplanationRef}
-              placeholder="What did you change, what remains risky, and how did you verify?"
-              value={finalExplanation}
+              id="review-changed"
+              ref={submissionReviewRef}
+              placeholder="Summarize the concrete implementation changes."
+              value={submissionReview.changed}
               disabled={submitted}
-              onChange={(event) => setFinalExplanation(event.target.value)}
+              onChange={(event) => setSubmissionReview((current) => ({ ...current, changed: event.target.value }))}
             />
-            <label htmlFor="decision-log">Decision log</label>
+            <label htmlFor="review-tradeoffs">What tradeoffs or product decisions did you make?</label>
             <textarea
-              id="decision-log"
-              placeholder="Record key choices, tradeoffs, and ambiguous behavior decisions."
-              value={decisionLog}
+              id="review-tradeoffs"
+              placeholder="Explain important choices, ambiguity, and authorization/status policies."
+              value={submissionReview.tradeoffs}
               disabled={submitted}
-              onChange={(event) => setDecisionLog(event.target.value)}
+              onChange={(event) => setSubmissionReview((current) => ({ ...current, tradeoffs: event.target.value }))}
+            />
+            <label htmlFor="review-verification">How did you verify your changes?</label>
+            <textarea
+              id="review-verification"
+              placeholder="Mention public tests, candidate tests, manual checks, and remaining risk."
+              value={submissionReview.verification}
+              disabled={submitted}
+              onChange={(event) => setSubmissionReview((current) => ({ ...current, verification: event.target.value }))}
+            />
+            <label htmlFor="review-next">What would you improve next, given more time?</label>
+            <textarea
+              id="review-next"
+              placeholder="Name the next highest-value improvement or test coverage gap."
+              value={submissionReview.nextSteps}
+              disabled={submitted}
+              onChange={(event) => setSubmissionReview((current) => ({ ...current, nextSteps: event.target.value }))}
+            />
+            <label htmlFor="review-notes">Optional: anything else the evaluator should know?</label>
+            <textarea
+              id="review-notes"
+              placeholder="Optional context."
+              value={submissionReview.notes}
+              disabled={submitted}
+              onChange={(event) => setSubmissionReview((current) => ({ ...current, notes: event.target.value }))}
             />
           </div>
         </div>
       </section>
+      {confirmingSubmit ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="submit-confirm-title">
+            <h2 id="submit-confirm-title">Submit final attempt?</h2>
+            <p>Submission is permanent. Hidden tests run only after this step.</p>
+            <ul className="submit-checklist">
+              <li><strong>Public tests run:</strong> {publicTestsRun ? "yes" : "no"}</li>
+              <li><strong>Candidate tests added or updated:</strong> {candidateTestsAdded ? "yes" : "no"}</li>
+              <li><strong>Submission review answered:</strong> {reviewAnsweredCount}/4 required questions</li>
+            </ul>
+            <div className="modal-actions">
+              <button className="command-button secondary" onClick={() => setConfirmingSubmit(false)}>Cancel</button>
+              <button className="command-button primary" disabled={submitting} onClick={() => submitFinal()}>
+                <Send size={17} aria-hidden="true" />
+                Submit final
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

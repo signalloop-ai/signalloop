@@ -1,4 +1,4 @@
-# SignalLoop MVP
+# SignalLoop
 
 SignalLoop is an AI-native candidate evaluator for software engineering hiring.
 
@@ -6,9 +6,17 @@ The MVP evaluates whether candidates can solve a realistic backend engineering t
 
 ## Status
 
-Phases 1 through 12 are complete. The next step is local pilot validation, followed by hosted Render/Supabase/Clerk setup and AWS ECS/Fargate execution work as explicit follow-ups.
+Phases 1 through 12 of the original MVP plan are complete and should be treated as historical implementation context.
 
-Current local capabilities:
+The active workstream is:
+
+```text
+docs/enhancements/phase-2-assessment-system/
+```
+
+Phase 2 is currently documentation/planning first. Do not implement scoring, timer, assessment-pack, or UI changes until the relevant Phase 2 task is explicitly started.
+
+Current capabilities:
 
 - Candidate invite links and browser workspace.
 - Monaco editor-backed file editing.
@@ -16,10 +24,11 @@ Current local capabilities:
 - Constrained AI collaborator with OpenAI provider and local fallback.
 - Final submission with hidden-test execution through the worker.
 - Deterministic Engineering Evidence Report generation.
-- Employer portal with Clerk login when configured and local development login fallback.
+- Employer portal with Clerk login.
 - Pilot hardening: audit events, validation/fallback error responses, retry-bounded hidden worker calls, basic rate limiting, and deployment env templates.
+- Hosted Render/Supabase/Clerk deployment with AWS ECS/Fargate public/hidden execution validated for pilot use.
 
-Hosted Render/Supabase/Clerk deployment and AWS ECS/Fargate production execution are documented but not yet deployed/tested from this repo.
+Next product direction: assessment system enhancement, including a stronger standard assessment, optional timed assessments, LLM-assisted report scoring, and a planned advanced FastAPI assessment.
 
 ## Coding Agent Reading Order
 
@@ -30,9 +39,9 @@ Start every new coding-agent session with:
 3. `docs/README.md`
 4. `docs/architecture/technical-product-architecture-spec.md`
 5. `docs/execution/coding-agent-execution-plan.md`
-6. The current phase file under `docs/execution/phases/`
+6. The active workstream file named in `CURRENT_STATE.md`
 
-Work one phase at a time. Do not implement future-scope features without an explicit architecture decision.
+Work one phase or enhancement task at a time. Do not implement future-scope features without an explicit architecture decision.
 
 ## Repository Layout
 
@@ -140,7 +149,7 @@ Pilot deployment target:
 - Supabase for Postgres.
 - Clerk for employer auth.
 - Local Docker worker for local testing.
-- AWS ECS/Fargate per-run tasks for production execution later.
+- AWS ECS/Fargate per-run tasks for hosted candidate execution.
 
 See `docs/deployment/render-supabase-clerk.md`.
 

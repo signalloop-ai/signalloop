@@ -7,11 +7,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from signalloop_api.ai_policy import AIDecision
 from signalloop_api.ai_provider import get_ai_provider
+from signalloop_api.auth import get_current_employer
 from signalloop_api.database import get_session
 from signalloop_api.main import app
-from signalloop_api.models import EvidenceReport
+from signalloop_api.models import Employer, EvidenceReport
 from signalloop_api.submissions import get_hidden_test_runner
-from tests.test_attempt_lifecycle import session_factory as session_factory_fixture
 
 
 class FakeProvider:
@@ -40,7 +40,10 @@ class FakeHiddenTestRunner:
 
 
 @pytest.fixture()
-def client(session_factory: sessionmaker[Session]) -> Generator[TestClient, None, None]:
+def client(
+    session_factory: sessionmaker[Session],
+    default_employer: Employer,
+) -> Generator[TestClient, None, None]:
     def override_get_session() -> Generator[Session, None, None]:
         session = session_factory()
         try:
@@ -48,14 +51,15 @@ def client(session_factory: sessionmaker[Session]) -> Generator[TestClient, None
         finally:
             session.close()
 
+    def override_get_current_employer() -> Employer:
+        return default_employer
+
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_current_employer] = override_get_current_employer
     app.dependency_overrides[get_hidden_test_runner] = lambda: FakeHiddenTestRunner()
     app.dependency_overrides[get_ai_provider] = lambda: FakeProvider()
     yield TestClient(app)
     app.dependency_overrides.clear()
-
-
-session_factory = session_factory_fixture
 
 
 def create_submitted_attempt(client: TestClient) -> int:
@@ -103,6 +107,10 @@ def test_generate_evidence_report_persists_required_sections(
     assert body["report_id"] > 0
     assert body["score_total"] == report["scores"]["total"]
     assert body["recommendation"] == report["overall_recommendation"]
+    assert report["metadata"]["timing"]["timing_mode"] == "untimed"
+    assert report["metadata"]["timing"]["duration_minutes"] == 90
+    assert report["metadata"]["timing"]["submission_mode"] == "manual"
+    assert "confidence" not in report["scores"]
     for section in [
         "executive_summary",
         "overall_recommendation",
@@ -110,14 +118,22 @@ def test_generate_evidence_report_persists_required_sections(
         "rubric_weights",
         "public_test_results",
         "hidden_test_results",
+        "feature_design_implementation",
         "candidate_tests",
         "ai_collaboration",
+        "ai_integrity_risk",
+        "favo",
+        "llm_assisted_review",
         "process_evidence",
         "explanation_submitted",
+        "submission_review",
         "timeline",
         "follow_up_questions",
     ]:
         assert section in report
+    assert report["ai_integrity_risk"]["score_impact"] == "none_phase_2"
+    assert set(report["favo"]) == {"frame", "ask", "verify", "own"}
+    assert report["llm_assisted_review"]["status"] == "not_run"
     assert report["candidate_tests"]["added_test_files"] == ["tests/test_candidate_ownership.py"]
     assert "test_duplicate_email_is_case_insensitive_and_conflicts" in report["hidden_test_results"]["summary"]["failure_names"]
     assert len(report["follow_up_questions"]) >= 3

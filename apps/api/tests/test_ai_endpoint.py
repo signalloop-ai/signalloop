@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from signalloop_api.ai_policy import AIDecision
 from signalloop_api.ai_provider import get_ai_provider
+from signalloop_api.auth import get_current_employer
 from signalloop_api.database import get_session
 from signalloop_api.main import app
-from signalloop_api.models import AIInteraction
-from tests.test_attempt_lifecycle import session_factory as session_factory_fixture
+from signalloop_api.models import AIInteraction, Employer
 
 
 class FakeProvider:
@@ -18,7 +18,7 @@ class FakeProvider:
         from signalloop_api.ai_policy import fallback_classify, REDIRECT_MESSAGE
         decision = fallback_classify(message, recent_messages)
         if not decision.allowed:
-            return AIDecision(allowed=False, policy_tags=decision.tags, message=REDIRECT_MESSAGE)
+            return AIDecision(allowed=False, policy_tags=decision.tags, message=decision.redirect_message or REDIRECT_MESSAGE)
         path = context.get("path") if context else "no file"
         return AIDecision(
             allowed=True,
@@ -28,7 +28,10 @@ class FakeProvider:
 
 
 @pytest.fixture()
-def client(session_factory: sessionmaker[Session]) -> Generator[TestClient, None, None]:
+def client(
+    session_factory: sessionmaker[Session],
+    default_employer: Employer,
+) -> Generator[TestClient, None, None]:
     def override_get_session() -> Generator[Session, None, None]:
         session = session_factory()
         try:
@@ -36,13 +39,14 @@ def client(session_factory: sessionmaker[Session]) -> Generator[TestClient, None
         finally:
             session.close()
 
+    def override_get_current_employer() -> Employer:
+        return default_employer
+
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_current_employer] = override_get_current_employer
     app.dependency_overrides[get_ai_provider] = lambda: FakeProvider()
     yield TestClient(app)
     app.dependency_overrides.clear()
-
-
-session_factory = session_factory_fixture
 
 
 def create_attempt(client: TestClient) -> str:
@@ -98,6 +102,68 @@ def test_ai_endpoint_redirects_disallowed_requests_and_logs_tags(
         interactions = session.scalars(select(AIInteraction).order_by(AIInteraction.id)).all()
         assert len(interactions) == 2
         assert interactions[1].policy_tags
+
+
+def test_ai_endpoint_redirects_design_choice_requests(client: TestClient) -> None:
+    token = create_attempt(client)
+
+    response = client.post(
+        f"/candidate/invites/{token}/ai/messages",
+        json={"message": "Should I return 403 or 404? Choose for me."},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["allowed"] is False
+    assert "choose_design" in body["policy_tags"]
+    assert "I can compare the tradeoffs" in body["message"]
+
+
+def test_ai_endpoint_returns_socratic_message_for_direct_diagnosis(
+    session_factory: sessionmaker[Session],
+    default_employer: Employer,
+) -> None:
+    from signalloop_api.ai_policy import SOCRATIC_REDIRECT_MESSAGE
+
+    class DiagnosisFakeProvider:
+        def evaluate(self, message: str, context: dict | None, recent_messages: list[str]) -> AIDecision:
+            return AIDecision(allowed=False, policy_tags=["direct_diagnosis"], message=SOCRATIC_REDIRECT_MESSAGE)
+
+    def override_get_session() -> Generator[Session, None, None]:
+        session = session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    def override_get_current_employer() -> Employer:
+        return default_employer
+
+    app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_current_employer] = override_get_current_employer
+    app.dependency_overrides[get_ai_provider] = lambda: DiagnosisFakeProvider()
+    diagnosis_client = TestClient(app)
+
+    try:
+        token = create_attempt(diagnosis_client)
+        response = diagnosis_client.post(
+            f"/candidate/invites/{token}/ai/messages",
+            json={
+                "message": "What's wrong with this email validation function?",
+                "selected_context": {"path": "task_api/main.py", "content": "def validate_email(e): return e"},
+            },
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["allowed"] is False
+        assert body["policy_tags"] == ["direct_diagnosis"]
+        assert "what behavior did you observe" in body["message"].lower()
+
+        with session_factory() as session:
+            interactions = session.scalars(select(AIInteraction).order_by(AIInteraction.id)).all()
+            assert interactions[-1].policy_tags == ["direct_diagnosis"]
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_ai_endpoint_rejects_evaluator_context(client: TestClient) -> None:

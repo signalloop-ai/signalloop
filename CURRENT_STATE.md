@@ -4,9 +4,11 @@
 
 Phase 12 Documentation and Handoff is complete. Local and hosted MVP validation are complete enough for pilot use. Render web/API, Supabase persistence, Clerk-gated employer portal, and AWS ECS/Fargate public/hidden execution have been validated end-to-end, including a hosted browser-level candidate submission and employer report flow.
 
+The active post-MVP workstream is Phase 2: Assessment System Enhancement.
+
 ## Current phase
 
-Post-MVP local validation and hosted deployment preparation.
+Phase 2 documentation and planning.
 
 ## Last completed phase
 
@@ -32,23 +34,52 @@ Phase 12: Documentation and Handoff.
 - Placeholder app folders: `apps/web`, `apps/api`, `apps/worker`.
 - Shared package placeholder: `packages/shared`.
 - Assessment pack implementation: `assessment_packs/fastapi_task_api_v1`.
+- Phase 2 standard assessment pack implementation:
+  `assessment_packs/fastapi_task_api_standard_v2`.
+- Phase 2 advanced assessment pack implementation:
+  `assessment_packs/fastapi_task_api_advanced_v1`.
 - Root `.gitignore` and `.env.example`.
-- Candidate assessment README, starter FastAPI app, public tests, and final explanation template.
+- Candidate assessment README, starter FastAPI app, public tests, and historical final explanation template for the MVP pack.
 - Evaluator-only hidden tests, reference solution notes, scoring rubric, manual evaluation form, and reference solution.
 - `uv` documented as the Python dependency and command runner for assessment development.
 - Backend API project in `apps/api` with FastAPI app, SQLAlchemy models, Alembic migrations, database session setup, health endpoint, and tests.
 - Candidate attempt lifecycle API endpoints for creating invites, opening candidate invite links, returning candidate-safe assessment metadata/files, and saving snapshots.
 - Worker service in `apps/worker` with public test-run API, Docker runtime image definition, workspace materialization, hidden/evaluator file rejection, timeout/resource controls, and tests.
-- Web app in `apps/web` with candidate invite workspace UI, Monaco editor, direct public test execution through the worker, and final explanation/decision-log form.
+- Web app in `apps/web` with candidate invite workspace UI, Monaco editor, direct public test execution through the worker, and structured Submission Review form.
 - Candidate workspace polish from local validation: visible candidate instructions, resizable file/AI/submission panels, independent scroll containers, Enter-to-send chat, explicit save status, and visible submission requirements.
 - Backend-to-worker public test-run orchestration through `POST /candidate/invites/{token}/run-public-tests`, with public test snapshots and `TestRun` records persisted for evidence reports.
 - Constrained AI collaborator endpoint with provider abstraction, OpenAI provider, local fallback provider, system prompt, guardrail classifier, context boundary checks, AI message logging, policy tags, and workspace chat UI.
-- Final submission endpoint with immutable final code snapshot, final explanation, decision log, attempt locking, backend-orchestrated hidden worker run, hidden `TestRun` persistence, and candidate-safe submission response.
+- Phase 2 AI policy tightening is implemented locally: the assistant may compare
+  tradeoffs but must not choose the candidate's design, and prompt-injection attempts
+  are classified as disallowed evidence.
+- Final submission endpoint with immutable final code snapshot, structured Submission Review evidence, attempt locking, backend-orchestrated hidden worker run, hidden `TestRun` persistence, and candidate-safe submission response.
 - Worker hidden-test endpoint for backend-supplied evaluator tests.
 - Skipped-by-default live full-stack Playwright smoke test enabled with `LIVE_INVITE_TOKEN`.
 - Engineering Evidence Report generation and fetch endpoints, with persisted report JSON, recommendation, score total, scoring categories, FAVO analysis, timeline, and follow-up questions.
+- Phase 2 deterministic scoring rubric is implemented in the report generator for
+  public issue resolution, private issue generalization, feature/design implementation,
+  candidate-written tests, AI collaboration, and regression/code quality.
 - Employer attempt list API endpoint with invite URLs and evidence report summary metadata.
-- Employer web portal at `/employer` with Clerk login when configured, local development login fallback, invite creation, candidate attempt list, and report detail pages.
+- Employer web portal at `/employer` with Clerk login (always required), invite creation, candidate attempt list, and report detail pages.
+- Employer invite creation now supports Phase 2 assessment configuration fields:
+  standard assessment, timed/untimed mode, and fixed duration options of 60, 90,
+  120, and 150 minutes. Employers can select Standard FastAPI v2 or Advanced
+  FastAPI v1.
+- Time-boxed assessment flow is implemented locally: candidate accept starts the
+  server timer, timed attempts show a countdown with warnings, expiry auto-submits
+  the current browser files when the tab is open, backend expiry is enforced on
+  snapshots/public tests/AI/final submission, and reports include timing metadata.
+- Phase 2 UI enhancements are implemented locally: candidate Submission Review uses
+  structured prompts plus a final confirmation modal, and employer reports show
+  timing metadata, native score/test bars, feature/design summary, FAVO-style
+  interpretation, and AI integrity risk.
+- Phase 2 report generation is implemented locally with deterministic score sections,
+  structured Submission Review evidence, FAVO, AI integrity risk, feature/design
+  implementation, and explicit LLM-assisted review status.
+- Backend employer routes enforce Clerk-user employer ownership for invite creation,
+  attempt listing, and evidence-report generate/fetch. Both local and production
+  environments always require a valid Clerk JWT — no dev-fallback bypass exists.
+  `EMPLOYER_AUTH_REQUIRED` and the local employer identity config have been removed.
 - API audit events persisted in `audit_events` through Alembic migration `0002_create_audit_events`.
 - API request validation/fallback error handlers and basic in-memory rate limiting.
 - Retry-bounded hidden worker calls with configurable timeout/retry settings.
@@ -58,16 +89,61 @@ Phase 12: Documentation and Handoff.
 - AWS ECS/Fargate execution deployment guide at `docs/deployment/aws-ecs-fargate-execution.md`.
 - Root README updated with current MVP status, local run sequence, test commands, deployment direction, and known-limits pointer.
 - Development handoff docs: `docs/development/testing.md`, `docs/development/known-limitations.md`, and `docs/development/local-pilot-checklist.md`.
+- Phase 2 enhancement documentation under `docs/enhancements/phase-2-assessment-system/`.
+- Phase 2 planning decisions include Clerk-user-based strict employer isolation,
+  structured Submission Review, report-only AI integrity risk, removal of the
+  employer-facing generic confidence label, and richer report/candidate UI polish.
+- Advanced FastAPI assessment design is specified in
+  `docs/assessment/fastapi-task-api-advanced-v1.md` and implemented in
+  `assessment_packs/fastapi_task_api_advanced_v1/`.
 
 ## What does not exist yet
 
-- Production hardening beyond pilot scope: hosted public execution, final submission, hidden execution, report generation, and employer report rendering now work end-to-end. Remaining work is polish/hardening rather than unblocking the MVP flow.
+- External LLM-assisted report review is not invoked yet; reports include
+  `llm_assisted_review.status=not_run` until a bounded prompt and safety boundary are
+  added.
 
 ## Next task
 
-Continue local pilot validation first:
+Continue Phase 2 from:
 
-`docs/development/local-pilot-checklist.md`
+`docs/enhancements/phase-2-assessment-system/`
+
+Recommended next implementation task:
+
+Local Phase 2 implementation is complete except for external LLM-assisted report
+review. Local Playwright e2e now passes when run against an already-running dev server
+with `PLAYWRIGHT_SKIP_WEBSERVER=1`; decide next whether to implement the bounded LLM
+review prompt or proceed to deployment smoke testing.
+
+Strict employer isolation was implemented locally in:
+
+`docs/enhancements/phase-2-assessment-system/08-multi-tenant-employer-isolation.md`
+
+Do not mutate `assessment_packs/fastapi_task_api_v1/` into the Phase 2 standard pack.
+The versioned standard pack now exists at
+`assessment_packs/fastapi_task_api_standard_v2/`; keep v1 as the historical MVP/pilot
+reference.
+
+Advanced pack local validation:
+
+- Starter public tests: 1 passed, 5 failed on unmodified candidate code.
+- Reference solution public tests: 6 passed.
+- Reference solution hidden tests: 7 passed.
+- API suite after enabling Advanced: 55 passed.
+- Web typecheck/lint/build passed.
+- Playwright e2e: 2 passed, 1 skipped by design.
+- Live local browser smoke was exercised against Standard and Advanced timed invites
+  on a disposable SQLite API at `127.0.0.1:8016`, worker at `127.0.0.1:9000`, and
+  built web server at `127.0.0.1:3100`. This found and fixed UTC timestamp
+  serialization for timed attempts and local employer fallback collision handling.
+- Local Docker assessment runtime must be `signalloop-python-assessment:3.11`; using
+  `python:3.11-slim` causes public/hidden runs to fail before pytest collection.
+- Final Playwright rerun after forcing the corrected runtime image was blocked by the
+  Codex escalation usage limit. Re-run the live smoke locally with fresh invites before
+  deployment.
+
+Historical MVP validation notes:
 
 Recent local validation created submitted attempt 11 and generated evidence report 2 with score 40 and recommendation `needs_review`. Candidate submission, hidden evaluation persistence, report generation, and report rendering were verified locally.
 
@@ -110,6 +186,13 @@ Hosted smoke on 2026-06-17:
 
 ## Notes for next coding agent
 
-The phase plan is complete through Phase 12. Next work should validate the full MVP locally, then proceed to hosted Render/Supabase/Clerk setup and the ECS/Fargate execution backend as separate, explicit follow-up work.
+The original MVP phase plan is complete through Phase 12. Use it as historical context, not the active implementation plan.
+
+Current active workstream:
+
+`docs/enhancements/phase-2-assessment-system/`
+
+First Phase 2 task was documentation/planning only. Future implementation must remain
+bounded to the specific Phase 2 task file.
 
 Deployment architecture note: use local Docker worker for development/testing. Production execution should target AWS ECS/Fargate per-run assessment runner tasks instead of Docker-in-Docker on Render or another managed web-service runtime. Render remains suitable for web/API, Supabase for Postgres, and Clerk for employer auth.

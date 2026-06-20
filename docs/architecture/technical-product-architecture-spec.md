@@ -1,7 +1,7 @@
 # SignalLoop Technical Product & Architecture Specification
 
-Version: 1.0 Markdown scaffold
-Status: MVP source of truth
+Version: 2.0
+Status: Phase 2 source of truth — updated 2026-06-19
 
 ## 1. Purpose
 
@@ -31,7 +31,7 @@ Core flow:
 5. Candidate runs public tests.
 6. Candidate asks constrained AI assistant questions.
 7. System captures snapshots and events.
-8. Candidate submits final code, explanation, and decision log.
+8. Candidate submits final code and structured Submission Review.
 9. System runs hidden tests.
 10. System generates Engineering Evidence Report.
 11. Employer reviews report and follow-up questions.
@@ -40,7 +40,7 @@ Core flow:
 
 ### Web app
 
-Candidate onboarding, workspace UI, Monaco editor, file tree, test output panel, AI assistant panel, final explanation, decision log, employer report UI.
+Candidate onboarding, workspace UI, Monaco editor, file tree, test output panel, AI assistant panel, structured Submission Review, employer report UI.
 
 ### Backend API
 
@@ -139,13 +139,15 @@ Candidate must decide:
 
 ## 10. Seeded issue areas
 
-Evaluator-only issue areas:
+Evaluator-only issue areas (7 total, configured per pack):
 
-1. Duplicate email handling.
-2. Empty or whitespace-only task title.
-3. Invalid status transitions.
-4. Ownership/access behavior.
-5. Delete behavior.
+1. Duplicate email (case-insensitive + whitespace trimming).
+2. Blank or whitespace-only task title (with title trimming).
+3. Task priority defaulting, normalization, and validation.
+4. Owner-only read and delete access.
+5. Unknown actor access (resource existence leakage).
+6. Status transition enforcement (TODO → IN_PROGRESS → DONE).
+7. Idempotent owner delete (second delete returns 404).
 
 ## 11. Candidate workspace
 
@@ -157,35 +159,66 @@ Left: file tree
 Center: Monaco editor
 Right: constrained AI assistant
 Bottom: test output panel
-Final: final explanation (required) + decision log (optional)
+Final: structured Submission Review with final confirmation
 ```
 
 ## 12. Constrained AI collaborator
 
-Allowed:
+The AI collaborator operates as a **Socratic tutor**, not a solution generator. Classification
+uses an LLM-based `evaluate()` call that returns structured JSON `{allowed, policy_tags, message}`.
+A pattern-based fallback (`fallback_classify`) runs only if the LLM call fails.
 
-- explain selected code,
-- explain public test output,
-- explain concepts,
-- suggest debugging approaches,
-- discuss tradeoffs for candidate-identified decisions,
-- provide small generic code examples.
+### Allowed
 
-Disallowed:
+- Explain Python, FastAPI, pytest, or httpx mechanics not specific to the assessment code
+  (e.g. how parametrize works, what a 422 status code means).
+- Interpret test failure output the candidate shares — describe what the output says, not the fix.
+- Confirm or redirect a hypothesis the candidate has already stated and committed to.
+- Compare candidate-identified tradeoffs on a design decision they have already made.
+- Ask one focused question that leads the candidate to discover the issue themselves.
 
-- enumerate all defects,
-- list all hidden issues,
-- provide full solution,
-- rewrite whole files,
-- provide issue-by-issue patches,
-- generate final explanation,
-- list all missing tests,
-- infer hidden tests,
-- access evaluator-only artifacts.
+### Disallowed policy tags
+
+| Tag | Trigger | Response |
+|---|---|---|
+| `direct_diagnosis` | Asks AI to identify what is wrong with specific code, confirm implementation correctness, or suggest a test to catch a bug | Socratic redirect — a question back, not a flat block |
+| `enumerate_defects` | Asks to list or explain all bugs/defects/issues | Block with redirect message |
+| `full_solution` | Asks to fix everything or provide a complete solution | Block |
+| `issue_by_issue_patch` | Asks for a patch for each problem | Block |
+| `missing_tests` | Asks to write all missing tests or the complete test suite | Block |
+| `final_explanation` | Asks to write or generate the final explanation or decision log | Block |
+| `hidden_tests` | Asks about hidden tests, evaluator artifacts, or scoring internals | Block |
+| `choose_design` | Asks the AI to pick the assessment design choice for the candidate | Tradeoff redirect — AI may compare, candidate must choose |
+| `prompt_injection` | Asks AI to ignore policy, change roles, bypass rules, or reveal protected information | Block |
+| `anti_decomposition` | Multi-turn session is cumulatively producing a full solution | Block |
+
+### Socratic tutor rule
+
+When a candidate asks the AI to diagnose their code or suggest a test for a specific behavior,
+the AI must respond with one question about what the candidate has already observed:
+
+- “What behavior did you see when you ran this?”
+- “What input would trigger the case you're worried about?”
+- “What does the test output tell you about where it's failing?”
+
+If the candidate has already stated a hypothesis, the AI may confirm or redirect it — but
+must not provide the implementation or the exact fix.
+
+### Classification architecture
+
+- **LLM path (primary):** `OpenAIProvider.evaluate()` sends the system prompt plus the candidate
+  message to OpenAI and parses structured JSON. Context boundaries prevent the AI from seeing
+  hidden tests, evaluator notes, or scoring internals.
+- **Fallback (on LLM failure):** `fallback_classify()` uses keyword patterns for unambiguous
+  bulk-bypass requests (`enumerate_defects`, `full_solution`, etc.). `direct_diagnosis` is
+  intentionally excluded from the fallback — it requires context the pattern matcher cannot judge.
+- **Message routing:** `direct_diagnosis` responses use `SOCRATIC_REDIRECT_MESSAGE` (a question
+  back). All other disallowed tags use `REDIRECT_MESSAGE` (a flat block).
 
 ## 13. Anti-decomposition rule
 
-The assistant must treat a multi-turn sequence as disallowed if the combined effect is to produce the full solution.
+The assistant must treat a multi-turn sequence as disallowed if the combined effect is to
+produce the full solution.
 
 Example disallowed sequence:
 
@@ -199,6 +232,12 @@ Expected redirect:
 I cannot enumerate all defects or provide issue-by-issue fixes for the assessment. I can help you reason through one candidate-identified issue or one failing behavior at a time.
 ```
 
+`direct_diagnosis` redirects use a different message:
+
+```text
+Before I help further, what behavior did you observe, and what did you expect? Tell me what you've already tried or noticed, and I'll help you reason through it.
+```
+
 ## 14. Evidence capture
 
 Capture:
@@ -210,8 +249,7 @@ Capture:
 - AI messages,
 - selected code context,
 - final submission,
-- final explanation,
-- decision log,
+- structured submission-review answers,
 - hidden test results.
 
 ## 15. Engineering Evidence Report
@@ -224,8 +262,7 @@ Inputs:
 - hidden tests,
 - candidate-created tests,
 - AI interaction history,
-- final explanation,
-- decision log,
+- structured submission-review answers,
 - timeline.
 
 Sections:
@@ -233,14 +270,19 @@ Sections:
 1. Executive summary
 2. Overall recommendation
 3. Scores and rubric weights
-4. Public test results
-5. Hidden test results (seeded issue coverage)
-6. Candidate-written tests
-7. AI collaboration
-8. Process evidence (snapshots, test runs)
-9. Explanation submitted
-10. Timeline
-11. Follow-up questions
+4. Timing metadata (mode, duration, time used, submission mode)
+5. Public test results
+6. Hidden test results (seeded issue coverage)
+7. Feature/design implementation
+8. Candidate-written tests
+9. AI collaboration (flagged prompts, paste detection, large paste events)
+10. AI integrity risk (low/medium/high/critical label with signals)
+11. FAVO interpretation (Frame/Ask/Verify/Own derived from evidence)
+12. LLM-assisted review status (`not_run` until bounded prompt is added)
+13. Process evidence (snapshots, test runs)
+14. Submission Review
+15. Timeline
+16. Follow-up questions (candidate-specific, generated from evidence)
 
 ## 16. Scoring rubric
 
@@ -249,12 +291,12 @@ Change values there to rebalance — nothing else needs to change.
 
 | Category | Points | Notes |
 |---|---:|---|
-| Public test coverage | 20 | Only tests that start failing in the unmodified starter code count. Tests that already pass go to regression instead. |
-| Hidden test coverage | 30 | 6 hidden tests × 5 pts each. Automated after submission. |
-| Regression | 15 | Previously-passing tests that fail after candidate changes. |
+| Public issue resolution | 15 | Initially failing public tests now pass. |
+| Private issue generalization | 20 | Hidden tests and private seeded behavior coverage. |
+| Feature/design implementation | 20 | Configured feature/design checks plus supporting review evidence. |
 | Candidate-written tests | 15 | Test files added or modified vs initial snapshot. |
-| AI collaboration | 10 | Disciplined use; no enumerate-all redirects. |
-| Explanation and decisions | 10 | Notes on changes, 403 vs 404 choice, status transition policy. |
+| AI collaboration | 20 | Disciplined use and policy evidence. |
+| Regression/code quality | 10 | Previously passing behavior remains stable. |
 
 Which tests are initially failing is configured per assessment pack in `DEFAULT_PACKS` inside
 `apps/api/signalloop_api/attempts.py` under the key `initially_failing_tests`.
@@ -263,9 +305,17 @@ Recommendation thresholds: ≥80 → strong_advance, ≥60 → advance_with_foll
 
 ## 17. Integrity roadmap
 
-MVP has no video proctoring. Use process evidence and low-process-evidence flags.
+MVP has no video proctoring. Phase 2 uses process evidence and the AI integrity risk label.
 
-Later phases may add browser focus events, tab-switch signals, copy/paste telemetry, optional screen recording, proctored mode, and candidate-specific variants.
+Implemented in Phase 2:
+- AI policy redirect logging (all tags persisted per interaction).
+- Paste detection: verbatim AI code block matching against final submission.
+- Large paste event detection: snapshot-to-snapshot diff flagging sudden large additions.
+- AI integrity risk label (low/medium/high/critical) derived from signals above.
+- `direct_diagnosis` Socratic redirect — logged and visible in employer report.
+
+Later phases may add browser focus events, tab-switch signals, optional screen recording,
+proctored mode, and candidate-specific assessment variants.
 
 ## 18. Code boundary
 
@@ -274,3 +324,134 @@ This spec does not include complete candidate/evaluator source code. Full code b
 ## 19. Manual trial learnings
 
 A manual trial showed that prompt-only restriction is insufficient. Candidates can decompose full-solution requests into smaller requests. The assessment must include judgment, tradeoffs, and stricter assistant anti-decomposition rules.
+
+## 20. Phase 2 Assessment System Enhancement
+
+Status: implemented locally. Hosted deployment not yet smoke-tested for Phase 2 features.
+
+The MVP architecture was validated locally and in hosted pilot infrastructure. Phase 2
+improves the assessment system while preserving the existing deployment stack.
+
+### Assessment pack versioning
+
+MVP pack kept as historical/pilot reference (do not mutate):
+
+```text
+assessment_packs/fastapi_task_api_v1/
+```
+
+Phase 2 packs:
+
+```text
+assessment_packs/fastapi_task_api_standard_v2/   (standard — default for new invites)
+assessment_packs/fastapi_task_api_advanced_v1/   (advanced — optional per invite)
+```
+
+### Rubric
+
+Implemented in `apps/api/signalloop_api/reports.py` (`RUBRIC` dict). Change values there
+to rebalance — nothing else needs to change.
+
+| Category | Points | Evaluation mode |
+|---|---:|---|
+| Public issue resolution | 15 | Automated public tests |
+| Private issue generalization | 20 | Automated hidden tests |
+| Feature/design implementation | 20 | Configured feature/design checks |
+| Candidate-written tests | 15 | Automated heuristics (test file count, function count, edge-case signals) |
+| AI collaboration | 20 | AI logs, policy classifier, verification behavior |
+| Regression/code quality | 10 | Automated regression check |
+
+`direct_diagnosis` redirects do not reduce the AI collaboration score. `enumerate_defects`,
+`full_solution`, and `final_explanation` redirects do.
+
+### Timer model
+
+Timed assessments are optional per invite. Employer selects mode and duration at invite creation.
+
+- Timer starts when the candidate accepts onboarding.
+- Standard default: 90 minutes. Advanced default: 120 minutes.
+- Fixed duration options: 60, 90, 120, 150 minutes.
+- Countdown shown in candidate workspace topbar with warnings at 10 min, 5 min, 1 min.
+- On expiry with open tab: frontend auto-submits current in-browser files with
+  `submission_mode: "auto_expired"`.
+- Backend enforces expiry on all candidate endpoints (snapshots, public tests, AI, submit)
+  and returns 409 after expiry regardless of browser state.
+
+### LLM-assisted review
+
+Not yet invoked. Reports include `llm_assisted_review.status = "not_run"` until a bounded
+review prompt and ADR-approved safety boundary are added. The LLM reviewer must not receive
+hidden test source, reference solutions, evaluator notes, or scoring internals beyond the
+bounded evidence needed for the review task.
+
+### Submission review
+
+Replaces the separate final explanation and decision log with a structured 4-question form
+captured at final submission:
+
+1. What changed?
+2. Tradeoffs or product decisions?
+3. How did you verify?
+4. What would you improve next?
+
+Optional: additional evaluator notes. The Submit button opens a confirmation modal showing
+public-test status, whether candidate tests were added, and how many required questions
+were answered. Incomplete answers warn but do not block submission.
+
+### FAVO report interpretation
+
+Derived automatically from evidence. Candidates do not write FAVO.
+
+| FAVO area | Derived from |
+|---|---|
+| Frame | feature/design score |
+| Ask | candidate AI prompt count |
+| Verify | public test run count, candidate test files, hidden test status |
+| Own | submission-review required questions answered |
+
+### AI integrity risk
+
+Report-only label (low/medium/high/critical) derived from:
+
+- `policy_redirect_count` — all assistant interactions with any policy tag.
+- `severe_redirect_count` — `full_solution`, `final_explanation`, `anti_decomposition`, `prompt_injection`.
+- `prompt_injection_count` — `prompt_injection` tag specifically.
+- `pasted_ai_code_count` — verbatim AI code blocks found in final submission.
+- `large_paste_event_count` — snapshot-to-snapshot diffs with ≥8 lines added at once.
+- `weak_submission_review` — fewer than 2 required questions answered.
+
+Does not change the numeric score. Guides employer review attention and follow-up questions.
+Must not state plagiarism as a fact.
+
+`direct_diagnosis` redirects appear in `flagged_prompts` and count toward
+`policy_redirect_count` but not `severe_redirect_count`.
+
+### Socratic AI tutor (direct_diagnosis)
+
+Candidates can bypass diagnosis by asking the AI about one function at a time. The
+`direct_diagnosis` policy tag handles this: instead of blocking, the AI responds with
+a Socratic question about what the candidate has already observed. See section 12 for
+the full classification architecture and response routing.
+
+### Employer isolation
+
+Strict Clerk-user-based isolation implemented:
+
+- Web sends Clerk session token on all employer API calls.
+- Backend employer routes verify Clerk identity via `get_current_employer()`.
+- `Employer` row keyed by Clerk user id.
+- Invite creation derives `attempt.employer_id` from the authenticated employer.
+- Attempt lists and evidence-report routes are scoped to the authenticated employer.
+- Clerk JWT is always required — both local and production. No dev bypass exists.
+- Candidate invite routes remain bearer-link based and do not expose employer-wide data.
+
+### Deployment architecture
+
+No deployment stack changes in Phase 2.
+
+- Web/API: Render.
+- Database: Supabase (Postgres).
+- Employer auth: Clerk.
+- Local execution: Docker worker (`http_worker` backend).
+- Hosted candidate execution: AWS ECS/Fargate per-run tasks (`ecs_fargate` backend).
+- Backend switches via `EXECUTION_BACKEND` env var (`apps/api/signalloop_api/execution.py`).

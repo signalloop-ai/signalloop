@@ -5,6 +5,449 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-06-20 — Local Phase 2 Validation Cleanup
+
+**Symptom:** Review of the latest Phase 2 changes found local validation drift:
+
+- `next.config.ts` could inline empty public env values when root `.env` was absent or
+  shell values were set.
+- `npm run typecheck` failed in the candidate workspace e2e test.
+- Real-Postgres `schema_health` tests were collected by the default API test command.
+- Local docs still described the removed employer dev-login fallback.
+- Real API Playwright helper still clicked the removed "Use local employer login"
+  button.
+
+**Root cause:** Clerk-only auth and Phase 2 live testing changes were applied across
+code, tests, and docs at different times, leaving stale local setup assumptions.
+
+**Files changed:**
+
+- `.env.example`
+- `.env.local.example`
+- `.env.render-supabase.example`
+- `README.md`
+- `apps/web/README.md`
+- `apps/web/next.config.ts`
+- `apps/web/tests/e2e/candidate-workspace.spec.ts`
+- `apps/web/tests/e2e/real-api-invite-flow.spec.ts`
+- `apps/api/tests/test_schema_health.py`
+- `docs/development/testing.md`
+- `docs/development/known-limitations.md`
+- `docs/development/local-pilot-checklist.md`
+- `docs/enhancements/phase-2-assessment-system/03-employer-assessment-configuration.md`
+- `docs/enhancements/phase-2-assessment-system/08-multi-tenant-employer-isolation.md`
+- `docs/enhancements/phase-2-assessment-system/phase-2-execution-plan.md`
+
+**What changed:**
+
+- `next.config.ts` now prefers `process.env` values with root `.env` as fallback.
+- Schema-health tests now skip unless `RUN_SCHEMA_HEALTH_TESTS=1`.
+- Local docs now state that employer routes require Clerk locally and in production.
+- Real API invite Playwright test now uses a pre-created `REAL_API_INVITE_TOKEN`.
+- Candidate auto-expiry e2e test uses a mutable capture holder that typechecks.
+- Stale docs saying Advanced is disabled were updated to reflect the implemented
+  Advanced pack.
+
+**Validation:**
+
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> 66 passed, 3 skipped.
+- `cd apps/worker && UV_CACHE_DIR=.uv-cache uv run pytest` -> 22 passed.
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/web && npm run lint` -> passed.
+- `cd apps/web && npm run build` -> passed.
+- `cd apps/web && PLAYWRIGHT_SKIP_WEBSERVER=1 npm run test:e2e -- --workers=1`
+  -> 16 passed, 2 skipped.
+- Local live Standard candidate flow passed against disposable SQLite API, local Docker
+  worker, and built web server.
+- Local live Advanced candidate flow passed against the same local stack.
+- Persisted live test-run outputs confirmed pytest ran inside the Docker assessment
+  image for both public and hidden runs.
+
+**Follow-up:** Real employer portal invite creation remains Clerk-only. Full employer
+real-API Playwright creation requires a real signed-in Clerk browser session or a
+valid test Clerk token.
+
+---
+
+## 2026-06-19 — Clerk-Only Auth + Local/Production Parity
+
+**Symptom / goal:**
+
+- Employer portal was showing "Local dev login active until Clerk keys are configured"
+  even after Clerk was set up, because `EMPLOYER_AUTH_REQUIRED` could be toggled off and
+  `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` was empty in the shell (overriding the root `.env`).
+- 10–15 second API latency on employer auth calls because `PyJWKClient` was instantiated
+  per-request with no cache.
+- Employer page stuck in "Loading employer session" after server restart due to Clerk's
+  `getToken` reference changing during initialization causing a cancel-restart loop in
+  `useEffect`.
+- User requirement: local and production environments must be identical — no dev
+  fallback auth paths.
+
+**Root cause:**
+
+- `EMPLOYER_AUTH_REQUIRED` flag allowed bypassing Clerk JWT verification locally via a
+  custom `X-Dev-Employer-Id` header and hardcoded employer config values.
+- `PyJWKClient` constructed fresh on every request, causing TCP timeout stalls when the
+  JWKS endpoint was slow.
+- Shell had `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=''` which took precedence over the root
+  `.env` value via Next.js's `process.env` auto-inlining.
+- `getToken` from `useAuth()` gets a new function reference when Clerk initializes,
+  recreating the `useCallback`, triggering the `useEffect` cleanup, and looping.
+
+**Files changed:**
+
+- `apps/api/signalloop_api/auth.py`
+- `apps/api/signalloop_api/config.py`
+- `apps/api/tests/conftest.py` (new — shared fixtures)
+- `apps/api/tests/test_attempt_lifecycle.py`
+- `apps/api/tests/test_ai_endpoint.py`
+- `apps/api/tests/test_cors.py`
+- `apps/api/tests/test_employer_isolation.py`
+- `apps/api/tests/test_evidence_report.py`
+- `apps/api/tests/test_final_submission.py`
+- `apps/web/next.config.ts`
+- `apps/web/src/app/employer/page.tsx`
+- `apps/web/src/app/employer/reports/[attemptId]/page.tsx`
+- `apps/web/tests/e2e/employer-portal.spec.ts`
+
+**What changed:**
+
+- Removed `EMPLOYER_AUTH_REQUIRED`, `local_employer_clerk_user_id`, and
+  `local_employer_email` from config. Both environments now always require a valid Clerk
+  JWT — no dev bypass.
+- Removed `local_employer_identity` branch from `auth.py`. `get_current_employer` only
+  calls `verify_clerk_token`.
+- `PyJWKClient` is now a module-level singleton with `cache_keys=True`, instantiated
+  once at import time. Eliminates per-request HTTPS fetches and the 10–15 s stall.
+- New `apps/api/tests/conftest.py` with shared `session_factory`, `default_employer`,
+  `employer_context`, and `client` fixtures. All test files updated to use
+  `app.dependency_overrides[get_current_employer]` instead of relying on dev fallback.
+- `EmployerContext` dataclass in conftest lets isolation tests switch authenticated
+  employer between requests without two-client contention on `app.dependency_overrides`.
+- `apps/web/next.config.ts` injects root `.env` values into `process.env` before the
+  config object so that a shell-exported empty variable does not shadow the file value.
+- Added `allowedDevOrigins: ["127.0.0.1"]` to `next.config.ts` so HMR works when the
+  browser connects via `127.0.0.1`.
+- Employer dashboard (`page.tsx`) rewritten to Clerk-only: removed `DevPortal`,
+  `ClerkEmployerPortal`, `isDev`, and `localSessionActive`. One code path.
+- Added `isClerkLoaded` guard in `useEffect` on both the employer dashboard and the
+  evidence report page — prevents the cancel-restart loop caused by `getToken` reference
+  churn during Clerk initialization.
+- Playwright `employer-portal.spec.ts`: added `mockClerkSignedIn` helper that
+  intercepts `**clerk.accounts.dev/v1/client**`, returning a fake authenticated session
+  for `GET /v1/client` and `{ object: "token", jwt }` for token refresh endpoints.
+
+**Validation:**
+
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> all passed.
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/web && npm run lint` -> passed.
+- `cd apps/web && npx playwright test tests/e2e/employer-portal.spec.ts` -> 5 passed.
+
+---
+
+## 2026-06-19 — Phase 2 Live E2E Findings
+
+**Symptom:** Live local browser testing initially passed through the UI but exposed
+several real integration issues:
+
+- Parallel local fallback invite creation could fail with `UNIQUE constraint failed:
+  employers.email`.
+- Timed attempts could auto-expire immediately in the browser because API responses
+  serialized naive timestamps without a UTC marker.
+- A non-default web port failed browser fetches until API CORS included that origin.
+- Public/hidden worker runs failed before pytest collection when the API used
+  `ASSESSMENT_RUNTIME_IMAGE=python:3.11-slim`.
+- The live Playwright smoke still asserted old Phase 1 final explanation fields and a
+  Standard-only title.
+
+**Root cause:**
+
+- Local employer fallback did not handle unique-email collisions robustly.
+- SQLite returns naive datetimes even when the app writes UTC-aware values; browser
+  `Date.parse()` interpreted those as local time.
+- Local live smoke services were split across `3100` and `8016` without matching CORS.
+- `.env.example` still documented a generic Python image instead of the assessment
+  runtime image.
+- The live smoke test had not been updated for Phase 2 structured Submission Review or
+  Advanced assessment titles.
+
+**Files changed:**
+
+- `.env.example`
+- `apps/api/signalloop_api/auth.py`
+- `apps/api/signalloop_api/attempts.py`
+- `apps/api/tests/test_attempt_lifecycle.py`
+- `apps/api/tests/test_employer_isolation.py`
+- `apps/web/tests/e2e/live-full-stack-smoke.spec.ts`
+- `docs/development/testing.md`
+- `CURRENT_STATE.md`
+
+**What changed:**
+
+- Local fallback employer creation now recovers from unique collisions without merging
+  distinct Clerk users by email.
+- Candidate/employer attempt timestamps now serialize as UTC ISO strings ending in
+  `Z`.
+- Live Playwright smoke now uses Phase 2 Submission Review fields, accepts Standard or
+  Advanced FastAPI titles, and has a live-worker timeout.
+- `.env.example` now points local worker execution at
+  `signalloop-python-assessment:3.11`.
+- Testing docs now call out CORS/base URL alignment and the required local assessment
+  runtime image.
+
+**Validation:**
+
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> 57 passed.
+- `cd apps/worker && UV_CACHE_DIR=.uv-cache uv run pytest` -> 22 passed.
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/web && npm run lint` -> passed.
+- `docker build -f docker/python-assessment.Dockerfile -t signalloop-python-assessment:3.11 .`
+  from `apps/worker` -> passed.
+- `docker run --rm signalloop-python-assessment:3.11 python -m pytest --version`
+  -> `pytest 8.3.4`.
+- Live Standard browser smoke passed once against the disposable local API/worker/web,
+  then persisted worker output inspection showed the API had used the wrong runtime image.
+- Live Advanced browser smoke passed once against the disposable local API/worker/web,
+  then persisted worker output inspection showed the API had used the wrong runtime image.
+
+**Follow-up:**
+
+- Re-run fresh Standard and Advanced live Playwright smokes locally with
+  `ASSESSMENT_RUNTIME_IMAGE=signalloop-python-assessment:3.11`; the final rerun after
+  correcting the runtime image was blocked by the Codex escalation usage limit.
+- After those pass, generate reports for the fresh attempts and verify employer report
+  pages in the browser.
+
+---
+
+## 2026-06-19 — Playwright E2E Sandbox Fix
+
+**Symptom:** `npm run test:e2e` was unreliable in Codex. Playwright first failed while
+trying to bind `127.0.0.1:3000` even though a dev server was already running; direct
+browser launch then failed inside the macOS sandbox with a Chromium Mach-port permission
+error.
+
+**Root cause:** The Playwright config always tried to manage the web server, and the
+Codex sandbox can block both local server binding and Chromium's macOS browser-process
+registration. Once run outside the sandbox, the employer report test also had one stale
+strict-mode assertion because "Public issue resolution" now appears in both the chart
+label and score-card title.
+
+**Files changed:**
+
+- `apps/web/playwright.config.ts`
+- `apps/web/tests/e2e/employer-portal.spec.ts`
+- `docs/development/testing.md`
+- `docs/enhancements/phase-2-assessment-system/05-advanced-assessment-pack.md`
+- `CURRENT_STATE.md`
+
+**What changed:**
+
+- Added `PLAYWRIGHT_BASE_URL` for non-default local/hosted targets.
+- Added `PLAYWRIGHT_SKIP_WEBSERVER=1` so e2e can reuse an already-running web server.
+- Tightened the employer report assertion to avoid duplicate-text strict-mode failure.
+- Documented the reusable local command.
+
+**Validation:**
+
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/web && npm run lint` -> passed.
+- `cd apps/web && PLAYWRIGHT_SKIP_WEBSERVER=1 npm run test:e2e -- --workers=1`
+  -> 2 passed, 1 skipped.
+
+**Follow-up:** The skipped live smoke remains intentional. Run it only with API, worker,
+web, and a valid `LIVE_INVITE_TOKEN`.
+
+---
+
+## 2026-06-19 — Phase 2 Task 02 AI Collaborator Policy Tightening
+
+**Symptom:** The AI collaborator policy allowed tradeoff discussion, but the classifier
+did not explicitly distinguish "compare tradeoffs" from "choose the answer for me" and
+did not tag prompt-injection attempts.
+
+**Root cause:** MVP policy tags focused on all-defects/full-solution/final-explanation
+requests and did not encode Phase 2 design-choice ownership or prompt-injection evidence.
+
+**Files changed:**
+
+- `apps/api/signalloop_api/ai_policy.py`
+- `apps/api/signalloop_api/ai_provider.py`
+- `apps/api/tests/test_ai_policy.py`
+- `apps/api/tests/test_ai_endpoint.py`
+- `docs/prompts/ai-collaborator-policy.md`
+- `docs/enhancements/phase-2-assessment-system/02-ai-collaborator-policy-tightening.md`
+- `docs/enhancements/phase-2-assessment-system/phase-2-execution-plan.md`
+- `CURRENT_STATE.md`
+
+**What changed:**
+
+- Added disallowed `choose_design` and `prompt_injection` tags.
+- Added a specific redirect for requests asking the assistant to choose an assessment
+  design decision.
+- Updated the system prompt and local fallback classifier.
+- Updated provider fallback behavior to preserve task-specific redirect messages.
+- Added AI policy and endpoint tests for tradeoff comparison, design-choice redirect, and
+  prompt-injection detection.
+
+**Validation:**
+
+- `cd apps/api && uv run pytest tests/test_ai_policy.py tests/test_ai_endpoint.py tests/test_ai_provider.py`
+  -> 11 passed.
+- `cd apps/api && uv run pytest` -> 49 passed.
+
+**Follow-up:** AI integrity risk remains report-only and will be surfaced in the reporting
+task.
+
+---
+
+## 2026-06-19 — Phase 2 Task 01 Standard v2 Assessment And Rubric
+
+**Symptom:** The MVP assessment and deterministic scoring model were too shallow for the
+next phase of human-AI engineering evaluation.
+
+**Root cause:** `fastapi_task_api_v1` was designed as the historical MVP/pilot pack, and
+the MVP scoring rubric overweighted simple public/hidden test totals and a generic
+written explanation category.
+
+**Files changed:**
+
+- `assessment_packs/fastapi_task_api_standard_v2/`
+- `apps/api/signalloop_api/attempts.py`
+- `apps/api/signalloop_api/reports.py`
+- `apps/api/signalloop_api/schemas.py`
+- `apps/api/tests/test_attempt_lifecycle.py`
+- `apps/web/tests/e2e/candidate-workspace.spec.ts`
+- `apps/web/tests/e2e/employer-portal.spec.ts`
+- `docs/enhancements/phase-2-assessment-system/01-assessment-rubric-and-standard-pack.md`
+- `docs/enhancements/phase-2-assessment-system/phase-2-execution-plan.md`
+- `docs/architecture/technical-product-architecture-spec.md`
+- `docs/development/known-limitations.md`
+- `CURRENT_STATE.md`
+
+**What changed:**
+
+- Created `assessment_packs/fastapi_task_api_standard_v2/` and kept v1 intact.
+- Added priority handling as the standard-v2 feature/design dimension.
+- Standard v2 starter public tests intentionally pass 2 and fail 4.
+- Standard v2 reference solution passes 6 public and 7 hidden tests.
+- Default invite pack changed to `fastapi_task_api_standard_v2`.
+- Report scoring now uses Phase 2 categories:
+  public issue resolution, private issue generalization, feature/design implementation,
+  candidate-written tests, AI collaboration, and regression/code quality.
+- Candidate-written test scoring now considers test function count, HTTP assertions, and
+  edge-case signals instead of only counting touched files.
+
+**Validation:**
+
+- `cd assessment_packs/fastapi_task_api_standard_v2/candidate && uv run pytest`
+  -> expected 2 passed, 4 failed.
+- `cd assessment_packs/fastapi_task_api_standard_v2/evaluator/reference_solution && uv run pytest -c pyproject.toml --rootdir=. ../../candidate/tests`
+  -> 6 passed.
+- `cd assessment_packs/fastapi_task_api_standard_v2/evaluator/reference_solution && uv run pytest -c pyproject.toml --rootdir=. ../hidden_tests`
+  -> 7 passed.
+- `cd apps/api && uv run pytest` -> 45 passed.
+- `cd apps/web && npm run lint` -> passed.
+- `cd apps/web && npm run build` -> passed.
+- `cd apps/web && npm run typecheck` -> passed after build regenerated `.next/types`.
+- `cd apps/web && npm run test:e2e` -> 2 passed, 1 skipped.
+
+**Follow-up:** Implement structured submission review and report-only AI integrity risk in
+their bounded Phase 2 tasks.
+
+---
+
+## 2026-06-19 — Phase 2 Task 08 Multi-Tenant Employer Isolation
+
+**Symptom:** Employer portal login was a frontend gate only. Backend employer routes could
+list all attempts, create attempts with a client-supplied `employer_id`, and generate or
+fetch reports by attempt id without ownership checks.
+
+**Root cause:** The MVP shipped with Clerk only on the web surface; the API did not verify
+Clerk identity or derive tenant ownership server-side.
+
+**Files changed:**
+
+- `apps/api/pyproject.toml`
+- `apps/api/uv.lock`
+- `apps/api/signalloop_api/auth.py`
+- `apps/api/signalloop_api/config.py`
+- `apps/api/signalloop_api/attempts.py`
+- `apps/api/signalloop_api/reports.py`
+- `apps/api/tests/test_employer_isolation.py`
+- `apps/web/src/app/employer/api.ts`
+- `apps/web/src/app/employer/page.tsx`
+- `apps/web/src/app/employer/reports/[attemptId]/page.tsx`
+- `.env.example`
+- `.env.local.example`
+- `.env.render-supabase.example`
+- `docs/deployment/render-supabase-clerk.md`
+- `docs/development/known-limitations.md`
+- `docs/enhancements/phase-2-assessment-system/08-multi-tenant-employer-isolation.md`
+- `docs/enhancements/phase-2-assessment-system/phase-2-execution-plan.md`
+- `CURRENT_STATE.md`
+
+**What changed:**
+
+- Added backend Clerk JWT verification with `PyJWT[crypto]`.
+- Added `get_current_employer` and local-only dev employer fallback.
+- Invite creation now derives `attempt.employer_id` from the authenticated employer and
+  ignores client-supplied `employer_id`.
+- Attempt listing is scoped to the authenticated employer.
+- Evidence-report generation/fetch validates attempt ownership.
+- Employer web API calls send Clerk bearer tokens when available.
+- Added tenant isolation API tests.
+
+**Validation:**
+
+- `cd apps/api && uv run pytest` -> 45 passed.
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/web && npm run lint` -> passed.
+- `cd apps/web && npm run build` -> passed.
+- `cd apps/web && npm run test:e2e` -> 2 passed, 1 skipped.
+
+**Follow-up:** Set `EMPLOYER_AUTH_REQUIRED=true` plus Clerk JWT issuer/JWKS env values in
+Render before deploying this change.
+
+---
+
+## 2026-06-19 — Phase 2 Planning Freeze Updates
+
+**Symptom:** Phase 2 scope had open decisions around employer isolation, report
+confidence, AI misuse indicators, structured candidate submission evidence, and UI polish.
+
+**Root cause:** The MVP validated the end-to-end flow but left several post-MVP decisions
+as conversational context rather than durable implementation guidance.
+
+**Files changed:**
+
+- `CURRENT_STATE.md`
+- `docs/architecture/technical-product-architecture-spec.md`
+- `docs/enhancements/phase-2-assessment-system/README.md`
+- `docs/enhancements/phase-2-assessment-system/phase-2-execution-plan.md`
+- `docs/enhancements/phase-2-assessment-system/phase-2-product-scope.md`
+- `docs/enhancements/phase-2-assessment-system/02-ai-collaborator-policy-tightening.md`
+- `docs/enhancements/phase-2-assessment-system/06-ui-enhancements.md`
+- `docs/enhancements/phase-2-assessment-system/07-reporting-and-favo-updates.md`
+- `docs/enhancements/phase-2-assessment-system/08-multi-tenant-employer-isolation.md`
+
+**What changed:**
+
+- Added strict Clerk-user-based employer isolation as a Phase 2 task.
+- Captured that AI integrity risk is report-only and must not directly affect numeric
+  score in Phase 2.
+- Captured removal of the generic employer-facing report confidence label.
+- Captured structured Submission Review and final-submit confirmation behavior.
+- Captured report/candidate UI polish direction, including simple report charts and
+  an AI integrity risk panel.
+
+**Follow-up:** Implement one bounded Phase 2 task at a time. Multi-tenant isolation should
+be completed before broader external pilot usage.
+
+---
+
 ## 2026-06-17 — Hosted Render/Supabase/AWS E2E Smoke Findings
 
 **Why:** First hosted e2e smoke was run against:
@@ -698,3 +1141,193 @@ This lets all rows in `.submission-panel` size naturally to content while preser
 
 - Backend-to-worker public test orchestration is still not implemented (known, per
   `CURRENT_STATE.md`). Public tests are called directly from the browser to the worker.
+
+---
+
+## 2026-06-19 — Phase 2 Employer Assessment Configuration
+
+### Change — Invite-level assessment and timing configuration
+
+**Why:** Phase 2 needs employers to choose the standard assessment and timing
+expectations per invite before timer enforcement and advanced packs are implemented.
+
+**Implementation:**
+- Added `assessment_level`, `timing_mode`, `duration_minutes`, and `expires_at` to
+  `assessment_attempts` through Alembic migration `0003_add_attempt_configuration`.
+- Extended the attempt creation API with fixed validation for standard/advanced,
+  timed/untimed, and 60/90/120/150 minute durations.
+- Kept advanced assessment intentionally unavailable until the advanced pack task;
+  the employer UI shows it as planned/disabled and the API rejects advanced creation.
+- Updated the employer invite form and attempt list to display timing configuration.
+- Hardened API validation error serialization so Pydantic validator errors return a
+  clean 422 response.
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> 51 passed.
+- `cd apps/api && DATABASE_URL=sqlite:////tmp/signalloop_phase2_config_migration_check_2.db UV_CACHE_DIR=.uv-cache uv run alembic upgrade head` -> passed.
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/web && npm run lint` -> passed.
+- `cd apps/web && npm run build` -> passed.
+- `cd apps/web && npm run test:e2e` was attempted but blocked by sandbox `EPERM`
+  while binding `127.0.0.1:3000`; run it locally before deployment.
+
+---
+
+## 2026-06-19 — Phase 2 Advanced FastAPI Pack Implementation
+
+### Change — Advanced pack implemented and enabled
+
+**Why:** Employer invite configuration already exposes assessment difficulty. Leaving
+Advanced disabled made the Standard/Advanced choice feel unfinished.
+
+**Implementation:**
+- Added `assessment_packs/fastapi_task_api_advanced_v1/`.
+- Added candidate starter app, README, public tests, requirements, pyproject, and lock
+  file.
+- Added evaluator hidden tests, reference solution, reference notes, scoring rubric,
+  and manual evaluation form.
+- Added `fastapi_task_api_advanced_v1` to API `DEFAULT_PACKS`.
+- Mapped `assessment_level=advanced` to the advanced pack and default 120-minute
+  duration.
+- Enabled the Advanced option in the employer invite form.
+- Added API coverage for creating Advanced attempts.
+- Made candidate file loading ignore `.uv-cache` generated during local dependency
+  attempts.
+
+**Validation:**
+- Advanced starter public tests using existing assessment virtualenv:
+  `1 passed, 5 failed` on unmodified starter code.
+- Advanced reference solution against public tests:
+  `6 passed`.
+- Advanced reference solution against hidden tests:
+  `7 passed`.
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> 55 passed.
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/web && npm run lint` -> passed.
+- `cd apps/web && npm run build` -> passed.
+- `cd apps/web && npm run test:e2e` was attempted but blocked by sandbox `EPERM`
+  while binding `127.0.0.1:3000`; run it locally before deployment.
+
+**Follow-up:**
+- External LLM-assisted report review is still not invoked; reports continue to show
+  `llm_assisted_review.status=not_run`.
+
+---
+
+## 2026-06-19 — Phase 2 Reporting And FAVO Updates
+
+### Change — Phase 2 report evidence sections
+
+**Why:** Employer reports should evaluate the human-AI engineering process, not only
+final code or generic confidence.
+
+**Implementation:**
+- Removed the report-level `scores.confidence` field from generated reports.
+- Added structured `submission_review` evidence parsed from final submission review
+  answers.
+- Added deterministic `favo` interpretation for Frame, Ask, Verify, and Own.
+- Added report-only `ai_integrity_risk` with low/medium/high/critical labels and
+  `score_impact=none_phase_2`.
+- Added `feature_design_implementation` as a top-level report section.
+- Added `llm_assisted_review` status metadata. External LLM review is not invoked in
+  the local deterministic path.
+- Updated employer report UI/types to render the backend-provided sections.
+- Updated architecture docs to reflect structured Submission Review, FAVO, AI
+  integrity risk, and Phase 2 rubric categories.
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_evidence_report.py` -> 8 passed.
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> 54 passed.
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/web && npm run lint` -> passed.
+- `cd apps/web && npm run build` -> passed.
+- `cd apps/web && npm run test:e2e` was attempted but blocked by sandbox `EPERM`
+  while binding `127.0.0.1:3000`; run it locally before deployment.
+
+---
+
+## 2026-06-19 — Phase 2 UI Enhancements
+
+### Change — Structured submission review, confirmation, and report visuals
+
+**Why:** Phase 2 needs clearer candidate submission expectations and more readable
+employer reports without expanding into a dashboard product.
+
+**Implementation:**
+- Replaced separate final explanation/decision-log inputs with structured Submission
+  Review prompts:
+  - What did you change?
+  - What tradeoffs or product decisions did you make?
+  - How did you verify your changes?
+  - What would you improve next, given more time?
+  - Optional evaluator notes.
+- Submit now opens a confirmation modal and shows public-test, candidate-test, and
+  review completion signals before final submission.
+- Manual submission no longer requires review text at the API layer; review answers
+  remain supporting evidence.
+- Employer report page now shows timing metadata, native score bars, public/hidden
+  test bars, feature/design summary, FAVO-style interpretation, and AI integrity risk.
+- Added modal, chart, and FAVO styling in the shared web CSS.
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> 54 passed.
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/web && npm run lint` -> passed.
+- `cd apps/web && npm run build` -> passed.
+- `cd apps/web && npm run test:e2e` was attempted but blocked by sandbox `EPERM`
+  while binding `127.0.0.1:3000`; run it locally before deployment.
+
+---
+
+## 2026-06-19 — Phase 2 Advanced Pack Specification
+
+### Change — Advanced FastAPI pack design documented
+
+**Why:** Phase 2 needs a deeper FastAPI assessment direction, but the advanced pack
+implementation should remain separate from standard v2 and timer work.
+
+**Implementation:**
+- Added `docs/assessment/fastapi-task-api-advanced-v1.md` with domain, endpoints,
+  seeded issue areas, feature/design requirements, public/hidden test direction,
+  AI collaboration signal, rubric mapping, and non-goals.
+- Marked `05-advanced-assessment-pack.md` as specification completed only.
+- Linked the spec from the Phase 2 execution plan and docs index.
+
+**Validation:**
+- Confirmed this task is documentation-only.
+- Did not create `assessment_packs/fastapi_task_api_advanced_v1/`.
+
+---
+
+## 2026-06-19 — Phase 2 Time-Boxed Assessment Flow
+
+### Change — Timed attempts and expiry enforcement
+
+**Why:** Phase 2 needs employer-selectable timed assessments without trusting only the
+browser countdown.
+
+**Implementation:**
+- Added `submission_mode` to `assessment_attempts` through Alembic migration
+  `0004_add_submission_mode`.
+- Added explicit `POST /candidate/invites/{token}/accept`; loading an invite is now
+  passive and accepting the rules starts `started_at` plus `expires_at` for timed
+  attempts.
+- Candidate invite responses now include timing metadata.
+- Candidate workspace shows a countdown for timed attempts, warnings at 10/5/1
+  minute, and auto-submits current browser files at expiry.
+- Backend enforces expiry on snapshots, public test runs, AI messages, and final
+  submission.
+- Closed/stale-tab expiry records an `auto_expired` final submission from the latest
+  persisted snapshot when the next backend action arrives.
+- Evidence reports now include timing mode, duration, time used, start, expiry,
+  submission timestamp, and submission mode.
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_attempt_lifecycle.py tests/test_final_submission.py tests/test_evidence_report.py tests/test_ai_endpoint.py` -> 30 passed.
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> 54 passed.
+- `cd apps/api && DATABASE_URL=sqlite:////tmp/signalloop_phase2_timer_migration_check.db UV_CACHE_DIR=.uv-cache uv run alembic upgrade head` -> passed.
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/web && npm run lint` -> passed.
+- `cd apps/web && npm run build` -> passed.
+- `cd apps/web && npm run test:e2e` was attempted but blocked by sandbox `EPERM`
+  while binding `127.0.0.1:3000`; run it locally before deployment.

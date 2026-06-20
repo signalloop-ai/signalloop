@@ -1,15 +1,17 @@
 from datetime import datetime
 from difflib import SequenceMatcher
-from re import DOTALL, findall, finditer
+from re import DOTALL, MULTILINE, findall, finditer
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from signalloop_api.attempts import DEFAULT_PACKS
+from signalloop_api.auth import get_current_employer
 from signalloop_api.audit import record_audit_event
+from signalloop_api.config import settings
 from signalloop_api.database import get_session
-from signalloop_api.models import AIInteraction, AssessmentAttempt, CodeSnapshot, EvidenceReport, TestRun
+from signalloop_api.models import AIInteraction, AssessmentAttempt, CodeSnapshot, Employer, EvidenceReport, TestRun
 from signalloop_api.schemas import EvidenceReportResponse
 
 
@@ -18,17 +20,18 @@ router = APIRouter()
 # Single source of truth for all scoring weights.
 # Change values here to rebalance the rubric — nothing else needs to change.
 RUBRIC = {
-    "public_test_coverage": 20,   # public tests passing at submission
-    "hidden_test_coverage": 30,   # hidden seeded issues fixed (6 tests × 5 pts)
-    "regression": 15,             # existing behavior not broken by candidate changes
+    "public_issue_resolution": 15,
+    "private_issue_generalization": 20,
+    "feature_design_implementation": 20,
     "candidate_tests": 15,        # tests the candidate wrote or modified
-    "ai_collaboration": 10,       # disciplined AI use (no enumerate-all prompts)
-    "explanation": 10,            # explanation and design decision notes
+    "ai_collaboration": 20,
+    "regression_code_quality": 10,
 }
 
 SEEDED_ISSUE_AREAS = [
     "duplicate email (case-insensitive + whitespace trimming)",
     "blank or whitespace-only task title (with title trimming)",
+    "task priority defaulting, normalization, and validation",
     "owner-only read and delete access",
     "unknown actor access (resource existence leakage)",
     "status transition enforcement (TODO → IN_PROGRESS → DONE)",
@@ -56,10 +59,31 @@ def candidate_test_evidence(initial_files: dict[str, str], final_files: dict[str
     final_tests = test_file_paths(final_files)
     added = sorted(final_tests - initial_tests)
     modified = sorted(path for path in final_tests & initial_tests if final_files.get(path) != initial_files.get(path))
+    touched_paths = added + modified
+    touched_content = "\n".join(final_files.get(path, "") for path in touched_paths)
+    test_function_count = len(findall(r"^\s*def\s+test_[a-zA-Z0-9_]+\s*\(", touched_content, flags=MULTILINE))
+    http_assertion_count = len(findall(r"assert\s+.+\.status_code\s*==", touched_content))
+    edge_case_terms = [
+        "400",
+        "403",
+        "404",
+        "409",
+        "422",
+        "actor_user_id",
+        "duplicate",
+        "blank",
+        "priority",
+        "transition",
+        "delete",
+    ]
+    edge_case_signal_count = sum(1 for term in edge_case_terms if term in touched_content)
     return {
         "added_test_files": added,
         "modified_test_files": modified,
         "candidate_test_file_count": len(added) + len(modified),
+        "candidate_test_function_count": test_function_count,
+        "http_assertion_count": http_assertion_count,
+        "edge_case_signal_count": edge_case_signal_count,
     }
 
 
@@ -165,6 +189,10 @@ def score_category(name: str, points: int, max_points: int, evidence: str) -> di
     return {"category": name, "points": points, "max_points": max_points, "evidence": evidence}
 
 
+def count_fixed_tests(test_names: list[str], failure_names: list[str]) -> int:
+    return sum(1 for test_name in test_names if test_name not in failure_names)
+
+
 def calculate_scores(
     *,
     test_runs: list[TestRun],
@@ -175,6 +203,7 @@ def calculate_scores(
     decision_log: str,
     snapshots: list[CodeSnapshot],
     initially_failing_tests: list[str],
+    feature_design_tests: list[str],
 ) -> dict:
     public_runs = [run for run in test_runs if run.run_type == "public"]
     pub = parse_pytest_output(public_runs[-1] if public_runs else None)
@@ -182,8 +211,6 @@ def calculate_scores(
     hid_passed = hidden_summary["passed"]
     hid_ratio = hid_passed / hid_collected if hid_collected else 0
 
-    # Public test coverage (20 pts) — points only for the tests that start failing.
-    # A test is "fixed" if it was initially failing but is no longer in the failure list.
     if not public_runs:
         pub_score = 0
         pub_evidence = "No public test run recorded."
@@ -192,43 +219,53 @@ def calculate_scores(
         pub_evidence = "No initially-failing tests configured for this assessment pack."
     else:
         tests_fixed = [t for t in initially_failing_tests if t not in pub["failure_names"]]
-        pub_score = round(RUBRIC["public_test_coverage"] * len(tests_fixed) / len(initially_failing_tests))
+        pub_score = round(RUBRIC["public_issue_resolution"] * len(tests_fixed) / len(initially_failing_tests))
         pub_evidence = f"{len(tests_fixed)}/{len(initially_failing_tests)} initially-failing tests now pass: {tests_fixed or 'none'}."
 
-    # Hidden test coverage (30 pts) — 5 pts per hidden test passed.
     if hidden_summary["status"] == "passed":
-        hidden_score = RUBRIC["hidden_test_coverage"]
+        hidden_score = RUBRIC["private_issue_generalization"]
     elif hid_collected:
-        hidden_score = round(RUBRIC["hidden_test_coverage"] * hid_ratio)
+        hidden_score = round(RUBRIC["private_issue_generalization"] * hid_ratio)
     else:
         hidden_score = 0
 
-    # Regression (15 pts) — any test NOT in initially_failing_tests that now fails is a regression.
+    combined_failures = sorted(set(pub["failure_names"] + hidden_summary["failure_names"]))
+    if feature_design_tests:
+        feature_fixed = count_fixed_tests(feature_design_tests, combined_failures)
+        feature_score = round(RUBRIC["feature_design_implementation"] * feature_fixed / len(feature_design_tests))
+        feature_evidence = f"{feature_fixed}/{len(feature_design_tests)} configured feature/design checks passed."
+    else:
+        feature_score = 0
+        feature_evidence = "No feature/design checks configured for this assessment pack."
+
     if not public_runs:
         reg_score = 0
         reg_evidence = "No public test run recorded; regression could not be assessed."
     else:
         regressed = [t for t in pub["failure_names"] if t not in initially_failing_tests]
         if not regressed:
-            reg_score = RUBRIC["regression"]
+            reg_score = RUBRIC["regression_code_quality"]
             reg_evidence = "No regression detected in previously-passing tests."
         elif len(regressed) == 1:
-            reg_score = round(RUBRIC["regression"] * 0.4)
+            reg_score = round(RUBRIC["regression_code_quality"] * 0.4)
             reg_evidence = f"1 regression detected: {regressed}."
         else:
             reg_score = 0
             reg_evidence = f"{len(regressed)} regressions detected: {regressed}."
 
-    # Candidate-written tests (15 pts).
     test_count = candidate_tests["candidate_test_file_count"]
-    if test_count >= 2:
+    test_functions = candidate_tests.get("candidate_test_function_count", 0)
+    http_assertions = candidate_tests.get("http_assertion_count", 0)
+    edge_signals = candidate_tests.get("edge_case_signal_count", 0)
+    if test_functions >= 3 and http_assertions >= 2 and edge_signals >= 2:
         cand_test_score = RUBRIC["candidate_tests"]
+    elif test_functions >= 1 and http_assertions >= 1:
+        cand_test_score = round(RUBRIC["candidate_tests"] * 0.75)
     elif test_count == 1:
-        cand_test_score = round(RUBRIC["candidate_tests"] * 0.6)
+        cand_test_score = round(RUBRIC["candidate_tests"] * 0.4)
     else:
         cand_test_score = 0
 
-    # AI collaboration (10 pts) — disciplined use, no "enumerate all defects" prompts.
     candidate_ai_count = sum(1 for i in ai_interactions if i.role == "candidate")
     disallowed_count = sum(
         1 for i in ai_interactions
@@ -243,38 +280,23 @@ def calculate_scores(
         ai_score = round(RUBRIC["ai_collaboration"] * 0.6)
         ai_evidence = f"{candidate_ai_count} candidate prompts, {disallowed_count} policy redirect(s)."
     else:
-        ai_score = 0
-        ai_evidence = "No AI messages sent; collaboration signal absent."
-
-    # Explanation and decisions (10 pts).
-    explanation_text = (final_explanation + " " + decision_log).strip()
-    has_decisions = text_has_any(explanation_text, ["403", "404", "transition", "todo", "in_progress", "done", "tradeoff"])
-    has_length = len(explanation_text) >= 80
-    if has_decisions and has_length:
-        exp_score = RUBRIC["explanation"]
-        exp_evidence = "Explanation covers design decisions and has sufficient length."
-    elif has_decisions or has_length:
-        exp_score = round(RUBRIC["explanation"] * 0.6)
-        exp_evidence = "Explanation is partial — either missing design decisions or very brief."
-    else:
-        exp_score = round(RUBRIC["explanation"] * 0.2)
-        exp_evidence = "Explanation is absent or too brief to assess."
+        ai_score = round(RUBRIC["ai_collaboration"] * 0.5)
+        ai_evidence = "No AI messages sent; collaboration signal is limited but not automatically failing."
 
     categories = [
-        score_category("Public test coverage", pub_score, RUBRIC["public_test_coverage"], pub_evidence),
-        score_category("Hidden test coverage", hidden_score, RUBRIC["hidden_test_coverage"],
+        score_category("Public issue resolution", pub_score, RUBRIC["public_issue_resolution"], pub_evidence),
+        score_category("Private issue generalization", hidden_score, RUBRIC["private_issue_generalization"],
             f"Hidden test status: {hidden_summary['status']}; estimated {hid_passed}/{hid_collected} passed."),
-        score_category("Regression", reg_score, RUBRIC["regression"], reg_evidence),
+        score_category("Feature/design implementation", feature_score, RUBRIC["feature_design_implementation"], feature_evidence),
         score_category("Candidate-written tests", cand_test_score, RUBRIC["candidate_tests"],
-            f"Candidate added/modified {test_count} test file(s)."),
+            f"Candidate added/modified {test_count} test file(s), with {test_functions} test function(s)."),
         score_category("AI collaboration", ai_score, RUBRIC["ai_collaboration"], ai_evidence),
-        score_category("Explanation and decisions", exp_score, RUBRIC["explanation"], exp_evidence),
+        score_category("Regression/code quality", reg_score, RUBRIC["regression_code_quality"], reg_evidence),
     ]
 
     total = sum(cat["points"] for cat in categories)
     max_total = sum(RUBRIC.values())
-    confidence = "high" if hid_collected else "medium" if public_runs else "low"
-    return {"total": total, "max_points": max_total, "categories": categories, "confidence": confidence}
+    return {"total": total, "max_points": max_total, "categories": categories}
 
 
 def recommendation_for_score(total: int) -> str:
@@ -373,14 +395,136 @@ def build_follow_up_questions(
             "Where did it come from and how did you verify it was correct?"
         )
 
-    # Brief or absent explanation
+    # Brief or absent submission review
     if len((final_explanation + decision_log).strip()) < 80:
         questions.append(
-            "Your final explanation was very brief. "
+            "Your submission review was very brief. "
             "Summarize the most important change you made and why you made it."
         )
 
     return questions
+
+
+def parse_submission_review(final_explanation: str, decision_log: str) -> dict:
+    fields = {
+        "what_changed": "",
+        "tradeoffs_or_product_decisions": decision_log,
+        "verification": "",
+        "improvements_with_more_time": "",
+        "additional_notes": "",
+    }
+    prefix_map = {
+        "What changed:": "what_changed",
+        "Tradeoffs/product decisions:": "tradeoffs_or_product_decisions",
+        "Verification:": "verification",
+        "Improve next:": "improvements_with_more_time",
+        "Additional notes:": "additional_notes",
+    }
+    for section in final_explanation.split("\n\n"):
+        for prefix, key in prefix_map.items():
+            if section.startswith(prefix):
+                value = section.removeprefix(prefix).strip()
+                fields[key] = "" if value == "Not answered." else value
+    if not any(fields.values()) and final_explanation.strip():
+        fields["what_changed"] = final_explanation.strip()
+    required = [
+        fields["what_changed"],
+        fields["tradeoffs_or_product_decisions"],
+        fields["verification"],
+        fields["improvements_with_more_time"],
+    ]
+    return {
+        **fields,
+        "required_answer_count": sum(1 for value in required if value.strip()),
+        "required_question_count": len(required),
+    }
+
+
+def ai_integrity_risk(ai_interactions: list[AIInteraction], pasted_code: dict, paste_events: dict, submission_review: dict) -> dict:
+    assistant_redirects = [
+        interaction.policy_tags or []
+        for interaction in ai_interactions
+        if interaction.role == "assistant" and interaction.policy_tags
+    ]
+    flattened_tags = [tag for tags in assistant_redirects for tag in tags]
+    prompt_injection_count = sum(1 for tag in flattened_tags if tag == "prompt_injection")
+    severe_redirect_count = sum(
+        1
+        for tag in flattened_tags
+        if tag in {"full_solution", "final_explanation", "anti_decomposition", "prompt_injection"}
+    )
+    total_redirect_count = len(assistant_redirects)
+    copied_code_count = pasted_code.get("pasted_ai_code_count", 0)
+    large_paste_count = paste_events.get("large_paste_count", 0)
+    weak_review = submission_review["required_answer_count"] < 2
+
+    if prompt_injection_count or copied_code_count >= 2 or severe_redirect_count >= 3:
+        label = "critical"
+    elif copied_code_count or large_paste_count >= 2 or severe_redirect_count:
+        label = "high"
+    elif total_redirect_count or large_paste_count or weak_review:
+        label = "medium"
+    else:
+        label = "low"
+
+    return {
+        "label": label,
+        "signals": {
+            "policy_redirect_count": total_redirect_count,
+            "severe_redirect_count": severe_redirect_count,
+            "prompt_injection_count": prompt_injection_count,
+            "pasted_ai_code_count": copied_code_count,
+            "large_paste_event_count": large_paste_count,
+            "weak_submission_review": weak_review,
+        },
+        "score_impact": "none_phase_2",
+    }
+
+
+def build_favo(
+    scores: dict,
+    candidate_tests: dict,
+    ai_interactions: list[AIInteraction],
+    submission_review: dict,
+    public_run_count: int,
+    hidden_summary: dict,
+) -> dict:
+    categories = {category["category"]: category for category in scores["categories"]}
+    return {
+        "frame": {
+            "label": "strong" if categories["Feature/design implementation"]["points"] >= 14 else "developing",
+            "evidence": categories["Feature/design implementation"]["evidence"],
+        },
+        "ask": {
+            "label": "present" if any(i.role == "candidate" for i in ai_interactions) else "limited",
+            "evidence": f"{sum(1 for i in ai_interactions if i.role == 'candidate')} candidate prompt(s) captured.",
+        },
+        "verify": {
+            "label": "strong" if public_run_count and candidate_tests["candidate_test_file_count"] else "limited",
+            "evidence": (
+                f"{public_run_count} public run(s), {candidate_tests['candidate_test_file_count']} candidate test file(s), "
+                f"hidden status {hidden_summary['status']}."
+            ),
+        },
+        "own": {
+            "label": "present" if submission_review["required_answer_count"] >= 2 else "limited",
+            "evidence": (
+                f"{submission_review['required_answer_count']}/{submission_review['required_question_count']} "
+                "submission-review questions answered."
+            ),
+        },
+    }
+
+
+def llm_assisted_review_status() -> dict:
+    return {
+        "status": "not_run",
+        "reason": (
+            "LLM-assisted report review is intentionally disabled in the local deterministic test path. "
+            "Enable only after adding a bounded report-review prompt and ADR-approved safety boundary."
+        ),
+        "provider_configured": bool(settings.openai_api_key),
+    }
 
 
 def build_timeline(
@@ -430,6 +574,8 @@ def build_report(
     paste_events = detect_large_paste_events(snapshots)
     pack_config = DEFAULT_PACKS.get(attempt.assessment_pack.slug, {})
     initially_failing_tests = pack_config.get("initially_failing_tests", [])
+    feature_design_tests = pack_config.get("feature_design_tests", [])
+    seeded_issue_areas = pack_config.get("seeded_issue_areas", SEEDED_ISSUE_AREAS)
     scores = calculate_scores(
         test_runs=test_runs,
         hidden_summary=hidden_summary,
@@ -439,16 +585,33 @@ def build_report(
         decision_log=final_submission.decision_log,
         snapshots=snapshots,
         initially_failing_tests=initially_failing_tests,
+        feature_design_tests=feature_design_tests,
     )
     recommendation = recommendation_for_score(scores["total"])
+    submission_review = parse_submission_review(
+        final_submission.final_explanation,
+        final_submission.decision_log,
+    )
 
     public_runs = [run for run in test_runs if run.run_type == "public"]
     pub_summary = parse_pytest_output(public_runs[-1] if public_runs else None)
+    time_used_minutes = None
+    if attempt.started_at and attempt.submitted_at:
+        time_used_minutes = round((attempt.submitted_at - attempt.started_at).total_seconds() / 60, 2)
     disallowed_count = sum(
         1 for i in ai_interactions
         if i.role == "assistant" and i.policy_tags and any(
             tag in {"enumerate_defects", "full_solution", "final_explanation"} for tag in i.policy_tags
         )
+    )
+    integrity_risk = ai_integrity_risk(ai_interactions, pasted_code, paste_events, submission_review)
+    favo = build_favo(
+        scores=scores,
+        candidate_tests=candidate_tests,
+        ai_interactions=ai_interactions,
+        submission_review=submission_review,
+        public_run_count=len(public_runs),
+        hidden_summary=hidden_summary,
     )
 
     return {
@@ -461,6 +624,15 @@ def build_report(
                 "version": attempt.assessment_pack.version,
             },
             "submitted_at": iso(attempt.submitted_at),
+            "timing": {
+                "timing_mode": attempt.timing_mode,
+                "duration_minutes": attempt.duration_minutes,
+                "time_used_minutes": time_used_minutes,
+                "started_at": iso(attempt.started_at),
+                "submitted_at": iso(attempt.submitted_at),
+                "expires_at": iso(attempt.expires_at),
+                "submission_mode": attempt.submission_mode or "manual",
+            },
         },
         "executive_summary": {
             "summary": (
@@ -483,9 +655,13 @@ def build_report(
             "initially_failing_tests": initially_failing_tests,
         },
         "hidden_test_results": {
-            "seeded_issue_areas": SEEDED_ISSUE_AREAS,
+            "seeded_issue_areas": seeded_issue_areas,
             "summary": hidden_summary,
         },
+        "feature_design_implementation": next(
+            (category for category in scores["categories"] if category["category"] == "Feature/design implementation"),
+            None,
+        ),
         "candidate_tests": candidate_tests,
         "ai_collaboration": {
             "message_count": len(ai_interactions),
@@ -502,7 +678,7 @@ def build_report(
                 for i, interaction in enumerate(ai_interactions)
                 if interaction.role == "assistant"
                 and interaction.policy_tags
-                and any(tag in {"enumerate_defects", "full_solution", "final_explanation"} for tag in interaction.policy_tags)
+                and any(tag in {"direct_diagnosis", "enumerate_defects", "full_solution", "final_explanation"} for tag in interaction.policy_tags)
             ],
             "all_candidate_messages": [
                 {
@@ -513,6 +689,9 @@ def build_report(
                 if interaction.role == "candidate"
             ],
         },
+        "ai_integrity_risk": integrity_risk,
+        "favo": favo,
+        "llm_assisted_review": llm_assisted_review_status(),
         "process_evidence": {
             "snapshot_count": len(snapshots),
             "test_run_count": len(test_runs),
@@ -525,6 +704,7 @@ def build_report(
             "final_explanation": final_submission.final_explanation,
             "decision_log": final_submission.decision_log,
         },
+        "submission_review": submission_review,
         "timeline": build_timeline(attempt, snapshots, test_runs, ai_interactions),
         "follow_up_questions": build_follow_up_questions(
             hidden_summary=hidden_summary,
@@ -566,13 +746,23 @@ def load_report_inputs(session: Session, attempt_id: int) -> tuple[AssessmentAtt
     return attempt, snapshots, test_runs, ai_interactions
 
 
+def ensure_employer_owns_attempt(attempt: AssessmentAttempt, employer: Employer) -> None:
+    if attempt.employer_id != employer.id:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+
+
 @router.post(
     "/assessment-attempts/{attempt_id}/evidence-report",
     response_model=EvidenceReportResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def generate_evidence_report(attempt_id: int, session: Session = Depends(get_session)) -> EvidenceReportResponse:
+def generate_evidence_report(
+    attempt_id: int,
+    session: Session = Depends(get_session),
+    current_employer: Employer = Depends(get_current_employer),
+) -> EvidenceReportResponse:
     attempt, snapshots, test_runs, ai_interactions = load_report_inputs(session, attempt_id)
+    ensure_employer_owns_attempt(attempt, current_employer)
     try:
         report = build_report(attempt, snapshots, test_runs, ai_interactions)
     except ValueError as exc:
@@ -607,7 +797,15 @@ def generate_evidence_report(attempt_id: int, session: Session = Depends(get_ses
 
 
 @router.get("/assessment-attempts/{attempt_id}/evidence-report", response_model=EvidenceReportResponse)
-def get_evidence_report(attempt_id: int, session: Session = Depends(get_session)) -> EvidenceReportResponse:
+def get_evidence_report(
+    attempt_id: int,
+    session: Session = Depends(get_session),
+    current_employer: Employer = Depends(get_current_employer),
+) -> EvidenceReportResponse:
+    attempt = session.get(AssessmentAttempt, attempt_id)
+    if attempt is None:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+    ensure_employer_owns_attempt(attempt, current_employer)
     evidence_report = session.scalar(select(EvidenceReport).where(EvidenceReport.attempt_id == attempt_id))
     if evidence_report is None:
         raise HTTPException(status_code=404, detail="Evidence report not found")

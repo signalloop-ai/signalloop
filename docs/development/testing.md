@@ -49,6 +49,13 @@ npm run build
 npm run test:e2e
 ```
 
+If a dev server is already running on `127.0.0.1:3000`, reuse it instead of asking
+Playwright to start another server:
+
+```sh
+PLAYWRIGHT_SKIP_WEBSERVER=1 npm run test:e2e -- --workers=1
+```
+
 Expected current Playwright result:
 
 ```text
@@ -57,11 +64,16 @@ Expected current Playwright result:
 
 The skipped test is `live-full-stack-smoke.spec.ts`. It requires real local services and `LIVE_INVITE_TOKEN`.
 
-The employer Playwright test uses the local development login fallback. In development
-(`NODE_ENV=development`), the "Use local employer login" button is always shown, even
-when `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is set. This means the Playwright test passes
-against the dev server regardless of Clerk configuration. In a production build the
-Clerk-only path is enforced.
+The employer Playwright test mocks Clerk's browser session and mocks employer API calls.
+The real employer portal requires Clerk locally and in production; there is no local
+employer-login fallback.
+
+Real Postgres schema health checks are opt-in:
+
+```sh
+cd apps/api
+RUN_SCHEMA_HEALTH_TESTS=1 uv run pytest tests/test_schema_health.py -v
+```
 
 ## Live Local Smoke
 
@@ -74,12 +86,12 @@ For a full manual local smoke:
    (`127.0.0.1:8015` in the current local validation setup).
 5. Start web on `127.0.0.1:3000`.
 6. Open `/employer`.
-7. Sign in with Clerk, or use local development login if Clerk keys are not configured.
+7. Sign in with Clerk.
 8. Create an invite.
 9. Open the candidate invite.
 10. Run public tests.
 11. Ask the AI collaborator a bounded question.
-12. Submit final code/explanation/decision log.
+12. Submit final code and structured Submission Review.
 13. Generate and view the evidence report in the employer portal.
 
 To run the live Playwright smoke after creating an invite:
@@ -88,6 +100,22 @@ To run the live Playwright smoke after creating an invite:
 cd apps/web
 LIVE_INVITE_TOKEN=... npm run test:e2e
 ```
+
+When running the live smoke on a non-default web port, keep these values aligned:
+
+- API `PUBLIC_BASE_URL`
+- API `CORS_ORIGINS`
+- web `NEXT_PUBLIC_API_URL`
+- Playwright `PLAYWRIGHT_BASE_URL`
+
+For local Docker worker execution, the API must use:
+
+```sh
+ASSESSMENT_RUNTIME_IMAGE=signalloop-python-assessment:3.11
+```
+
+The generic `python:3.11-slim` image does not include pytest or FastAPI assessment
+dependencies and will make public/hidden runs fail before tests are collected.
 
 ## Hosted Smoke
 

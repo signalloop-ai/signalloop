@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-IGNORED_DIRS = {"__pycache__", ".pytest_cache", ".venv", ".git"}
+IGNORED_DIRS = {"__pycache__", ".pytest_cache", ".venv", ".git", ".uv-cache"}
 IGNORED_FILENAMES = {".gitkeep", "uv.lock", "FINAL_EXPLANATION.md"}
 IGNORED_SUFFIXES = {".pyc", ".pyo"}
 

@@ -14,6 +14,7 @@ from signalloop_api.database import get_session
 from signalloop_api.execution import HTTPWorkerExecutionProvider, execution_error_result
 from signalloop_api.models import AssessmentAttempt, CodeSnapshot, FinalSubmission, TestRun
 from signalloop_api.schemas import FinalSubmissionRequest, FinalSubmissionResponse
+from signalloop_api.timebox import attempt_is_expired
 
 
 router = APIRouter()
@@ -125,6 +126,7 @@ def submit_final_attempt(
         raise HTTPException(status_code=409, detail="Final submission is immutable")
 
     submitted_at = datetime.now(timezone.utc)
+    submission_mode = "auto_expired" if payload.submission_mode == "auto_expired" or attempt_is_expired(attempt, submitted_at) else "manual"
     snapshot = CodeSnapshot(attempt_id=attempt.id, kind="final_submission", files=payload.files)
     session.add(snapshot)
     session.flush()
@@ -138,13 +140,14 @@ def submit_final_attempt(
     )
     attempt.status = "submitted"
     attempt.submitted_at = submitted_at
+    attempt.submission_mode = submission_mode
     session.add(final_submission)
     record_audit_event(
         session,
         "submission.created",
         actor_type="candidate",
         attempt_id=attempt.id,
-        event_metadata={"file_count": len(payload.files)},
+        event_metadata={"file_count": len(payload.files), "submission_mode": submission_mode},
     )
     session.commit()
     session.refresh(snapshot)

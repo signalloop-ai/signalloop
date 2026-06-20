@@ -523,6 +523,61 @@ button:disabled {
   padding-left: 18px;
 }
 
+.modal-backdrop {
+  align-items: center;
+  background: rgb(15 23 42 / 0.38);
+  bottom: 0;
+  display: grid;
+  justify-items: center;
+  left: 0;
+  padding: 18px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 20;
+}
+
+.confirm-modal {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 24px 80px rgb(15 23 42 / 0.24);
+  display: grid;
+  gap: 14px;
+  max-width: 520px;
+  padding: 22px;
+  width: 100%;
+}
+
+.confirm-modal h2 {
+  font-size: 20px;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.confirm-modal p {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.submit-checklist {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 12px 12px 28px;
+}
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .onboarding {
   align-items: center;
   display: grid;
@@ -855,6 +910,69 @@ button:disabled {
   display: grid;
   gap: 10px;
   margin: 0;
+}
+
+.chart-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.chart-bar {
+  display: grid;
+  gap: 6px;
+}
+
+.chart-bar-label {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.chart-bar-label span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.chart-bar-label strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.chart-track {
+  background: #edf2f7;
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.chart-track span {
+  background: var(--accent);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+}
+
+.favo-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.favo-grid span {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  display: grid;
+  font-size: 13px;
+  gap: 4px;
+  padding: 10px;
+}
+
+.favo-grid strong {
+  color: var(--text);
 }
 
 .score-row {

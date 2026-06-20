@@ -7,7 +7,7 @@ Use this checklist before moving to hosted Render/Supabase/Clerk testing.
 - [ ] `.env` exists at the repository root.
 - [ ] `DATABASE_URL` points to local Postgres.
 - [ ] `OPENAI_API_KEY` is set, or local fallback AI behavior is acceptable.
-- [ ] `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` are set if testing real Clerk login.
+- [ ] `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` are set for employer login.
 - [ ] Web/API ports match `.env`, `playwright.config.ts`, and the running services.
 - [ ] Docker is running.
 - [ ] Local Postgres is running.
@@ -32,14 +32,14 @@ Use this checklist before moving to hosted Render/Supabase/Clerk testing.
 ## Manual Flow
 
 - [ ] Open `/employer`.
-- [ ] Sign in with Clerk, or use local development login while running the dev server.
+- [ ] Sign in with Clerk.
 - [ ] Create a candidate invite.
 - [ ] Open the invite link.
 - [ ] Accept candidate rules.
 - [ ] Edit a file.
 - [ ] Run public tests.
 - [ ] Ask one bounded AI question.
-- [ ] Submit final explanation and decision log.
+- [ ] Submit final code and structured Submission Review.
 - [ ] Generate evidence report.
 - [ ] Confirm employer report view shows score, recommendation, FAVO, and follow-up questions.
 

@@ -1,0 +1,14 @@
+[project]
+name = "signalloop-fastapi-task-api-v1-reference"
+version = "0.1.0"
+description = "Evaluator reference solution for the SignalLoop FastAPI assessment"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.115.6",
+    "httpx==0.27.2",
+    "pytest==8.3.4",
+    "uvicorn==0.34.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

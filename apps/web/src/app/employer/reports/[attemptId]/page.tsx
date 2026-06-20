@@ -1,5 +1,6 @@
 "use client";
 
+import { useAuth } from "@clerk/nextjs";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -29,14 +30,41 @@ function SectionTitle({ title }: { title: string }) {
   );
 }
 
-function JsonBlock({ value }: { value: unknown }) {
-  return <pre className="report-json">{JSON.stringify(value, null, 2)}</pre>;
+function percentage(points: number, maxPoints: number): number {
+  if (!maxPoints) return 0;
+  return Math.max(0, Math.min(100, Math.round((points / maxPoints) * 100)));
+}
+
+function ChartBar({ label, value, max }: { label: string; value: number; max: number }) {
+  const width = percentage(value, max);
+  return (
+    <div className="chart-bar">
+      <div className="chart-bar-label">
+        <span>{label}</span>
+        <strong>{value}/{max}</strong>
+      </div>
+      <div className="chart-track" aria-hidden="true">
+        <span style={{ width: `${width}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function TestResultBar({ label, passed, collected }: { label: string; passed: number; collected: number }) {
+  return <ChartBar label={label} value={passed} max={collected || 1} />;
+}
+
+function formatTimingValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "number") return `${value}m`;
+  return String(value);
 }
 
 export default function ReportDetail() {
   const params = useParams<{ attemptId: string | string[] }>();
   const attemptIdParam = params.attemptId;
   const attemptId = Array.isArray(attemptIdParam) ? attemptIdParam[0] : attemptIdParam;
+  const { getToken, isLoaded } = useAuth();
   const [report, setReport] = useState<EvidenceReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -46,11 +74,11 @@ export default function ReportDetail() {
     setLoading(true);
     setError(null);
     try {
-      setReport(await fetchReport(attemptId));
+      setReport(await fetchReport(attemptId, getToken));
     } catch (loadError) {
       if (loadError instanceof ApiError && loadError.status === 404) {
         try {
-          setReport(await generateReport(attemptId));
+          setReport(await generateReport(attemptId, getToken));
         } catch (generateError) {
           setError(generateError instanceof Error ? generateError.message : "Report generation failed");
         }
@@ -60,20 +88,21 @@ export default function ReportDetail() {
     } finally {
       setLoading(false);
     }
-  }, [attemptId]);
+  }, [attemptId, getToken]);
 
   useEffect(() => {
+    if (!isLoaded) return;
     const timeoutId = window.setTimeout(() => {
       void loadReport();
     }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [loadReport]);
+  }, [loadReport, isLoaded]);
 
   async function createReport() {
     setGenerating(true);
     setError(null);
     try {
-      setReport(await generateReport(attemptId));
+      setReport(await generateReport(attemptId, getToken));
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : "Report generation failed");
     } finally {
@@ -82,6 +111,9 @@ export default function ReportDetail() {
   }
 
   const r = report?.report;
+  const timing = r?.metadata?.timing;
+  const featureScore = r?.feature_design_implementation
+    ?? r?.scores?.categories?.find((cat: { category: string }) => cat.category === "Feature/design implementation");
 
   return (
     <main className="employer-page">
@@ -124,8 +156,23 @@ export default function ReportDetail() {
               </strong>
             </div>
             <div className="metric">
-              <span>Confidence</span>
-              <strong>{r.scores.confidence}</strong>
+              <span>Assessment</span>
+              <strong>{r.metadata.assessment.version}</strong>
+            </div>
+          </section>
+
+          <section className="metric-row">
+            <div className="metric">
+              <span>Timing</span>
+              <strong>{timing?.timing_mode ?? "untimed"}</strong>
+            </div>
+            <div className="metric">
+              <span>Duration / used</span>
+              <strong>{formatTimingValue(timing?.duration_minutes)} / {formatTimingValue(timing?.time_used_minutes)}</strong>
+            </div>
+            <div className="metric">
+              <span>Submission mode</span>
+              <strong>{timing?.submission_mode ?? "manual"}</strong>
             </div>
           </section>
 
@@ -145,6 +192,11 @@ export default function ReportDetail() {
           {/* Score breakdown */}
           <section className="employer-section">
             <SectionTitle title="Score breakdown" />
+            <div className="chart-list">
+              {r.scores.categories.map((cat: { category: string; points: number; max_points: number }) => (
+                <ChartBar key={cat.category} label={cat.category} value={cat.points} max={cat.max_points} />
+              ))}
+            </div>
             <div className="score-list">
               {r.scores.categories.map((cat: { category: string; points: number; max_points: number; evidence: string }) => (
                 <div className="score-row" key={cat.category}>
@@ -162,6 +214,11 @@ export default function ReportDetail() {
           <section className="report-grid">
             <article className="employer-section">
               <SectionTitle title="Public test results" />
+              <TestResultBar
+                label="Public tests"
+                passed={r.public_test_results.last_run_summary.passed}
+                collected={r.public_test_results.last_run_summary.collected}
+              />
               <p className="report-copy">
                 Ran {r.public_test_results.run_count} time(s). Last run: {r.public_test_results.last_run_summary.status} —{" "}
                 {r.public_test_results.last_run_summary.passed}/{r.public_test_results.last_run_summary.collected} passed.
@@ -186,6 +243,11 @@ export default function ReportDetail() {
 
             <article className="employer-section">
               <SectionTitle title="Hidden test results" />
+              <TestResultBar
+                label="Hidden tests"
+                passed={r.hidden_test_results.summary.passed}
+                collected={r.hidden_test_results.summary.collected}
+              />
               <p className="report-copy">
                 Status: {r.hidden_test_results.summary.status} —{" "}
                 {r.hidden_test_results.summary.passed}/{r.hidden_test_results.summary.collected} passed.
@@ -206,6 +268,27 @@ export default function ReportDetail() {
                   <li key={area}>{area}</li>
                 ))}
               </ul>
+            </article>
+          </section>
+
+          <section className="report-grid">
+            <article className="employer-section">
+              <SectionTitle title="Feature/design implementation" />
+              <p className="report-copy">
+                {featureScore ? `${featureScore.points}/${featureScore.max_points}: ${featureScore.evidence}` : "No feature/design score available."}
+              </p>
+            </article>
+
+            <article className="employer-section">
+              <SectionTitle title="FAVO interpretation" />
+              <div className="favo-grid">
+                {Object.entries(r.favo).map(([area, value]: [string, { label: string; evidence: string }]) => (
+                  <span key={area}>
+                    <strong>{area}</strong>
+                    {value.label}: {value.evidence}
+                  </span>
+                ))}
+              </div>
             </article>
           </section>
 
@@ -261,16 +344,31 @@ export default function ReportDetail() {
                 </p>
               ) : null}
             </article>
+            <article className="employer-section">
+              <SectionTitle title="AI integrity risk" />
+              <p className={`report-copy ${r.ai_integrity_risk.label === "low" ? "" : "report-warn"}`}>
+                Risk: {r.ai_integrity_risk.label}. Numeric score impact: {r.ai_integrity_risk.score_impact}.
+              </p>
+              <ul className="report-list">
+                {Object.entries(r.ai_integrity_risk.signals).map(([name, value]) => (
+                  <li key={name}>{name}: {String(value)}</li>
+                ))}
+              </ul>
+            </article>
           </section>
 
           {/* Explanation + process evidence */}
           <section className="report-grid">
             <article className="employer-section">
-              <SectionTitle title="Explanation submitted" />
-              <p className="report-label">Final explanation:</p>
-              <p className="report-copy">{r.explanation_submitted.final_explanation || "—"}</p>
-              <p className="report-label">Decision log:</p>
-              <p className="report-copy">{r.explanation_submitted.decision_log || "—"}</p>
+              <SectionTitle title="Submission review" />
+              <p className="report-label">What changed:</p>
+              <p className="report-copy">{r.submission_review.what_changed || "—"}</p>
+              <p className="report-label">Tradeoffs or product decisions:</p>
+              <p className="report-copy">{r.submission_review.tradeoffs_or_product_decisions || "—"}</p>
+              <p className="report-label">Verification:</p>
+              <p className="report-copy">{r.submission_review.verification || "—"}</p>
+              <p className="report-label">Improve next:</p>
+              <p className="report-copy">{r.submission_review.improvements_with_more_time || "—"}</p>
             </article>
 
             <article className="employer-section">
@@ -298,6 +396,13 @@ export default function ReportDetail() {
                 <li key={q}>{q}</li>
               ))}
             </ol>
+          </section>
+
+          <section className="employer-section">
+            <SectionTitle title="LLM-assisted review" />
+            <p className="report-copy">
+              Status: {r.llm_assisted_review.status}. {r.llm_assisted_review.reason}
+            </p>
           </section>
 
           {/* Timeline */}
