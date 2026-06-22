@@ -100,12 +100,16 @@ function barColorClass(pct: number): string {
   return "danger";
 }
 
-function ChartBar({ label, value, max }: { label: string; value: number; max: number }) {
+function ChartBar({ label, value, max, anchor }: { label: string; value: number; max: number; anchor?: string }) {
   const pct = percentage(value, max);
   return (
     <div className="chart-bar">
       <div className="chart-bar-label">
-        <span>{label}</span>
+        <span>
+          {anchor ? (
+            <a href={`#${anchor}`} className="chart-bar-link">{label}</a>
+          ) : label}
+        </span>
         <strong>{value}/{max}</strong>
       </div>
       <div className={`chart-track ${barColorClass(pct)}`} aria-hidden="true">
@@ -142,7 +146,7 @@ function ScoreRing({ score, max }: { score: number; max: number }) {
 const SECTION_ANCHORS: Record<string, string> = {
   public_issue_resolution: "section-public-tests",
   private_issue_generalization: "section-hidden-tests",
-  feature_design_implementation: "section-feature-design",
+  feature_design_implementation: "section-enhancements",
   candidate_tests: "section-candidate-tests",
   ai_collaboration: "section-ai-collaboration",
 };
@@ -150,7 +154,7 @@ const SECTION_ANCHORS: Record<string, string> = {
 const CATEGORY_LABELS: Record<string, string> = {
   public_issue_resolution: "Public tests",
   private_issue_generalization: "Hidden tests",
-  feature_design_implementation: "Feature design",
+  feature_design_implementation: "Enhancements",
   candidate_tests: "Candidate tests",
   ai_collaboration: "AI collaboration",
   regression_code_quality: "Regression",
@@ -345,10 +349,7 @@ export default function ReportDetail() {
 
           {/* Score breakdown */}
           <section className="employer-section">
-            <SectionTitle
-              title="Score breakdown"
-              subtitle="Click any category to jump to the detailed section below"
-            />
+            <SectionTitle title="Score breakdown" />
             <div className="chart-list">
               {r.scores.categories.map((cat: { category: string; points: number; max_points: number }) => (
                 <ChartBar
@@ -356,29 +357,9 @@ export default function ReportDetail() {
                   label={CATEGORY_LABELS[cat.category] ?? cat.category.replaceAll("_", " ")}
                   value={cat.points}
                   max={cat.max_points}
+                  anchor={SECTION_ANCHORS[cat.category]}
                 />
               ))}
-            </div>
-            <div className="score-quick-ref">
-              {r.scores.categories.map((cat: { category: string; points: number; max_points: number }) => {
-                const anchor = SECTION_ANCHORS[cat.category];
-                const label = CATEGORY_LABELS[cat.category] ?? cat.category.replaceAll("_", " ");
-                const pct = percentage(cat.points, cat.max_points);
-                const colorCls = barColorClass(pct);
-                const chip = (
-                  <span className={`score-ref-chip score-ref-${colorCls}`}>
-                    <span className="score-ref-label">{label}</span>
-                    <span className="score-ref-pts">{cat.points}/{cat.max_points}</span>
-                  </span>
-                );
-                return anchor ? (
-                  <a key={cat.category} href={`#${anchor}`} className="score-ref-link" title={`Jump to ${label}`}>
-                    {chip}
-                  </a>
-                ) : (
-                  <span key={cat.category}>{chip}</span>
-                );
-              })}
             </div>
           </section>
 
@@ -446,8 +427,8 @@ export default function ReportDetail() {
 
           {/* Feature/design + FAVO */}
           <section className="report-grid">
-            <article id="section-feature-design" className="employer-section">
-              <SectionTitle title="Feature / design implementation" />
+            <article id="section-enhancements" className="employer-section">
+              <SectionTitle title="Enhancements" />
               <p className="report-copy">
                 {featureScore
                   ? `${featureScore.points}/${featureScore.max_points}: ${featureScore.evidence}`
