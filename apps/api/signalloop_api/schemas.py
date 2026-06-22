@@ -11,6 +11,7 @@ class CreateAttemptRequest(BaseModel):
     assessment_pack_slug: str = "fastapi_task_api_standard_v2"
     assessment_level: Literal["standard", "advanced"] = "standard"
     timing_mode: Literal["untimed", "timed"] = "untimed"
+    evaluator_feedback_mode: Literal["strict", "guided"] = "strict"
     duration_minutes: Optional[int] = None
     candidate_email: Optional[EmailStr] = None
     employer_id: Optional[int] = None
@@ -44,12 +45,14 @@ class CandidateAttemptResponse(BaseModel):
     candidate_email: Optional[str]
     assessment: AssessmentMetadata
     timing_mode: str
+    evaluator_feedback_mode: str
     duration_minutes: int
     started_at: Optional[str]
     expires_at: Optional[str]
     submitted_at: Optional[str]
     submission_mode: Optional[str]
     files: dict[str, str]
+    initial_files: dict[str, str]
 
 
 class EmployerAttemptSummary(BaseModel):
@@ -61,6 +64,7 @@ class EmployerAttemptSummary(BaseModel):
     assessment: AssessmentMetadata
     assessment_level: str
     timing_mode: str
+    evaluator_feedback_mode: str
     duration_minutes: int
     expires_at: Optional[str]
     submission_mode: Optional[str]

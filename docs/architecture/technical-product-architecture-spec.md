@@ -25,6 +25,7 @@ Candidate Browser
 Core flow:
 
 1. Employer creates candidate invite.
+   Employer may choose assessment level, timing mode, and evaluator feedback mode.
 2. Candidate opens unique invite link.
 3. Candidate reads onboarding and assessment rules.
 4. Candidate edits code in browser.
@@ -41,6 +42,11 @@ Core flow:
 ### Web app
 
 Candidate onboarding, workspace UI, Monaco editor, file tree, test output panel, AI assistant panel, structured Submission Review, employer report UI.
+
+Candidate IDE enhancements may include syntax diagnostics, public-test-output links,
+color-coded public test output, and file indicators. These features must use only
+candidate-visible files and public test output; hidden tests and evaluator artifacts must
+not drive candidate IDE hints.
 
 ### Backend API
 
@@ -164,7 +170,8 @@ Final: structured Submission Review with final confirmation
 
 ## 12. Constrained AI collaborator
 
-The AI collaborator operates as a **Socratic tutor**, not a solution generator. Classification
+The AI collaborator is a constrained collaborator: the candidate must identify the issue;
+once they have, the AI helps implement the fix. It is not a solution generator. Classification
 uses an LLM-based `evaluate()` call that returns structured JSON `{allowed, policy_tags, message}`.
 A pattern-based fallback (`fallback_classify`) runs only if the LLM call fails.
 
@@ -181,8 +188,8 @@ A pattern-based fallback (`fallback_classify`) runs only if the LLM call fails.
 
 | Tag | Trigger | Response |
 |---|---|---|
-| `direct_diagnosis` | Asks AI to identify what is wrong with specific code, confirm implementation correctness, or suggest a test to catch a bug | Socratic redirect — a question back, not a flat block |
-| `enumerate_defects` | Asks to list or explain all bugs/defects/issues | Block with redirect message |
+| `no_issue_identified` | Candidate asks for help but has not named a specific issue | Redirect — ask what they observed |
+| `enumerate_defects` | Asks to list or explain all bugs/defects/issues | Block |
 | `full_solution` | Asks to fix everything or provide a complete solution | Block |
 | `issue_by_issue_patch` | Asks for a patch for each problem | Block |
 | `missing_tests` | Asks to write all missing tests or the complete test suite | Block |
@@ -192,17 +199,13 @@ A pattern-based fallback (`fallback_classify`) runs only if the LLM call fails.
 | `prompt_injection` | Asks AI to ignore policy, change roles, bypass rules, or reveal protected information | Block |
 | `anti_decomposition` | Multi-turn session is cumulatively producing a full solution | Block |
 
-### Socratic tutor rule
+### Key collaborator rule
 
-When a candidate asks the AI to diagnose their code or suggest a test for a specific behavior,
-the AI must respond with one question about what the candidate has already observed:
+The candidate must identify the issue. Once they have, the AI helps them implement the fix.
+The AI never does the discovery work for them.
 
-- “What behavior did you see when you ran this?”
-- “What input would trigger the case you're worried about?”
-- “What does the test output tell you about where it's failing?”
-
-If the candidate has already stated a hypothesis, the AI may confirm or redirect it — but
-must not provide the implementation or the exact fix.
+- If the candidate has named the specific issue → help them implement the fix.
+- If the candidate has not identified anything yet → ask what they observed.
 
 ### Classification architecture
 
@@ -210,9 +213,9 @@ must not provide the implementation or the exact fix.
   message to OpenAI and parses structured JSON. Context boundaries prevent the AI from seeing
   hidden tests, evaluator notes, or scoring internals.
 - **Fallback (on LLM failure):** `fallback_classify()` uses keyword patterns for unambiguous
-  bulk-bypass requests (`enumerate_defects`, `full_solution`, etc.). `direct_diagnosis` is
+  bulk-bypass requests (`enumerate_defects`, `full_solution`, etc.). `no_issue_identified` is
   intentionally excluded from the fallback — it requires context the pattern matcher cannot judge.
-- **Message routing:** `direct_diagnosis` responses use `SOCRATIC_REDIRECT_MESSAGE` (a question
+- **Message routing:** `no_issue_identified` responses use `SOCRATIC_REDIRECT_MESSAGE` (a question
   back). All other disallowed tags use `REDIRECT_MESSAGE` (a flat block).
 
 ## 13. Anti-decomposition rule
@@ -232,7 +235,7 @@ Expected redirect:
 I cannot enumerate all defects or provide issue-by-issue fixes for the assessment. I can help you reason through one candidate-identified issue or one failing behavior at a time.
 ```
 
-`direct_diagnosis` redirects use a different message:
+`no_issue_identified` redirects use a different message:
 
 ```text
 Before I help further, what behavior did you observe, and what did you expect? Tell me what you've already tried or noticed, and I'll help you reason through it.
@@ -251,6 +254,8 @@ Capture:
 - final submission,
 - structured submission-review answers,
 - hidden test results.
+- evaluator feedback mode.
+- execution timing breakdown where available.
 
 ## 15. Engineering Evidence Report
 
@@ -286,17 +291,38 @@ Sections:
 
 ## 16. Scoring rubric
 
-All weights are stored in the `RUBRIC` dict at the top of `apps/api/signalloop_api/reports.py`.
-Change values there to rebalance — nothing else needs to change.
+Weights are defined in two places:
+- Global `RUBRIC` in `apps/api/signalloop_api/reports.py` — standard v2 default.
+- Per-pack `"rubric"` key in `DEFAULT_PACKS` (`attempts.py`) — overrides global for advanced packs.
+
+### Standard v2 weights (default)
 
 | Category | Points | Notes |
 |---|---:|---|
 | Public issue resolution | 15 | Initially failing public tests now pass. |
-| Private issue generalization | 20 | Hidden tests and private seeded behavior coverage. |
-| Feature/design implementation | 20 | Configured feature/design checks plus supporting review evidence. |
+| Private issue generalization | 20 | Hidden tests covering undiscovered behaviors. |
+| Feature/design implementation | 20 | Configured feature/design checks. |
 | Candidate-written tests | 15 | Test files added or modified vs initial snapshot. |
-| AI collaboration | 20 | Disciplined use and policy evidence. |
-| Regression/code quality | 10 | Previously passing behavior remains stable. |
+| AI collaboration | 15 | Disciplined use and policy evidence. |
+| Regression/code quality | 15 | Previously passing behavior remains stable. |
+
+### Advanced v1 weights
+
+| Category | Points |
+|---|---:|
+| Public issue resolution | 15 |
+| Private issue generalization | 15 |
+| Feature/design implementation | 25 |
+| Candidate-written tests | 15 |
+| AI collaboration | 15 |
+| Regression/code quality | 15 |
+
+### Quality as a modifier
+
+Quality is embedded within each category rather than scored separately. For each public
+issue, hidden issue, and enhancement, the authored rubric defines full vs partial credit
+based on implementation approach. Tests encode quality where possible; the evaluator rubric
+specifies quality signals for cases tests cannot differentiate.
 
 Which tests are initially failing is configured per assessment pack in `DEFAULT_PACKS` inside
 `apps/api/signalloop_api/attempts.py` under the key `initially_failing_tests`.
@@ -312,7 +338,7 @@ Implemented in Phase 2:
 - Paste detection: verbatim AI code block matching against final submission.
 - Large paste event detection: snapshot-to-snapshot diff flagging sudden large additions.
 - AI integrity risk label (low/medium/high/critical) derived from signals above.
-- `direct_diagnosis` Socratic redirect — logged and visible in employer report.
+- `no_issue_identified` redirect — logged when candidate hasn't named an issue yet.
 
 Later phases may add browser focus events, tab-switch signals, optional screen recording,
 proctored mode, and candidate-specific assessment variants.
@@ -349,33 +375,84 @@ assessment_packs/fastapi_task_api_advanced_v1/   (advanced — optional per invi
 
 ### Rubric
 
-Implemented in `apps/api/signalloop_api/reports.py` (`RUBRIC` dict). Change values there
-to rebalance — nothing else needs to change.
+Implemented in `apps/api/signalloop_api/reports.py` (`RUBRIC` dict, standard v2 default).
+Per-pack overrides live in `DEFAULT_PACKS["rubric"]` in `attempts.py`.
 
-| Category | Points | Evaluation mode |
-|---|---:|---|
-| Public issue resolution | 15 | Automated public tests |
-| Private issue generalization | 20 | Automated hidden tests |
-| Feature/design implementation | 20 | Configured feature/design checks |
-| Candidate-written tests | 15 | Automated heuristics (test file count, function count, edge-case signals) |
-| AI collaboration | 20 | AI logs, policy classifier, verification behavior |
-| Regression/code quality | 10 | Automated regression check |
+| Category | Standard v2 | Advanced v1 | Evaluation mode |
+|---|---:|---:|---|
+| Public issue resolution | 15 | 15 | Automated public tests |
+| Private issue generalization | 20 | 15 | Automated hidden tests |
+| Feature/design implementation | 20 | 25 | Configured feature/design checks |
+| Candidate-written tests | 15 | 15 | Automated heuristics |
+| AI collaboration | 15 | 15 | AI logs and policy classifier |
+| Regression/code quality | 15 | 15 | Automated regression check |
 
-`direct_diagnosis` redirects do not reduce the AI collaboration score. `enumerate_defects`,
-`full_solution`, and `final_explanation` redirects do.
+Quality is a modifier within each category — full vs partial credit per issue/enhancement,
+defined in per-pack `SCORING_RUBRIC.md`. Tests encode quality where possible; the evaluator
+rubric specifies quality signals for cases tests alone cannot differentiate.
+
+### AI collaboration scoring tiers
+
+| Scenario | Score (of 15) |
+|---|---:|
+| No AI use | 8 (neutral floor — no signal, not penalised) |
+| Used AI, zero policy violations | 15 (full credit) |
+| Used AI, 1 policy violation | 6 (below floor) |
+| Used AI, 2–3 policy violations | 3 (heavy penalty) |
+| Used AI, 4+ policy violations | 0 (systematic abuse) |
+
+`no_issue_identified` redirects do not reduce the AI collaboration score. `enumerate_defects`,
+`full_solution`, and `final_explanation` redirects do (they count toward `disallowed_count` in
+`calculate_scores`).
 
 ### Timer model
 
 Timed assessments are optional per invite. Employer selects mode and duration at invite creation.
 
 - Timer starts when the candidate accepts onboarding.
-- Standard default: 90 minutes. Advanced default: 120 minutes.
+- Standard v2 default: 60 minutes. Advanced v1 default: 120 minutes.
 - Fixed duration options: 60, 90, 120, 150 minutes.
 - Countdown shown in candidate workspace topbar with warnings at 10 min, 5 min, 1 min.
 - On expiry with open tab: frontend auto-submits current in-browser files with
   `submission_mode: "auto_expired"`.
 - Backend enforces expiry on all candidate endpoints (snapshots, public tests, AI, submit)
   and returns 409 after expiry regardless of browser state.
+
+### Evaluator feedback mode
+
+Each attempt should record an employer-selected evaluator feedback mode:
+
+- `strict` — default for hiring. During active work, candidates see public test results
+  only. A static "Hidden checks — additional behaviors evaluated at submission" row is
+  always shown so candidates know edge-case testing exists, but no counts are revealed.
+  Enhancement feedback (which of the `feature_design_tests` pass) is always shown
+  regardless of mode. Full hidden/evaluator counts are available in employer reports after
+  final submission.
+- `guided` — candidates additionally see live hidden check counts split into two rows:
+  "Hidden checks" (edge-case/quality tests only, excluding enhancement tests) and
+  "Enhancements built" (named `feature_design_tests` subset). Hidden test names, failure
+  messages, tracebacks, file paths, and line numbers must remain hidden in both modes.
+
+Reports must display which mode was used. Guided mode improves candidate feedback but
+weakens hidden-test purity because candidates can iterate against aggregate evaluator
+signal.
+
+### Execution timing breakdown
+
+Public and hidden/evaluator execution should record timing buckets where available:
+
+- API preflight and snapshot persistence,
+- payload upload/handoff,
+- execution-provider startup,
+- runner/container startup,
+- workspace materialization,
+- pytest execution,
+- output upload/download handoff,
+- DB persistence,
+- total elapsed time.
+
+Candidate UI should show simple running/completed/duration feedback. Detailed timing is
+primarily for debugging latency and deciding where optimization gives the highest return.
 
 ### LLM-assisted review
 
@@ -423,15 +500,15 @@ Report-only label (low/medium/high/critical) derived from:
 Does not change the numeric score. Guides employer review attention and follow-up questions.
 Must not state plagiarism as a fact.
 
-`direct_diagnosis` redirects appear in `flagged_prompts` and count toward
+`no_issue_identified` redirects appear in `flagged_prompts` and count toward
 `policy_redirect_count` but not `severe_redirect_count`.
 
-### Socratic AI tutor (direct_diagnosis)
+### Key collaborator rule enforcement (no_issue_identified)
 
-Candidates can bypass diagnosis by asking the AI about one function at a time. The
-`direct_diagnosis` policy tag handles this: instead of blocking, the AI responds with
-a Socratic question about what the candidate has already observed. See section 12 for
-the full classification architecture and response routing.
+Candidates can attempt to bypass diagnosis by asking about one function at a time without
+naming what they observed. The `no_issue_identified` tag handles this: instead of blocking,
+the AI responds with a redirect question asking what the candidate has already observed.
+See section 12 for the full classification architecture and response routing.
 
 ### Employer isolation
 

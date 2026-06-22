@@ -41,6 +41,7 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
   const [candidateEmail, setCandidateEmail] = useState("");
   const [assessmentLevel, setAssessmentLevel] = useState<InviteConfiguration["assessmentLevel"]>("standard");
   const [timingMode, setTimingMode] = useState<InviteConfiguration["timingMode"]>("untimed");
+  const [evaluatorFeedbackMode, setEvaluatorFeedbackMode] = useState<InviteConfiguration["evaluatorFeedbackMode"]>("strict");
   const [durationMinutes, setDurationMinutes] = useState(90);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -96,7 +97,7 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
     try {
       const updatedAttempts = await createInvite(
         candidateEmail.trim(),
-        { assessmentLevel, timingMode, durationMinutes },
+        { assessmentLevel, timingMode, evaluatorFeedbackMode, durationMinutes },
         getAuthToken,
       );
       setAttempts(updatedAttempts);
@@ -193,6 +194,18 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
               </select>
             </>
           ) : null}
+          <label htmlFor="evaluator-feedback-mode">Evaluator feedback</label>
+          <select
+            id="evaluator-feedback-mode"
+            value={evaluatorFeedbackMode}
+            onChange={(event) => setEvaluatorFeedbackMode(event.target.value as InviteConfiguration["evaluatorFeedbackMode"])}
+          >
+            <option value="strict">Strict: hidden counts in employer report only</option>
+            <option value="guided">Guided: show aggregate evaluator progress</option>
+          </select>
+          <p className="submission-help">
+            Guided mode shows candidates aggregate evaluator pass/fail counts only. Details stay hidden.
+          </p>
           <button className="command-button primary" disabled={creating || !emailValid} type="submit">
             <Plus size={17} aria-hidden="true" />
             {creating ? "Creating" : "Create invite"}
@@ -228,8 +241,15 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
               <span className={`status-pill ${attempt.status === "submitted" ? "ready" : "warn"}`}>
                 {attempt.assessment_level} · {attempt.status}
               </span>
-              <span>{attempt.timing_mode === "timed" ? `Timed ${attempt.duration_minutes}m` : `Untimed ${attempt.duration_minutes}m`}</span>
-              <span>{attempt.score_total ?? "-"} · {recommendationLabel(attempt.recommendation)}</span>
+              <span>
+                {attempt.timing_mode === "timed" ? `Timed ${attempt.duration_minutes}m` : "Untimed"}
+                {" · "}
+                {attempt.evaluator_feedback_mode}
+              </span>
+              <span>
+                {attempt.score_total != null ? `Score: ${attempt.score_total} / 100` : "—"}
+                {attempt.recommendation ? ` · ${recommendationLabel(attempt.recommendation)}` : ""}
+              </span>
               {attempt.status === "submitted" ? (
                 <Link className="command-button secondary" href={`/employer/reports/${attempt.attempt_id}`}>
                   <FileText size={16} aria-hidden="true" />

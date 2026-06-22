@@ -16,7 +16,7 @@ def create_user(email: str) -> dict:
     return response.json()
 
 
-def create_team(name: str) -> dict:
+def create_team(name: str = "Platform") -> dict:
     response = client.post("/teams", json={"name": name})
     assert response.status_code == 201
     return response.json()
@@ -28,139 +28,182 @@ def add_member(team_id: int, user_id: int, role: str = "member") -> dict:
     return response.json()
 
 
-def create_task(team_id: int, owner_id: int, assignee_id: int | None = None, title: str = "Task") -> dict:
-    payload = {
-        "title": title,
-        "team_id": team_id,
-        "owner_id": owner_id,
-        "assignee_id": assignee_id,
-        "description": "Original description",
-    }
+def create_task(team_id: int, owner_id: int, title: str = "Task", assignee_id: int | None = None) -> dict:
+    payload: dict = {"title": title, "team_id": team_id, "owner_id": owner_id, "description": "Original description"}
+    if assignee_id is not None:
+        payload["assignee_id"] = assignee_id
     response = client.post("/tasks", json=payload)
     assert response.status_code == 201
     return response.json()
 
 
-def test_membership_role_is_validated_and_duplicates_conflict() -> None:
-    user = create_user("member@example.com")
-    team = create_team("Platform")
-    add_member(team["id"], user["id"], "member")
-
-    duplicate = client.post(f"/teams/{team['id']}/members", json={"user_id": user["id"], "role": "member"})
-    invalid = client.post(f"/teams/{team['id']}/members", json={"user_id": user["id"], "role": "admin"})
-
-    assert duplicate.status_code == 409
-    assert invalid.status_code == 422
+def add_dependency(task_id: int, blocker_id: int, actor_id: int) -> None:
+    client.post(
+        f"/tasks/{task_id}/dependencies",
+        params={"actor_user_id": actor_id},
+        json={"blocker_task_id": blocker_id},
+    )
 
 
-def test_team_lead_access_is_limited_to_own_team() -> None:
-    lead = create_user("lead@example.com")
+# --- Hidden issue 1: partial update authorization ---
+
+def test_non_owner_non_assignee_cannot_patch_task() -> None:
     owner = create_user("owner@example.com")
-    lead_team = create_team("Lead Team")
-    other_team = create_team("Other Team")
-    add_member(lead_team["id"], lead["id"], "lead")
-    add_member(other_team["id"], owner["id"])
-    task = create_task(other_team["id"], owner["id"])
-
-    response = client.get(f"/tasks/{task['id']}", params={"actor_user_id": lead["id"]})
-
-    assert response.status_code == 403
-
-
-def test_partial_update_preserves_description_and_assignee() -> None:
-    owner = create_user("owner@example.com")
-    assignee = create_user("assignee@example.com")
-    team = create_team("Platform")
+    outsider = create_user("outsider@example.com")
+    team = create_team()
     add_member(team["id"], owner["id"])
-    add_member(team["id"], assignee["id"])
-    task = create_task(team["id"], owner["id"], assignee_id=assignee["id"])
+    add_member(team["id"], outsider["id"])
+    task = create_task(team["id"], owner["id"])
 
     response = client.patch(
         f"/tasks/{task['id']}",
-        params={"actor_user_id": owner["id"]},
-        json={"title": "Retitled task"},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["title"] == "Retitled task"
-    assert response.json()["description"] == "Original description"
-    assert response.json()["assignee_id"] == assignee["id"]
-
-
-def test_status_transition_and_audit_events_are_complete() -> None:
-    owner = create_user("owner@example.com")
-    team = create_team("Platform")
-    add_member(team["id"], owner["id"])
-    task = create_task(team["id"], owner["id"])
-
-    direct_done = client.patch(
-        f"/tasks/{task['id']}/status",
-        params={"actor_user_id": owner["id"]},
-        json={"status": "DONE"},
-    )
-    in_progress = client.patch(
-        f"/tasks/{task['id']}/status",
-        params={"actor_user_id": owner["id"]},
-        json={"status": "IN_PROGRESS"},
-    )
-    done = client.patch(
-        f"/tasks/{task['id']}/status",
-        params={"actor_user_id": owner["id"]},
-        json={"status": "DONE"},
-    )
-    events = client.get(f"/tasks/{task['id']}/events")
-
-    assert direct_done.status_code == 409
-    assert in_progress.status_code == 200
-    assert done.status_code == 200
-    assert [event["action"] for event in events.json()] == ["created", "status_changed", "status_changed"]
-
-
-def test_archived_task_is_hidden_and_second_delete_is_not_found() -> None:
-    owner = create_user("owner@example.com")
-    team = create_team("Platform")
-    add_member(team["id"], owner["id"])
-    task = create_task(team["id"], owner["id"])
-
-    first_delete = client.delete(f"/tasks/{task['id']}", params={"actor_user_id": owner["id"]})
-    read_after_delete = client.get(f"/tasks/{task['id']}", params={"actor_user_id": owner["id"]})
-    second_delete = client.delete(f"/tasks/{task['id']}", params={"actor_user_id": owner["id"]})
-    listed = client.get(f"/teams/{team['id']}/tasks", params={"actor_user_id": owner["id"]})
-
-    assert first_delete.status_code == 200
-    assert read_after_delete.status_code == 404
-    assert second_delete.status_code == 404
-    assert listed.json() == []
-
-
-def test_comment_actor_must_have_task_access() -> None:
-    owner = create_user("owner@example.com")
-    outsider = create_user("outsider@example.com")
-    team = create_team("Platform")
-    add_member(team["id"], owner["id"])
-    task = create_task(team["id"], owner["id"])
-
-    response = client.post(
-        f"/tasks/{task['id']}/comments",
-        json={"actor_user_id": outsider["id"], "body": "I should not comment"},
+        params={"actor_user_id": outsider["id"]},
+        json={"title": "Unauthorized change"},
     )
 
     assert response.status_code == 403
 
 
-def test_team_task_list_is_deterministically_sorted_and_paginated() -> None:
-    owner = create_user("owner@example.com")
-    team = create_team("Platform")
-    add_member(team["id"], owner["id"])
-    first = create_task(team["id"], owner["id"], title="First")
-    second = create_task(team["id"], owner["id"], title="Second")
-    third = create_task(team["id"], owner["id"], title="Third")
+# --- Hidden issue 2: role validation ---
 
-    page = client.get(
-        f"/teams/{team['id']}/tasks",
-        params={"actor_user_id": owner["id"], "limit": 2, "offset": 1},
+def test_membership_role_is_validated() -> None:
+    user = create_user("member@example.com")
+    team = create_team()
+
+    invalid = client.post(f"/teams/{team['id']}/members", json={"user_id": user["id"], "role": "admin"})
+    valid = client.post(f"/teams/{team['id']}/members", json={"user_id": user["id"], "role": "member"})
+
+    assert invalid.status_code == 422
+    assert valid.status_code == 201
+
+
+# --- Hidden issue 3: status transition enforcement ---
+
+def test_status_transition_chain_is_enforced() -> None:
+    owner = create_user("owner@example.com")
+    team = create_team()
+    add_member(team["id"], owner["id"])
+    task = create_task(team["id"], owner["id"])
+
+    invalid_status = client.patch(f"/tasks/{task['id']}/status", params={"actor_user_id": owner["id"]}, json={"status": "SHIPPED"})
+    direct_done = client.patch(f"/tasks/{task['id']}/status", params={"actor_user_id": owner["id"]}, json={"status": "DONE"})
+    to_in_progress = client.patch(f"/tasks/{task['id']}/status", params={"actor_user_id": owner["id"]}, json={"status": "IN_PROGRESS"})
+    to_done = client.patch(f"/tasks/{task['id']}/status", params={"actor_user_id": owner["id"]}, json={"status": "DONE"})
+
+    assert invalid_status.status_code == 422
+    assert direct_done.status_code == 409
+    assert to_in_progress.status_code == 200
+    assert to_done.status_code == 200
+
+
+# --- Enhancement 1 basic: task dependency creation ---
+
+def test_task_can_block_another_task() -> None:
+    owner = create_user("owner@example.com")
+    team = create_team()
+    add_member(team["id"], owner["id"])
+    blocker = create_task(team["id"], owner["id"], title="Blocker")
+    blocked = create_task(team["id"], owner["id"], title="Blocked")
+
+    response = client.post(
+        f"/tasks/{blocked['id']}/dependencies",
+        params={"actor_user_id": owner["id"]},
+        json={"blocker_task_id": blocker["id"]},
     )
 
-    assert page.status_code == 200
-    assert [task["id"] for task in page.json()] == [second["id"], third["id"]]
-    assert first["id"] < second["id"] < third["id"]
+    assert response.status_code == 201
+    assert response.json()["blocker_task_id"] == blocker["id"]
+
+
+# --- Enhancement 2 basic: team activity feed exists ---
+
+def test_team_activity_feed_returns_events() -> None:
+    owner = create_user("owner@example.com")
+    team = create_team()
+    add_member(team["id"], owner["id"])
+    create_task(team["id"], owner["id"])
+
+    response = client.get(f"/teams/{team['id']}/activity", params={"actor_user_id": owner["id"]})
+
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+    assert len(response.json()) >= 1
+    assert response.json()[0]["action"] == "created"
+
+
+# --- Enhancement 1 quality: blocker enforced on status transition ---
+
+def test_blocker_prevents_in_progress_transition() -> None:
+    owner = create_user("owner@example.com")
+    team = create_team()
+    add_member(team["id"], owner["id"])
+    blocker = create_task(team["id"], owner["id"], title="Blocker")
+    blocked = create_task(team["id"], owner["id"], title="Blocked")
+
+    add_dependency(blocked["id"], blocker["id"], owner["id"])
+
+    start_while_blocked = client.patch(
+        f"/tasks/{blocked['id']}/status",
+        params={"actor_user_id": owner["id"]},
+        json={"status": "IN_PROGRESS"},
+    )
+
+    client.patch(f"/tasks/{blocker['id']}/status", params={"actor_user_id": owner["id"]}, json={"status": "IN_PROGRESS"})
+    client.patch(f"/tasks/{blocker['id']}/status", params={"actor_user_id": owner["id"]}, json={"status": "DONE"})
+
+    start_after_blocker_done = client.patch(
+        f"/tasks/{blocked['id']}/status",
+        params={"actor_user_id": owner["id"]},
+        json={"status": "IN_PROGRESS"},
+    )
+
+    assert start_while_blocked.status_code == 409
+    assert start_after_blocker_done.status_code == 200
+
+
+# --- Enhancement 1 quality: cycle detection ---
+
+def test_dependency_cycle_is_rejected() -> None:
+    owner = create_user("owner@example.com")
+    team = create_team()
+    add_member(team["id"], owner["id"])
+    t1 = create_task(team["id"], owner["id"], title="Task 1")
+    t2 = create_task(team["id"], owner["id"], title="Task 2")
+    t3 = create_task(team["id"], owner["id"], title="Task 3")
+
+    client.post(f"/tasks/{t2['id']}/dependencies", params={"actor_user_id": owner["id"]}, json={"blocker_task_id": t1["id"]})
+    client.post(f"/tasks/{t3['id']}/dependencies", params={"actor_user_id": owner["id"]}, json={"blocker_task_id": t2["id"]})
+
+    cycle = client.post(f"/tasks/{t1['id']}/dependencies", params={"actor_user_id": owner["id"]}, json={"blocker_task_id": t3["id"]})
+    self_dep = client.post(f"/tasks/{t1['id']}/dependencies", params={"actor_user_id": owner["id"]}, json={"blocker_task_id": t1["id"]})
+
+    assert cycle.status_code == 409
+    assert self_dep.status_code == 409
+
+
+# --- Enhancement 2 quality: activity feed pagination and access control ---
+
+def test_activity_feed_is_paginated_and_team_scoped() -> None:
+    owner = create_user("owner@example.com")
+    outsider = create_user("outsider@example.com")
+    team = create_team("Platform")
+    other_team = create_team("Other")
+    add_member(team["id"], owner["id"])
+    add_member(other_team["id"], outsider["id"])
+
+    create_task(team["id"], owner["id"], title="Task 1")
+    create_task(team["id"], owner["id"], title="Task 2")
+
+    all_events = client.get(f"/teams/{team['id']}/activity", params={"actor_user_id": owner["id"]})
+    first_page = client.get(f"/teams/{team['id']}/activity", params={"actor_user_id": owner["id"], "limit": 1, "offset": 0})
+    second_page = client.get(f"/teams/{team['id']}/activity", params={"actor_user_id": owner["id"], "limit": 1, "offset": 1})
+    outsider_access = client.get(f"/teams/{team['id']}/activity", params={"actor_user_id": outsider["id"]})
+
+    assert all_events.status_code == 200
+    assert len(all_events.json()) >= 2
+    assert first_page.status_code == 200
+    assert len(first_page.json()) == 1
+    assert second_page.status_code == 200
+    assert len(second_page.json()) == 1
+    assert first_page.json()[0] != second_page.json()[0]
+    assert outsider_access.status_code == 403

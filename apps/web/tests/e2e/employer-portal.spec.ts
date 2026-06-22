@@ -109,6 +109,7 @@ const attempt = {
   },
   assessment_level: "standard",
   timing_mode: "untimed",
+  evaluator_feedback_mode: "strict",
   duration_minutes: 90,
   expires_at: null,
   submission_mode: "manual",
@@ -129,6 +130,7 @@ const report = {
       candidate_email: "candidate@example.com",
       submitted_at: "2026-06-17T10:30:00+00:00",
       assessment: attempt.assessment,
+      evaluator_feedback_mode: "strict",
       timing: {
         timing_mode: "untimed",
         duration_minutes: 90,
@@ -241,8 +243,8 @@ const report = {
       snapshot_count: 4,
       test_run_count: 3,
       test_runs: [
-        { id: 1, type: "public", status: "passed", duration_ms: 120 },
-        { id: 2, type: "hidden", status: "failed", duration_ms: 180 },
+        { id: 1, type: "public", status: "passed", duration_ms: 120, timings: { api_total_ms: 1500, worker_pytest_ms: 500 } },
+        { id: 2, type: "hidden", status: "failed", duration_ms: 180, timings: { api_total_ms: 2500, ecs_wait_stopped_ms: 1700 } },
       ],
     },
     explanation_submitted: {
@@ -271,9 +273,11 @@ const report = {
 
 test("employer can sign in with Clerk, create an invite, and view a report", async ({ page }) => {
   let attempts: Array<Record<string, unknown>> = [attempt];
+  let createPayload: Record<string, unknown> | null = null;
 
   await page.route("**/assessment-attempts", async (route) => {
     if (route.request().method() === "POST") {
+      createPayload = (await route.request().postDataJSON()) as Record<string, unknown>;
       attempts = [
         {
           ...attempt,
@@ -287,6 +291,7 @@ test("employer can sign in with Clerk, create an invite, and view a report", asy
           },
           assessment_level: "advanced",
           timing_mode: "timed",
+          evaluator_feedback_mode: "guided",
           duration_minutes: 120,
           expires_at: null,
           submission_mode: null,
@@ -335,10 +340,14 @@ test("employer can sign in with Clerk, create an invite, and view a report", asy
   await page.getByLabel("Candidate email").fill("new-candidate@example.com");
   await page.getByLabel("Assessment").selectOption("advanced");
   await page.getByLabel("Timing").selectOption("timed");
+  await page.getByLabel("Evaluator feedback").selectOption("guided");
   await page.getByRole("button", { name: "Create invite" }).click();
   await expect(page.getByText("http://127.0.0.1:3000/invite/new-token")).toBeVisible();
   await expect(page.getByText("new-candidate@example.com")).toBeVisible();
-  await expect(page.getByText("Timed 120m")).toBeVisible();
+  await expect(page.getByText("Timed 120m · guided")).toBeVisible();
+  expect(createPayload).not.toBeNull();
+  const submittedPayload = createPayload as unknown as Record<string, unknown>;
+  expect(submittedPayload.evaluator_feedback_mode).toBe("guided");
 
   await page.getByRole("link", { name: "View" }).nth(0).click();
   await expect(page.getByRole("heading", { name: "Evidence Report" })).toBeVisible();
@@ -346,6 +355,8 @@ test("employer can sign in with Clerk, create an invite, and view a report", asy
   await expect(page.getByRole("heading", { name: "Score breakdown" })).toBeVisible();
   await expect(page.locator("strong").filter({ hasText: "Public issue resolution" })).toBeVisible();
   await expect(page.getByText("Public test results")).toBeVisible();
+  await expect(page.getByText("Evaluator feedback")).toBeVisible();
+  await expect(page.getByText("strict")).toBeVisible();
   await expect(page.getByText("How did you choose the authorization response behavior?")).toBeVisible();
 });
 
@@ -371,6 +382,8 @@ test("evidence report renders all Phase 2 sections", async ({ page }) => {
   // Duration / used: "90m / 30m"
   await expect(page.getByText(/90m.*30m/)).toBeVisible();
   await expect(page.getByText("manual")).toBeVisible();
+  await expect(page.getByText("Evaluator feedback")).toBeVisible();
+  await expect(page.getByText("strict")).toBeVisible();
 
   // === Executive summary ===
   await expect(page.getByRole("heading", { name: "Executive summary" })).toBeVisible();
@@ -458,6 +471,8 @@ test("evidence report renders all Phase 2 sections", async ({ page }) => {
   await expect(page.getByText("4 snapshot(s), 3 test run(s)")).toBeVisible();
   await expect(page.getByText(/public — passed.*120ms/)).toBeVisible();
   await expect(page.getByText(/hidden — failed.*180ms/)).toBeVisible();
+  await expect(page.getByText(/total 1.5s/)).toBeVisible();
+  await expect(page.getByText(/ecs wait 1.7s/)).toBeVisible();
 
   // === Suggested follow-up questions ===
   await expect(page.getByRole("heading", { name: "Suggested follow-up questions" })).toBeVisible();

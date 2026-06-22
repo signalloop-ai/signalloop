@@ -51,6 +51,7 @@ class AssessmentAttempt(TimestampMixin, Base):
     assessment_level: Mapped[str] = mapped_column(String(50), default="standard")
     timing_mode: Mapped[str] = mapped_column(String(50), default="untimed")
     duration_minutes: Mapped[int] = mapped_column(Integer, default=90)
+    evaluator_feedback_mode: Mapped[str] = mapped_column(String(50), default="strict", server_default="strict")
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     candidate_email: Mapped[Optional[str]] = mapped_column(String(320))
     invite_token: Mapped[str] = mapped_column(String(255), unique=True)

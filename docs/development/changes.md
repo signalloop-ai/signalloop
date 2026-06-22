@@ -5,6 +5,397 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-06-22 — Report Polish, Scoring Fixes, Integrity Risk Tuning
+
+### Evidence report redesigned (collapsible sections)
+
+**Why:** The employer report was showing every detail inline — failure names, seeded
+areas, AI prompts, timeline events — making it hard to read at a glance.
+
+**Changed:**
+- Added `Disclosure` component using `<details>/<summary>` for verbose lists: test
+  failure names, initially-failing tests, seeded issue areas, file diffs, flagged AI
+  prompts, process evidence, and timeline.
+- Score summaries and key metrics always visible; details collapsed by default.
+- Added `.report-disclosure`, `.report-disclosure-body` CSS.
+
+**Files changed:**
+- `apps/web/src/app/employer/reports/[attemptId]/page.tsx`
+- `apps/web/src/app/globals.css`
+
+### Regression scoring proportional
+
+**Why:** A candidate who broke 1 of 10 originally-passing tests lost 100% of the
+regression category (step function). That's too harsh for a single accidental failure.
+
+**Changed:**
+- `reg_score = rubric_weight × max(0, 1 - regressed / originally_passing_count)`.
+- `original_test_names` built from initial starter files via `extract_test_names()` and
+  passed to `calculate_scores()`.
+- Candidate-added test functions excluded from regression detection: a new test that
+  fails is not a regression of an original passing test.
+
+**Files changed:**
+- `apps/api/signalloop_api/reports.py`
+
+### Candidate test evidence — function-level diff
+
+**Why:** `candidate_test_evidence()` was counting all test functions in touched files
+including unchanged ones, overcounting by as many as the original file had.
+
+**Changed:**
+- Backend: new `_extract_test_fn_bodies()` extracts per-function bodies. `functions_added`
+  = new test names in final not in initial; `functions_modified` = names in both with
+  changed body content.
+- Employer report shows "N functions added · M modified" instead of file/function/HTTP
+  assertion counts. HTTP assertions removed from display (kept for scoring heuristic only).
+
+**Files changed:**
+- `apps/api/signalloop_api/reports.py`
+- `apps/web/src/app/employer/reports/[attemptId]/page.tsx`
+- `apps/web/src/app/employer/types.ts`
+
+### Large paste threshold raised (8 → 25 lines)
+
+**Why:** 8 consecutive new lines flagged single test functions as suspicious pastes.
+A candidate writing several test functions at once would routinely trigger it.
+
+**Changed:**
+- `PASTE_LINE_THRESHOLD = 25` in `reports.py`.
+- Test updated to use 30-line addition and assert `>= 25`.
+
+**Files changed:**
+- `apps/api/signalloop_api/reports.py`
+- `apps/api/tests/test_evidence_report.py`
+
+### Integrity risk thresholds updated
+
+**Why:** `large_paste_count >= 2` triggered "high", but two large pastes to test files
+during a 2-hour assessment can be normal. "High" should require a clear pattern.
+
+**Changed:**
+- `large_paste_count >= 3` (was ≥ 2) now triggers "high"; 1–2 pastes → "medium".
+- `weak_review` now compares against `required_question_count` (dynamic) instead of
+  hardcoded 2. New 2-field form has 1 required field; old 4-field form retains 4.
+
+**Files changed:**
+- `apps/api/signalloop_api/reports.py`
+
+### Submission review display — new 2-field format
+
+**Why:** Employer report showed 4 field labels (What changed, Tradeoffs, Verification,
+Given more time) even when candidates only filled 1 field on the new 2-field form.
+
+**Changed:**
+- Employer report renders only non-empty submission review fields dynamically. Works for
+  both old 4-field and new 2-field submissions.
+- New form: only `what_changed` required; `additional_notes` is optional. `weak_review`
+  triggered only when `what_changed` is empty.
+
+**Files changed:**
+- `apps/web/src/app/employer/reports/[attemptId]/page.tsx`
+- `apps/api/signalloop_api/reports.py`
+
+---
+
+## 2026-06-22 — Enhancement Feedback, Progress Checklist Improvements, Candidate Test Count
+
+### Enhancement feedback always shown (both packs, both modes)
+
+**Why:** Enhancement progress was only visible in guided mode and relied on candidate's own
+tests, which is wrong — enhancements are evaluated by the evaluator's hidden tests, not by
+the candidate's test results.
+
+**Changed:**
+- `run_public_tests` always runs the evaluator hidden tests (not just in guided mode) and
+  always injects `enhancement_feedback: {passed, failed, collected}` into the response,
+  computed from `feature_design_tests` in the pack config.
+- `enhancement_summary()` now returns all-zeros if the evaluator run errored (previously
+  it incorrectly counted all enhancement tests as "passed" when Docker failed).
+- Frontend "Enhancements built" checklist item uses `collected > 0` as gate (not object
+  truthiness), so a failed evaluator run shows "run tests to check" rather than "0/N".
+
+**Files changed:**
+- `apps/api/signalloop_api/attempts.py`
+- `apps/web/src/app/invite/[inviteToken]/page.tsx`
+
+### Hidden checks item split from enhancements
+
+**Why:** Previously "Hidden checks" in guided mode counted all 8 hidden tests including the
+5 enhancement tests, which overlapped with "Enhancements built" (also 5 tests). The counts
+were misleading.
+
+**Changed:**
+- Guided mode: "Hidden checks" now shows only the non-enhancement hidden tests
+  (edge-case/quality tests). Computed as `evaluator_feedback - enhancement_feedback` per
+  dimension (passed, failed, collected). Guarded with `Math.max(0, …)` to prevent negatives.
+- Strict mode: "Hidden checks" now shows a static row — "additional behaviors evaluated at
+  submission" — so candidates know edge-case tests exist without seeing counts.
+- Progress order: Hidden checks above Enhancements built.
+
+**Files changed:**
+- `apps/web/src/app/invite/[inviteToken]/page.tsx`
+
+### Candidate test count and initial_files fix
+
+**Why:** `candidateTestsAdded` always returned false after a page reload because both
+`files` and `initialFiles` were set to `body.files` (the current snapshot), making the
+diff always zero.
+
+**Changed:**
+- API now returns `initial_files` (original starter code, always loaded from pack path,
+  never from snapshot) alongside `files` (current working snapshot).
+- Frontend sets `initialFiles` from `body.initial_files`, not `body.files`.
+- Candidate tests checklist item now shows count: "N added (scored at submission)" using a
+  `def test_` line count diff between current and initial test files.
+- Removed the "Notes: additional behaviors evaluated…" and "Evaluator checks: N passed…"
+  paragraphs from the test output panel header — the progress checklist is now the single
+  source of truth for all evaluator feedback.
+
+**Files changed:**
+- `apps/api/signalloop_api/schemas.py` — added `initial_files` to `CandidateAttemptResponse`
+- `apps/api/signalloop_api/attempts.py` — `candidate_attempt_response()` loads `starter_files` separately
+- `apps/web/src/app/invite/[inviteToken]/page.tsx`
+
+---
+
+## 2026-06-21 — Proving Tests, AI Policy Improvements, Submitted Code Viewer, Dynamic README
+
+### Proving tests for candidate-written test scoring
+
+**Changed:** Candidate test scoring now uses a deterministic proving-test approach instead
+of a keyword/count heuristic.
+
+A "proving test" is a candidate-written test that:
+1. Fails on the original unmodified starter code (proves it caught a real bug).
+2. Passes on the candidate's submitted code (proves the candidate fixed it).
+
+Scoring: 0 proving → 0 pts, 1 → 6 pts (40%), 2 → 11 pts (75%), 3+ → 15 pts (full).
+
+Candidate verification runs at report-generation time via a new worker endpoint
+`POST /run-candidate-verification`. The worker receives the original impl files as
+`files` and the candidate's submitted test files as `hidden_tests`, reusing
+`run_hidden_tests_in_workspace`. If the worker is unreachable, the category scores 0
+rather than blocking report generation.
+
+**Files changed:**
+- `apps/api/signalloop_api/reports.py` — `run_candidate_verification_if_possible()`,
+  `calculate_scores()` proving-test branch, `build_report()` verification call
+- `apps/api/tests/test_evidence_report.py` — `FakeCandidateVerificationRunner`,
+  proving-test scoring tests, zero-proving-test test
+
+### AI policy improvements
+
+**Changed:** System prompt rewritten with "Default: answer the question" as the lead.
+`no_issue_identified` is now narrowly scoped — it must not fire on post-implementation
+review, conceptual questions, or any message where the candidate has done work.
+
+New code response constraint: give only the specific changed lines, not the entire
+function. The candidate must integrate the change themselves.
+
+ISSUE_IDENTIFIED_SIGNALS expanded: "i added", "i implemented", "i modified", "i updated",
+"i created", "i fixed", "i changed", "i wrote", "from this error", "from the error",
+"what format", "how do i", "how to", "how does".
+
+DISALLOWED_PATTERNS expanded for prompt injection: "you are now a different", "without
+restrictions".
+
+AI policy test suite expanded from 10 to 59 tests including: 21 allowed legitimate
+candidate question cases (covering all 8 user-reported false positives), 16 disallowed
+bulk/protected requests, 8 vague-diagnosis redirect cases, 9 prompt injection cases.
+
+**Files changed:**
+- `apps/api/signalloop_api/ai_policy.py`
+- `apps/api/tests/test_ai_policy.py`
+
+### Priority hidden test removed from standard v2
+
+**Changed:** `test_priority_is_defaulted_normalized_and_validated` removed from
+`assessment_packs/fastapi_task_api_standard_v2/evaluator/hidden_tests/test_hidden_api.py`.
+
+Priority had zero public signal (not in starter `TaskCreate`, not tested publicly) and was
+flagged as unfair to candidates. `seeded_issue_areas` entry removed and `seeded_issue_count`
+changed from 7 to 5 in `DEFAULT_PACKS`.
+
+**Files changed:**
+- `assessment_packs/fastapi_task_api_standard_v2/evaluator/hidden_tests/test_hidden_api.py`
+- `apps/api/signalloop_api/attempts.py`
+
+### Dynamic time limit in assessment READMEs
+
+**Changed:** Hardcoded time limits replaced with `{{DURATION_MINUTES}}` placeholder in
+both pack READMEs. A new `apply_placeholders()` function in `assessment_files.py`
+substitutes `{{KEY}}` tokens at serve time. `load_candidate_files()` accepts an optional
+`substitutions` dict; `create_assessment_attempt` and `candidate_attempt_response` in
+`attempts.py` pass `{"DURATION_MINUTES": str(attempt.duration_minutes)}`.
+
+**Files changed:**
+- `apps/api/signalloop_api/assessment_files.py`
+- `apps/api/signalloop_api/attempts.py`
+- `assessment_packs/fastapi_task_api_standard_v2/candidate/README.md`
+- `assessment_packs/fastapi_task_api_advanced_v1/candidate/README.md`
+
+### Submitted code viewer in employer report
+
+**Changed:** `build_report()` now includes a `submitted_code` section with the candidate's
+final snapshot files, sorted: `task_api/` first, `tests/` second, config files last.
+
+The employer report page renders a tab-based `FileViewer` component (default tab:
+`task_api/main.py`, max-height 520 px scrollable code block).
+
+**Files changed:**
+- `apps/api/signalloop_api/reports.py`
+- `apps/web/src/app/employer/reports/[attemptId]/page.tsx`
+- `apps/web/src/app/globals.css` (added `.file-viewer`, `.file-viewer-tab`,
+  `.file-viewer-content` CSS; added `overflow-wrap` and `word-break` to `.report-list`)
+
+---
+
+## 2026-06-20 — Assessment Redesign: Quality-Embedded Scoring + Advanced v1 Pack
+
+**Decision:** Redesign both assessment packs to embed quality as a modifier within each
+scoring category (public issues, hidden issues, enhancements) instead of treating quality
+as a separate category.
+
+**Standard v2 changes:**
+- 3 public issues (failing tests: duplicate email, blank title, non-owner read)
+- 4 hidden issues: email case/whitespace normalization, priority defaulting/validation,
+  status transition enforcement, unknown actor 404 vs 403 distinction
+- 2 enhancements: `due_date` field with ISO validation + `GET /tasks?owner_id=` listing
+- Time limit: 60 minutes
+- Rubric: 15/20/20/15/15/15
+
+**Advanced v1 changes (new pack):**
+- 4 public issues: partial update field preservation, team lead scoping, archived tasks
+  in lists, comment access check
+- 3 hidden issues: patch authorization, membership role validation, status transitions
+- 2 enhancements: task dependencies (blocking + DFS cycle detection) + team activity feed
+  (paginated, team-scoped)
+- Time limit: 120 minutes
+- Rubric: 15/15/25/15/15/15 (feature weight increased to 25)
+
+**AI collaborator policy redesign:**
+- Replaced Socratic tutor rule with single principle: candidate must identify the issue;
+  once they have, AI helps implement the fix
+- Renamed `direct_diagnosis` tag → `no_issue_identified`
+- AI now allows implementation help when candidate has named a specific issue
+
+**Scoring changes:**
+- `RUBRIC` global in `reports.py` reflects standard v2 default weights
+- Per-pack `"rubric"` key in `DEFAULT_PACKS` overrides weights for advanced v1
+- `calculate_scores` now accepts `rubric` parameter and uses pack rubric throughout
+- `build_favo` feature threshold is now proportional (70% of pack feature max)
+- `build_report` emits `pack_rubric` not global `RUBRIC` as `rubric_weights`
+
+**Files changed:**
+- `assessment_packs/fastapi_task_api_standard_v2/candidate/README.md`
+- `assessment_packs/fastapi_task_api_standard_v2/candidate/tests/test_public_api.py`
+- `assessment_packs/fastapi_task_api_standard_v2/evaluator/hidden_tests/test_hidden_api.py`
+- `assessment_packs/fastapi_task_api_standard_v2/evaluator/reference_solution/task_api/main.py`
+- `assessment_packs/fastapi_task_api_standard_v2/evaluator/SCORING_RUBRIC.md`
+- `assessment_packs/fastapi_task_api_standard_v2/evaluator/REFERENCE_SOLUTION_NOTES.md`
+- `assessment_packs/fastapi_task_api_advanced_v1/candidate/README.md`
+- `assessment_packs/fastapi_task_api_advanced_v1/candidate/tests/test_public_api.py`
+- `assessment_packs/fastapi_task_api_advanced_v1/evaluator/hidden_tests/test_hidden_api.py`
+- `assessment_packs/fastapi_task_api_advanced_v1/evaluator/reference_solution/task_api/main.py`
+- `assessment_packs/fastapi_task_api_advanced_v1/evaluator/SCORING_RUBRIC.md`
+- `assessment_packs/fastapi_task_api_advanced_v1/evaluator/REFERENCE_SOLUTION_NOTES.md`
+- `apps/api/signalloop_api/ai_policy.py`
+- `apps/api/signalloop_api/attempts.py`
+- `apps/api/signalloop_api/reports.py`
+- `apps/api/tests/test_ai_policy.py`
+- `docs/architecture/technical-product-architecture-spec.md`
+
+**Validation:** 67/67 API tests pass (3 skipped). Reference solution passes all hidden
+and candidate public tests for both packs.
+
+---
+
+## 2026-06-20 — Implemented Phase 2 UX And Feedback Enhancements
+
+**Decision:** Add execution timing breakdown, configurable evaluator feedback mode, and
+candidate IDE ergonomics to the Phase 2 enhancement list.
+
+**Context:** Candidate feedback raised that strict hidden-test handling can feel too
+ambiguous because hidden failures are only visible after final submission. The product
+direction is to support both modes rather than choose one permanently before more pilot
+feedback.
+
+**Implemented local behavior:**
+
+- Execution timing breakdown records where run latency is spent before changing
+  infrastructure.
+- Strict mode remains the default for hiring: public test feedback during active work;
+  hidden/evaluator counts visible only in employer reports.
+- Guided mode may show aggregate evaluator pass/fail counts during active work.
+- Guided mode must not expose hidden test names, tracebacks, failure messages, file
+  paths, or line numbers.
+- Reports must record the mode used because guided mode changes score interpretation.
+- Candidate IDE ergonomics may add syntax diagnostics, clickable public pytest output,
+  color-coded public output, and file indicators using only candidate-visible files and
+  public test output.
+
+**Implementation files added/changed:**
+
+- `apps/api/alembic/versions/0005_add_evaluator_feedback_mode.py`
+- `apps/api/signalloop_api/attempts.py`
+- `apps/api/signalloop_api/execution.py`
+- `apps/api/signalloop_api/models.py`
+- `apps/api/signalloop_api/reports.py`
+- `apps/api/signalloop_api/schemas.py`
+- `apps/api/signalloop_api/submissions.py`
+- `apps/api/tests/test_attempt_lifecycle.py`
+- `apps/worker/signalloop_worker/runner.py`
+- `apps/worker/signalloop_worker/schemas.py`
+- `apps/worker/tests/test_api.py`
+- `apps/web/src/app/employer/api.ts`
+- `apps/web/src/app/employer/page.tsx`
+- `apps/web/src/app/employer/reports/[attemptId]/page.tsx`
+- `apps/web/src/app/employer/types.ts`
+- `apps/web/src/app/globals.css`
+- `apps/web/src/app/invite/[inviteToken]/page.tsx`
+
+**Validation:**
+
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> 68 passed, 3 skipped.
+- `cd apps/worker && UV_CACHE_DIR=.uv-cache uv run pytest` -> 22 passed.
+- `cd apps/web && npm run lint` -> passed.
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/web && npm run build` -> passed.
+- `cd apps/web && npm run test:e2e -- --workers=1` -> 17 passed, 2 skipped.
+- `cd apps/api && DATABASE_URL=sqlite:////tmp/signalloop_phase2_enhancements_migration.db UV_CACHE_DIR=.uv-cache uv run alembic upgrade head` -> passed.
+- Local Postgres migrated through `0005_add_evaluator_feedback_mode`.
+- Live local Playwright candidate smoke passed against the migrated Postgres/API/worker stack for:
+  - standard/strict invite,
+  - advanced/guided invite.
+- Clerk-authenticated employer portal was opened with the user's local Clerk session; standard
+  and advanced evidence reports rendered for the submitted live-smoke attempts.
+- Added deterministic API submission-scenario coverage for unchanged, public-only, strong,
+  weak-review, AI-risk, standard, and advanced report outcomes.
+- Expanded AI policy fallback tests for public-test explanation, framework concept help,
+  missing-test requests, hidden-test requests, final-explanation requests, full-solution
+  requests, and issue-by-issue patch requests.
+- Added skipped-by-default live OpenAI policy validation covering allowed named-issue help,
+  allowed public-test explanation, no-issue redirect, enumerate-defects block, hidden-tests
+  block, final-explanation block, prompt-injection block, and missing-tests block.
+- Fixed LLM response parsing so a disallowed `no_issue_identified` response with a blank
+  message still uses the required Socratic redirect.
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> 76 passed, 11 skipped.
+- `cd apps/api && RUN_LIVE_AI_TESTS=1 UV_CACHE_DIR=.uv-cache uv run pytest tests/test_live_ai_policy.py -q` -> 8 passed.
+
+**Files changed:**
+
+- `docs/architecture/technical-product-architecture-spec.md`
+- `docs/enhancements/phase-2-assessment-system/phase-2-product-scope.md`
+- `docs/enhancements/phase-2-assessment-system/phase-2-execution-plan.md`
+- `docs/enhancements/phase-2-assessment-system/03-employer-assessment-configuration.md`
+- `docs/enhancements/phase-2-assessment-system/06-ui-enhancements.md`
+- `docs/enhancements/phase-2-assessment-system/07-reporting-and-favo-updates.md`
+
+**Validation:** Documentation-only change. No runtime checks required.
+
+---
+
 ## 2026-06-20 — Local Phase 2 Validation Cleanup
 
 **Symptom:** Review of the latest Phase 2 changes found local validation drift:

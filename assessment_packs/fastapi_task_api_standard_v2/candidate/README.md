@@ -6,6 +6,10 @@ The team used an AI assistant to generate a first version of an internal task-ma
 
 The product manager wants the beta to be safe, predictable, and easy to debug. Public tests are incomplete. Some behavior is intentionally under-specified. Where requirements are ambiguous, make a reasonable decision and implement it consistently.
 
+## Time limit
+
+{{DURATION_MINUTES}} minutes{{TIMING_NOTE}}.
+
 ## Constraints
 
 1. Internal beta, not a public consumer product.
@@ -19,29 +23,48 @@ The product manager wants the beta to be safe, predictable, and easy to debug. P
 
 ## Your task
 
-Debug and harden the API in `task_api/`.
+Debug and harden the API in `task_api/`. Then implement two small enhancements described below.
 
 You should:
 
-- Run the public tests.
-- Inspect the implementation.
+- Run the public tests to find the initially-failing behaviors.
+- Inspect the implementation for additional issues not surfaced by public tests.
 - Fix behavior you believe is unsafe, invalid, or inconsistent.
-- Add or update candidate tests for the behavior you change.
+- Implement the enhancements below.
+- Add or update candidate tests for the behavior you change or add.
 - Be ready to summarize what you changed, what tradeoffs you chose, and how you verified it in the SignalLoop submission review.
 
 Two areas intentionally require judgment:
 
 - Unauthorized access behavior: choose whether inaccessible resources should return `403` or `404`.
 - Status transition policy: choose whether tasks can move directly from `TODO` to `DONE` or must move through `IN_PROGRESS`.
-- Priority handling: decide how to normalize and validate task priority values while preserving a simple API.
 
-Priority is part of the beta triage workflow. Tasks should expose a `priority` field using `LOW`, `MEDIUM`, or `HIGH`. If no priority is supplied, use a safe default.
+## Enhancements
+
+### 1. Task due date
+
+Tasks should support an optional `due_date` field for the beta triage workflow. A task with a due date should expose it in the response. The API should reject dates that do not make sense for a task management system. The exact validation rules are up to you — make a reasonable decision and implement it consistently.
+
+### 2. Task listing
+
+The API should support listing tasks for a given owner via `GET /tasks?owner_id=...`. The response should be a list of tasks. Decide how to handle ordering and what happens when the owner does not exist or has no tasks.
+
+## How your submission is evaluated
+
+Your score reflects not just whether tests pass, but the quality of your implementation:
+
+- **Design decisions**: For example, should an unknown actor receive a `403` or a `404`? The correct choice is evaluated, not just that you handled it at all.
+- **Input handling**: Normalization (e.g., case-insensitive email, whitespace trimming) and validation (e.g., rejecting bad date formats) are tested beyond the basic happy path.
+- **Enhancement correctness**: Enhancements are evaluated on edge cases — ordering, empty results, invalid inputs — not just the core feature working once.
+- **Consistency**: If you choose a policy (e.g., status transitions, access control), apply it consistently. Partial or inconsistent enforcement is a signal.
+
+You will not see the exact hidden checks during the attempt. Read the code and the constraints, reason about what correct behavior should be, and implement it thoroughly.
 
 ## AI collaborator policy
 
-The embedded assistant is a constrained collaborator. You may ask it to explain selected code, explain public test output, discuss one candidate-identified issue, or suggest general debugging approaches.
+The embedded assistant is a constrained collaborator. Once you have identified a specific issue, you may ask it to help you implement the fix. You may also ask it to explain Python, FastAPI, or pytest mechanics, interpret test output, or discuss tradeoffs for a design decision you have already made.
 
-Do not ask it to enumerate every defect, provide a full solution, rewrite whole files, generate your final explanation, infer hidden tests, or provide issue-by-issue patches.
+Do not ask it to enumerate every defect, provide a full solution, rewrite whole files, or generate your final explanation.
 
 ## Local setup
 
@@ -62,8 +85,9 @@ uv run uvicorn task_api.main:app --reload
 
 - `POST /users` creates a user from `email` and optional `name`.
 - `GET /users/{user_id}` returns a user.
-- `POST /tasks` creates a task from `title`, `owner_id`, and optional `priority`.
+- `POST /tasks` creates a task from `title`, `owner_id`, and optional `due_date`.
 - `GET /tasks/{task_id}?actor_user_id=...` returns a task for an actor.
+- `GET /tasks?owner_id=...` lists tasks for an owner.
 - `PATCH /tasks/{task_id}/status` updates a task status.
 - `DELETE /tasks/{task_id}?actor_user_id=...` deletes a task for an actor.
 

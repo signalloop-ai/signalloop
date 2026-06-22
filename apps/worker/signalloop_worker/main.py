@@ -56,6 +56,22 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.post("/run-candidate-verification", response_model=HiddenTestRunResult)
+    def run_candidate_verification(payload: HiddenTestRunRequest) -> HiddenTestRunResult:
+        """Run candidate-written test files against the original starter code.
+
+        Caller supplies original implementation files as `files` and the
+        candidate's new/modified test files as `hidden_tests`. Tests that fail
+        prove the candidate's tests catch real bugs in the starter code.
+        """
+        try:
+            with TemporaryDirectory(prefix="signalloop-candidate-verify-") as workspace:
+                from pathlib import Path
+
+                return run_hidden_tests_in_workspace(payload, Path(workspace))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     return app
 
 

@@ -13,6 +13,7 @@ export type EmployerAttemptSummary = {
   assessment: AssessmentMetadata;
   assessment_level: string;
   timing_mode: string;
+  evaluator_feedback_mode: string;
   duration_minutes: number;
   expires_at: string | null;
   submission_mode: string | null;
@@ -60,6 +61,7 @@ export type EvidenceReportResponse = {
         expires_at: string | null;
         submission_mode: string | null;
       };
+      evaluator_feedback_mode?: string;
     };
     executive_summary: {
       summary: string;
@@ -96,6 +98,10 @@ export type EvidenceReportResponse = {
       added_test_files: string[];
       modified_test_files: string[];
       candidate_test_file_count: number;
+      functions_added?: number;
+      functions_modified?: number;
+      candidate_test_function_count?: number;
+      http_assertion_count?: number;
     };
     ai_collaboration: {
       message_count: number;
@@ -120,7 +126,7 @@ export type EvidenceReportResponse = {
     process_evidence: {
       snapshot_count: number;
       test_run_count: number;
-      test_runs: Array<{ id: number; type: string; status: string; duration_ms: number }>;
+      test_runs: Array<{ id: number; type: string; status: string; duration_ms: number; timings?: Record<string, number> }>;
     };
     explanation_submitted: {
       final_explanation: string;
@@ -137,5 +143,9 @@ export type EvidenceReportResponse = {
     };
     timeline: Array<{ at: string; type: string; summary: string }>;
     follow_up_questions: string[];
+    submitted_code?: {
+      file_count: number;
+      files: Record<string, string>;
+    };
   };
 };

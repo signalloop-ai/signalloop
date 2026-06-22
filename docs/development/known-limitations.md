@@ -5,7 +5,7 @@ These are intentional MVP boundaries or unresolved follow-up items.
 ## Execution
 
 - Local development uses the Docker-based worker.
-- Production execution with AWS ECS/Fargate per-run tasks is documented in ADR 0006 but not implemented.
+- Production execution with AWS ECS/Fargate per-run tasks is implemented and validated end-to-end via `EXECUTION_BACKEND=ecs_fargate`. See `docs/deployment/aws-ecs-fargate-execution.md`.
 - Backend-to-worker orchestration exists for both public and hidden test runs. Public test results are persisted as `TestRun` records with `run_type="public"` via `POST /candidate/invites/{token}/run-public-tests`.
 - The worker must not be deployed to a platform that requires Docker-in-Docker or a host Docker socket inside a managed web-service container.
 

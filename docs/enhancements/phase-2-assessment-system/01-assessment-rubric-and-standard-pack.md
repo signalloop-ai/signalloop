@@ -9,15 +9,19 @@ and advanced assessments.
 
 ## Common Rubric
 
-| Category | Points | Evaluation mode |
-|---|---:|---|
-| Public issue resolution | 15 | Automated public tests |
-| Private issue generalization | 20 | Automated hidden tests |
-| Feature/design implementation | 20 | Automated tests plus evaluator/LLM review |
-| Candidate-written tests | 15 | Automated heuristics plus optional evaluator/LLM review |
-| AI collaboration | 20 | AI logs, policy classifier, verification behavior |
-| Regression/code quality | 10 | Automated regression plus evaluator/LLM review |
-| Total | 100 | Hybrid |
+| Category | Points (standard v2) | Points (advanced v1) | Evaluation mode |
+|---|---:|---:|---|
+| Public issue resolution | 15 | 15 | Automated public tests |
+| Private issue generalization | 20 | 15 | Automated hidden tests |
+| Feature/design implementation | 20 | 25 | Automated tests (combined public + hidden) |
+| Candidate-written tests | 15 | 15 | Automated heuristics |
+| AI collaboration | 15 | 15 | AI logs, policy classifier, violation tiers |
+| Regression/code quality | 15 | 15 | Automated regression |
+| Total | 100 | 100 | |
+
+Note: weights were rebalanced in the June 2026 redesign. AI collaboration decreased from
+the originally planned 20 to 15; regression/code quality increased from 10 to 15.
+Pack-specific overrides are in `DEFAULT_PACKS` in `attempts.py`.
 
 ## Changes From MVP Rubric
 
@@ -50,7 +54,7 @@ The standard pack should remain approachable but require judgment:
 - explicit ambiguity in authorization/status policy,
 - candidate-written tests encouraged,
 - AI collaboration useful but not sufficient,
-- default recommended duration: 90 minutes.
+- default recommended duration: 60 minutes.
 
 ## Feature/Design Implementation Principle
 

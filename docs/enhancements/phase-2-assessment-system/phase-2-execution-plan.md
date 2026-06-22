@@ -118,6 +118,45 @@ Submission Review, FAVO, AI integrity risk, feature/design implementation, and L
 review status. External LLM-assisted review remains disabled until a bounded prompt and
 safety boundary are added.
 
+## Task 10: Execution Timing And Evaluator Feedback Modes
+
+Status: completed locally.
+
+Add observability and configurable candidate feedback for execution runs:
+
+- persist stage-level timing breakdown for public and hidden/evaluator execution,
+- show candidate-safe run duration/progress in the workspace,
+- keep test/final-submit operations non-blocking where practical so candidates can keep
+  reading/editing while work is running,
+- add an employer-selectable evaluator feedback mode:
+  - `strict` — public test feedback only during attempt; hidden/evaluator counts remain
+    employer-report-only,
+  - `guided` — public test feedback plus aggregate evaluator pass/fail counts during
+    attempt, without hidden test names, tracebacks, file paths, line numbers, or failure
+    messages,
+- record the selected feedback mode on each attempt and in the employer report.
+
+Strict mode remains the default for hiring. Guided mode is explicitly a tradeoff: better
+candidate feedback, weaker hidden-test purity.
+
+## Task 11: Candidate IDE Ergonomics
+
+Status: completed locally.
+
+Improve the browser workspace so common IDE feedback is available without weakening the
+assessment:
+
+- lightweight Python syntax diagnostics while typing,
+- Monaco markers/gutter indicators for syntax problems,
+- clickable public pytest output that opens the referenced file and line,
+- color-coded public test output,
+- file-tree indicators for files referenced by syntax diagnostics or public test output,
+- editor search/bracket/indent polish.
+
+Only candidate-visible files and public test output may feed these features. Do not use
+hidden tests, evaluator artifacts, reference solutions, scoring internals, or inferred
+private issue coverage to generate IDE hints.
+
 ## Completion Protocol
 
 After each task:

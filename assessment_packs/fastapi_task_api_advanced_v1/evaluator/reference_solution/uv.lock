@@ -275,7 +275,7 @@ wheels = [
 ]
 
 [[package]]
-name = "signalloop-fastapi-task-api-v1-reference"
+name = "signalloop-fastapi-task-api-advanced-v1-reference"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

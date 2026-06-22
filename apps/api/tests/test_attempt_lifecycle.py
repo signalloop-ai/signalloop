@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from signalloop_api.models import AssessmentAttempt, AuditEvent, CodeSnapshot
+from signalloop_api.models import AssessmentAttempt, AuditEvent, CodeSnapshot, TestRun
 
 
 def test_create_attempt_generates_invite_and_initial_snapshot(
@@ -30,6 +30,7 @@ def test_create_attempt_generates_invite_and_initial_snapshot(
         assert attempt.status == "created"
         assert attempt.assessment_level == "standard"
         assert attempt.timing_mode == "untimed"
+        assert attempt.evaluator_feedback_mode == "strict"
         assert attempt.duration_minutes == 90
         assert attempt.expires_at is None
         assert attempt.started_at is None
@@ -275,6 +276,73 @@ def test_expired_timed_attempt_auto_submits_latest_snapshot_and_blocks_public_te
         assert attempt.final_submission.code_snapshot.files == {"task_api/main.py": "print('latest')\n"}
 
 
+def test_guided_feedback_mode_returns_aggregate_evaluator_counts(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeExecutionProvider:
+        def run_public(self, files: dict[str, str]) -> dict:
+            return {
+                "status": "failed",
+                "exit_code": 1,
+                "stdout": "collected 2 items\n\ntests/test_public_api.py .F\n\n1 passed, 1 failed",
+                "stderr": "",
+                "duration_ms": 10,
+                "timings": {"worker_pytest_ms": 10},
+            }
+
+        def run_hidden(self, files: dict[str, str], hidden_tests: dict[str, str]) -> dict:
+            return {
+                "status": "failed",
+                "exit_code": 1,
+                "stdout": (
+                    "collected 3 items\n"
+                    "tests/test_hidden_api.py _ test_hidden_a _\n"
+                    "tests/test_hidden_api.py _ test_hidden_b _\n"
+                    "1 passed, 2 failed"
+                ),
+                "stderr": "hidden detail should not be returned to candidate",
+                "duration_ms": 15,
+                "timings": {"worker_pytest_ms": 15},
+            }
+
+    monkeypatch.setattr("signalloop_api.attempts.get_execution_provider", lambda: FakeExecutionProvider())
+    created = client.post(
+        "/assessment-attempts",
+        json={"evaluator_feedback_mode": "guided"},
+    ).json()
+
+    response = client.post(
+        f"/candidate/invites/{created['invite_token']}/run-public-tests",
+        json={"kind": "public_test_run", "files": {"task_api/main.py": "print('candidate')\n"}},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "failed"
+    assert body["evaluator_feedback"] == {
+        "mode": "guided",
+        "status": "failed",
+        "collected": 3,
+        "passed": 1,
+        "failed": 2,
+        "details_hidden": True,
+    }
+    assert "hidden detail should not be returned" not in response.text
+    assert body["timings"]["api_total_ms"] >= 0
+
+    with session_factory() as session:
+        attempt = session.get(AssessmentAttempt, created["attempt_id"])
+        assert attempt is not None
+        assert attempt.evaluator_feedback_mode == "guided"
+        runs = session.scalars(
+            select(TestRun).where(TestRun.attempt_id == attempt.id).order_by(TestRun.id)
+        ).all()
+        assert [run.run_type for run in runs] == ["public", "guided_hidden"]
+        assert runs[-1].stderr == "hidden detail should not be returned to candidate"
+
+
 # ---------------------------------------------------------------------------
 # Email validation tests
 # ---------------------------------------------------------------------------
@@ -329,6 +397,7 @@ def test_employer_attempt_list_includes_all_phase2_fields(
             "candidate_email": "phase2-check@example.com",
             "assessment_level": "advanced",
             "timing_mode": "timed",
+            "evaluator_feedback_mode": "guided",
             "duration_minutes": 150,
         },
     )
@@ -342,6 +411,7 @@ def test_employer_attempt_list_includes_all_phase2_fields(
 
     assert item["assessment_level"] == "advanced"
     assert item["timing_mode"] == "timed"
+    assert item["evaluator_feedback_mode"] == "guided"
     assert item["duration_minutes"] == 150
     assert item["expires_at"] is None
     assert item["submission_mode"] is None

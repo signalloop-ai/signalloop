@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Dict, Optional
 
 from fastapi import FastAPI, HTTPException
@@ -22,7 +23,7 @@ class UserCreate(BaseModel):
 
     @field_validator("email")
     @classmethod
-    def email_must_not_be_blank(cls, value: str) -> str:
+    def normalize_email(cls, value: str) -> str:
         normalized = value.strip().lower()
         if not normalized:
             raise ValueError("Email is required")
@@ -33,6 +34,7 @@ class TaskCreate(BaseModel):
     title: str
     owner_id: int
     priority: str = "MEDIUM"
+    due_date: Optional[str] = None
 
     @field_validator("title")
     @classmethod
@@ -47,8 +49,21 @@ class TaskCreate(BaseModel):
     def priority_must_be_known(cls, value: str) -> str:
         normalized = value.strip().upper()
         if normalized not in VALID_PRIORITIES:
-            raise ValueError("Unknown priority")
+            raise ValueError(f"Priority must be one of {sorted(VALID_PRIORITIES)}")
         return normalized
+
+    @field_validator("due_date")
+    @classmethod
+    def due_date_must_be_valid(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        try:
+            parsed = date.fromisoformat(value)
+        except ValueError:
+            raise ValueError("due_date must be a valid ISO date (YYYY-MM-DD)")
+        if parsed < date.today():
+            raise ValueError("due_date cannot be in the past")
+        return value
 
 
 class StatusUpdate(BaseModel):
@@ -59,7 +74,7 @@ class StatusUpdate(BaseModel):
     def status_must_be_known(cls, value: str) -> str:
         normalized = value.strip().upper()
         if normalized not in VALID_STATUSES:
-            raise ValueError("Unknown status")
+            raise ValueError(f"Status must be one of {sorted(VALID_STATUSES)}")
         return normalized
 
 
@@ -81,7 +96,7 @@ def _ensure_actor_can_access(task: dict, actor_user_id: int) -> None:
     if actor_user_id not in users:
         raise HTTPException(status_code=404, detail="Actor not found")
     if task["owner_id"] != actor_user_id:
-        raise HTTPException(status_code=403, detail="Actor cannot access this task")
+        raise HTTPException(status_code=403, detail="Forbidden")
 
 
 @app.post("/users", status_code=201)
@@ -89,12 +104,7 @@ def create_user(payload: UserCreate) -> dict:
     global next_user_id
     if any(user["email"] == payload.email for user in users.values()):
         raise HTTPException(status_code=409, detail="Email already exists")
-
-    user = {
-        "id": next_user_id,
-        "email": payload.email,
-        "name": payload.name,
-    }
+    user = {"id": next_user_id, "email": payload.email, "name": payload.name}
     users[next_user_id] = user
     next_user_id += 1
     return user
@@ -113,17 +123,25 @@ def create_task(payload: TaskCreate) -> dict:
     global next_task_id
     if payload.owner_id not in users:
         raise HTTPException(status_code=404, detail="Owner not found")
-
     task = {
         "id": next_task_id,
         "title": payload.title,
         "owner_id": payload.owner_id,
         "status": "TODO",
         "priority": payload.priority,
+        "due_date": payload.due_date,
     }
     tasks[next_task_id] = task
     next_task_id += 1
     return task
+
+
+@app.get("/tasks")
+def list_tasks(owner_id: int) -> list[dict]:
+    return sorted(
+        [task for task in tasks.values() if task["owner_id"] == owner_id],
+        key=lambda t: t["id"],
+    )
 
 
 @app.get("/tasks/{task_id}")
@@ -140,11 +158,8 @@ def update_task_status(task_id: int, payload: StatusUpdate) -> dict:
     task = tasks.get(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
-
-    current_status = task["status"]
-    if payload.status not in ALLOWED_TRANSITIONS[current_status]:
+    if payload.status not in ALLOWED_TRANSITIONS[task["status"]]:
         raise HTTPException(status_code=409, detail="Invalid status transition")
-
     task["status"] = payload.status
     return task
 

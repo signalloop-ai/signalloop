@@ -17,9 +17,13 @@ class TestExecutionProvider(Protocol):
     def run_hidden(self, files: dict[str, str], hidden_tests: dict[str, str]) -> dict:
         ...
 
+    def run_candidate_verification(self, original_files: dict[str, str], candidate_tests: dict[str, str]) -> dict:
+        ...
+
 
 class HTTPWorkerExecutionProvider:
     def run_public(self, files: dict[str, str]) -> dict:
+        started = monotonic()
         response = httpx.post(
             f"{settings.execution_worker_url.rstrip('/')}/run-public-tests",
             json={
@@ -30,12 +34,17 @@ class HTTPWorkerExecutionProvider:
             timeout=settings.worker_request_timeout_seconds,
         )
         response.raise_for_status()
-        return dict(response.json())
+        result = dict(response.json())
+        timings = dict(result.get("timings") or {})
+        timings["api_worker_request_ms"] = int((monotonic() - started) * 1000)
+        result["timings"] = timings
+        return result
 
     def run_hidden(self, files: dict[str, str], hidden_tests: dict[str, str]) -> dict:
         last_error: httpx.HTTPError | None = None
         for _ in range(settings.worker_request_retries + 1):
             try:
+                started = monotonic()
                 response = httpx.post(
                     f"{settings.execution_worker_url.rstrip('/')}/run-hidden-tests",
                     json={
@@ -47,12 +56,36 @@ class HTTPWorkerExecutionProvider:
                     timeout=settings.worker_request_timeout_seconds,
                 )
                 response.raise_for_status()
-                return dict(response.json())
+                result = dict(response.json())
+                timings = dict(result.get("timings") or {})
+                timings["api_worker_request_ms"] = int((monotonic() - started) * 1000)
+                result["timings"] = timings
+                return result
             except httpx.HTTPError as exc:
                 last_error = exc
         if last_error is not None:
             raise last_error
         raise RuntimeError("Worker request failed without an error")
+
+    def run_candidate_verification(self, original_files: dict[str, str], candidate_tests: dict[str, str]) -> dict:
+        started = monotonic()
+        response = httpx.post(
+            f"{settings.execution_worker_url.rstrip('/')}/run-candidate-verification",
+            json={
+                "files": original_files,
+                "hidden_tests": candidate_tests,
+                "runtime_image": settings.assessment_runtime_image,
+                "timeout_seconds": 60,
+                "command": ["python", "-m", "pytest", "tests/", "-v"],
+            },
+            timeout=settings.worker_request_timeout_seconds,
+        )
+        response.raise_for_status()
+        result = dict(response.json())
+        timings = dict(result.get("timings") or {})
+        timings["api_worker_request_ms"] = int((monotonic() - started) * 1000)
+        result["timings"] = timings
+        return result
 
 
 class ECSFargateExecutionProvider:
@@ -84,6 +117,16 @@ class ECSFargateExecutionProvider:
             }
         )
 
+    def run_candidate_verification(self, original_files: dict[str, str], candidate_tests: dict[str, str]) -> dict:
+        return self._run_task(
+            {
+                "files": original_files,
+                "hidden_tests": candidate_tests,
+                "command": ["python", "-m", "pytest", "tests/", "-v"],
+                "timeout_seconds": 60,
+            }
+        )
+
     def _run_task(self, payload: dict) -> dict:
         require_ecs_settings()
         run_id = uuid4().hex
@@ -92,14 +135,15 @@ class ECSFargateExecutionProvider:
         input_uri = f"s3://{settings.signalloop_run_bucket}/{input_key}"
         output_uri = f"s3://{settings.signalloop_run_bucket}/{output_key}"
 
+        started = monotonic()
         self.s3.put_object(
             Bucket=settings.signalloop_run_bucket,
             Key=input_key,
             Body=json.dumps(payload).encode("utf-8"),
             ContentType="application/json",
         )
+        input_uploaded = monotonic()
 
-        started = monotonic()
         response = self.ecs.run_task(
             cluster=settings.aws_ecs_cluster,
             taskDefinition=settings.aws_ecs_runner_task_definition,
@@ -123,6 +167,7 @@ class ECSFargateExecutionProvider:
                 ]
             },
         )
+        task_requested = monotonic()
         failures = response.get("failures") or []
         if failures:
             raise RuntimeError(f"ECS RunTask failed: {failures}")
@@ -141,6 +186,7 @@ class ECSFargateExecutionProvider:
                 "MaxAttempts": settings.aws_ecs_waiter_max_attempts,
             },
         )
+        task_stopped = monotonic()
 
         described = self.ecs.describe_tasks(cluster=settings.aws_ecs_cluster, tasks=[task_arn])
         stopped_task = (described.get("tasks") or [{}])[0]
@@ -151,7 +197,19 @@ class ECSFargateExecutionProvider:
 
         result_object = self.s3.get_object(Bucket=settings.signalloop_run_bucket, Key=output_key)
         result = json.loads(result_object["Body"].read().decode("utf-8"))
-        result.setdefault("duration_ms", int((monotonic() - started) * 1000))
+        completed = monotonic()
+        result.setdefault("duration_ms", int((completed - started) * 1000))
+        timings = dict(result.get("timings") or {})
+        timings.update(
+            {
+                "s3_input_upload_ms": int((input_uploaded - started) * 1000),
+                "ecs_run_task_ms": int((task_requested - input_uploaded) * 1000),
+                "ecs_wait_stopped_ms": int((task_stopped - task_requested) * 1000),
+                "s3_output_download_ms": int((completed - task_stopped) * 1000),
+                "api_execution_provider_ms": int((completed - started) * 1000),
+            }
+        )
+        result["timings"] = timings
         return dict(result)
 
 
@@ -186,4 +244,5 @@ def execution_error_result(message: str) -> dict:
         "stdout": "",
         "stderr": message,
         "duration_ms": 0,
+        "timings": {},
     }

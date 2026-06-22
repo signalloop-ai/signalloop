@@ -53,24 +53,6 @@ def test_blank_task_title_is_rejected() -> None:
     assert response.status_code == 422
 
 
-def test_task_priority_defaults_and_accepts_high() -> None:
-    user = create_user()
-
-    default_response = client.post(
-        "/tasks",
-        json={"title": "Triage beta issue", "owner_id": user["id"]},
-    )
-    high_response = client.post(
-        "/tasks",
-        json={"title": "Fix production blocker", "owner_id": user["id"], "priority": "HIGH"},
-    )
-
-    assert default_response.status_code == 201
-    assert default_response.json()["priority"] == "MEDIUM"
-    assert high_response.status_code == 201
-    assert high_response.json()["priority"] == "HIGH"
-
-
 def test_non_owner_cannot_read_task() -> None:
     owner = create_user("owner@example.com")
     other = create_user("other@example.com")
@@ -87,9 +69,3 @@ def test_non_owner_cannot_read_task() -> None:
     assert response.status_code == 403
 
 
-def test_missing_task_returns_404() -> None:
-    user = create_user()
-
-    response = client.get("/tasks/999", params={"actor_user_id": user["id"]})
-
-    assert response.status_code == 404

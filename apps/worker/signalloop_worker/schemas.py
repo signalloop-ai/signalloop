@@ -21,6 +21,7 @@ class PublicTestRunResult(BaseModel):
     stdout: str
     stderr: str
     duration_ms: int
+    timings: dict[str, int] = Field(default_factory=dict)
 
 
 HiddenTestRunResult = PublicTestRunResult

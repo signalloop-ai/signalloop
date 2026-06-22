@@ -81,13 +81,15 @@ def parse_ai_decision(raw: str, original_message: str, recent_messages: list[str
         data = json.loads(raw)
         allowed = bool(data.get("allowed", True))
         policy_tags = [t for t in data.get("policy_tags", []) if isinstance(t, str)]
-        message = str(data.get("message", "")).strip() or "I could not generate a response."
+        message = str(data.get("message", "")).strip()
 
         # If the LLM said allowed but included a disallowed tag, trust the tag.
         if policy_tags and any(t in DISALLOWED_TAGS for t in policy_tags):
             allowed = False
         if not allowed and not message:
-            message = SOCRATIC_REDIRECT_MESSAGE if "direct_diagnosis" in policy_tags else REDIRECT_MESSAGE
+            message = SOCRATIC_REDIRECT_MESSAGE if "no_issue_identified" in policy_tags else REDIRECT_MESSAGE
+        if allowed and not message:
+            message = "I could not generate a response."
 
         return AIDecision(allowed=allowed, policy_tags=policy_tags, message=message)
     except (json.JSONDecodeError, KeyError, TypeError):

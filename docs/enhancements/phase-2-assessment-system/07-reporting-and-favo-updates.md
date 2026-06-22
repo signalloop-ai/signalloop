@@ -49,6 +49,20 @@ Submission Review captured at final submission:
 Reports should render these answers as evidence. They should not be treated as the
 primary grading surface.
 
+## Evaluator Feedback Mode
+
+Reports must record whether an attempt used strict or guided evaluator feedback:
+
+- `strict`: candidate saw public test feedback only during active work; hidden counts
+  were employer-report-only.
+- `guided`: candidate could see aggregate evaluator pass/fail counts during active work.
+
+Guided mode should be visible to employers because it changes score interpretation. It
+improves candidate guidance but lets candidates iterate against aggregate hidden
+evaluator signal.
+
+Status: implemented locally in report metadata and employer process evidence.
+
 ## AI Integrity Risk
 
 Add a report-only AI integrity risk label:

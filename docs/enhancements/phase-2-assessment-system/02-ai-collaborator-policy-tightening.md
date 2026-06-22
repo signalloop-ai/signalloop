@@ -50,28 +50,22 @@ Maintain the current anti-decomposition rule. If a sequence of narrower requests
 effectively asks for the full solution, refuse and redirect to one candidate-identified
 issue or behavior.
 
-## AI Collaboration Scoring Direction
+## AI Collaboration Scoring
 
-AI collaboration should become 20 points.
+AI collaboration is 15 points (reduced from the originally planned 20 in the June 2026 redesign).
 
-Suggested internal breakdown:
+Implemented tier formula:
 
-| Subcategory | Points |
+| Scenario | Score |
 |---|---:|
-| Focused, candidate-owned prompts | 5 |
-| Uses AI for reasoning/concepts/tradeoffs, not full solution | 5 |
-| Verifies AI suggestions through tests or code inspection | 5 |
-| Avoids over-delegation and policy violations | 5 |
+| No AI use | 8 (neutral floor — not penalised) |
+| Used AI, zero policy violations | 15 (full credit) |
+| Used AI, 1 policy violation | 6 (below floor) |
+| Used AI, 2–3 policy violations | 3 (heavy penalty) |
+| Used AI, 4+ policy violations | 0 (systematic abuse) |
 
-No AI use should not automatically fail a strong candidate, but it should reduce the
-collaboration signal.
-
-Suggested score interpretation:
-
-- good AI use: 16-20,
-- some over-delegation: 8-14,
-- no AI use but strong code/tests: around 10,
-- severe over-delegation: 0-7.
+No AI use does not automatically fail a strong candidate — it gets the neutral floor (8/15).
+Violations drop below the floor, ensuring the range is meaningful and zero is reachable.
 
 ## AI Integrity Risk Direction
 

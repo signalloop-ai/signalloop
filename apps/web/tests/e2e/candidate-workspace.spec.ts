@@ -459,3 +459,56 @@ test("untimed attempt shows recommended duration and not a countdown", async ({ 
   await expect(page.locator(".status-pill").filter({ hasText: /Time \d+:\d{2}/ })).not.toBeVisible();
   await expect(page.getByText(/minute remaining/)).not.toBeVisible();
 });
+
+test("guided evaluator feedback shows only aggregate hidden counts", async ({ page }) => {
+  await page.route("**/candidate/invites/playwright-token", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(startedAttempt({ evaluator_feedback_mode: "guided" })),
+    });
+  });
+
+  await page.route("**/candidate/invites/playwright-token/run-public-tests", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        status: "failed",
+        exit_code: 1,
+        stdout: [
+          "FAILED tests/test_public_api.py::test_public",
+          "E AssertionError",
+          "",
+          "tests/test_public_api.py:12: AssertionError",
+          "1 failed",
+        ].join("\n"),
+        stderr: "",
+        duration_ms: 100,
+        timings: {
+          api_total_ms: 1234,
+          worker_pytest_ms: 500,
+        },
+        evaluator_feedback: {
+          mode: "guided",
+          status: "failed",
+          collected: 6,
+          passed: 4,
+          failed: 2,
+          details_hidden: true,
+        },
+      }),
+    });
+  });
+
+  await page.goto("/invite/playwright-token");
+  await page.getByRole("button", { name: "Run Tests" }).click();
+
+  await expect(page.getByText("Evaluator checks: 4 passed, 2 failing. Details hidden.")).toBeVisible();
+  await expect(page.getByText("Completed in 1s.")).toBeVisible();
+  await expect(page.getByText("test_hidden_status_transition")).not.toBeVisible();
+  await expect(page.getByText("hidden_tests")).not.toBeVisible();
+  await expect(page.locator(".output-line.error").filter({ hasText: "FAILED tests/test_public_api.py::test_public" })).toBeVisible();
+  await expect(page.locator(".file-marker.warn").first()).toBeVisible();
+
+  await page.getByRole("button", { name: "tests/test_public_api.py:12" }).click();
+  await expect(page.locator(".file-row.active").filter({ hasText: "tests/test_public_api.py" })).toBeVisible();
+});

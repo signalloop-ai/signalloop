@@ -24,8 +24,8 @@ Before making implementation changes, read:
 - `execution/` - phase-by-phase implementation plan.
 - `enhancements/` - active post-MVP enhancement workstreams.
 - `assessment/` - assessment design and evaluation documentation.
-  - `assessment/fastapi-task-api-advanced-v1.md` - planned advanced FastAPI pack
-    specification; not implemented yet.
+  - `assessment/fastapi-task-api-advanced-v1.md` - advanced FastAPI pack specification.
+    Implemented at `assessment_packs/fastapi_task_api_advanced_v1/`.
 - `decisions/` - architecture decision records.
 - `prompts/` - constrained AI collaborator policy.
 - `reports/` - Engineering Evidence Report structure.

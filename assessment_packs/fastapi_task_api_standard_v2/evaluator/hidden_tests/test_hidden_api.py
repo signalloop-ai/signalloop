@@ -16,147 +16,130 @@ def create_user(email: str) -> dict:
     return response.json()
 
 
-def create_task(owner_id: int, title: str = "Investigate beta issue") -> dict:
-    response = client.post("/tasks", json={"title": title, "owner_id": owner_id})
+def create_task(owner_id: int, title: str = "Beta task", **kwargs: object) -> dict:
+    response = client.post("/tasks", json={"title": title, "owner_id": owner_id, **kwargs})
     assert response.status_code == 201
     return response.json()
 
 
-def test_duplicate_email_is_case_insensitive_and_conflicts() -> None:
-    create_user("Lead@example.com")
+# --- Enhancement 1 basic: due date field ---
 
-    response = client.post("/users", json={"email": " lead@example.com ", "name": "Duplicate"})
-
-    assert response.status_code == 409
-
-
-def test_task_title_is_trimmed_and_blank_titles_are_rejected() -> None:
+def test_due_date_is_optional_and_returned() -> None:
     owner = create_user("owner@example.com")
 
-    created = client.post(
-        "/tasks",
-        json={"title": "  Ship checklist  ", "owner_id": owner["id"]},
-    )
-    blank = client.post(
-        "/tasks",
-        json={"title": "\t  ", "owner_id": owner["id"]},
-    )
+    with_date = client.post("/tasks", json={"title": "Task with deadline", "owner_id": owner["id"], "due_date": "2099-12-31"})
+    without_date = client.post("/tasks", json={"title": "Task without deadline", "owner_id": owner["id"]})
 
-    assert created.status_code == 201
-    assert created.json()["title"] == "Ship checklist"
-    assert blank.status_code == 422
+    assert with_date.status_code == 201
+    assert with_date.json()["due_date"] == "2099-12-31"
+    assert without_date.status_code == 201
+    assert without_date.json().get("due_date") is None
 
 
-def test_task_priority_is_defaulted_normalized_and_validated() -> None:
-    owner = create_user("owner@example.com")
+# --- Enhancement 2 basic: task listing by owner ---
 
-    default_response = client.post(
-        "/tasks",
-        json={"title": "Default priority task", "owner_id": owner["id"]},
-    )
-    high_response = client.post(
-        "/tasks",
-        json={"title": "Escalated task", "owner_id": owner["id"], "priority": " high "},
-    )
-    invalid_response = client.post(
-        "/tasks",
-        json={"title": "Unknown priority task", "owner_id": owner["id"], "priority": "CRITICAL"},
-    )
-
-    assert default_response.status_code == 201
-    assert default_response.json()["priority"] == "MEDIUM"
-    assert high_response.status_code == 201
-    assert high_response.json()["priority"] == "HIGH"
-    assert invalid_response.status_code == 422
-
-
-def test_only_owner_can_read_or_delete_task() -> None:
+def test_tasks_can_be_listed_by_owner() -> None:
     owner = create_user("owner@example.com")
     other = create_user("other@example.com")
-    task = create_task(owner["id"])
+    client.post("/tasks", json={"title": "Owner task 1", "owner_id": owner["id"]})
+    client.post("/tasks", json={"title": "Owner task 2", "owner_id": owner["id"]})
+    client.post("/tasks", json={"title": "Other task", "owner_id": other["id"]})
 
-    read_response = client.get(
-        f"/tasks/{task['id']}",
-        params={"actor_user_id": other["id"]},
-    )
-    delete_response = client.delete(
-        f"/tasks/{task['id']}",
-        params={"actor_user_id": other["id"]},
-    )
-    owner_read_response = client.get(
-        f"/tasks/{task['id']}",
-        params={"actor_user_id": owner["id"]},
-    )
+    response = client.get("/tasks", params={"owner_id": owner["id"]})
 
-    assert read_response.status_code == 403
-    assert delete_response.status_code == 403
-    assert owner_read_response.status_code == 200
+    assert response.status_code == 200
+    titles = [t["title"] for t in response.json()]
+    assert "Owner task 1" in titles
+    assert "Owner task 2" in titles
+    assert "Other task" not in titles
 
 
-def test_unknown_actor_cannot_access_task() -> None:
+# --- Hidden issue 1: email normalization ---
+
+def test_duplicate_email_is_case_insensitive_and_trimmed() -> None:
+    create_user("Lead@example.com")
+
+    case_variant = client.post("/users", json={"email": "lead@example.com", "name": "Dup1"})
+    whitespace_variant = client.post("/users", json={"email": " Lead@example.com ", "name": "Dup2"})
+
+    assert case_variant.status_code == 409
+    assert whitespace_variant.status_code == 409
+
+
+# --- Hidden issue 2: full status transition chain ---
+
+def test_status_transition_chain_is_enforced() -> None:
     owner = create_user("owner@example.com")
     task = create_task(owner["id"])
 
-    response = client.get(
-        f"/tasks/{task['id']}",
-        params={"actor_user_id": 999},
-    )
-
-    assert response.status_code == 404
-
-
-def test_status_values_and_transitions_are_enforced() -> None:
-    owner = create_user("owner@example.com")
-    task = create_task(owner["id"])
-
-    invalid_status = client.patch(
-        f"/tasks/{task['id']}/status",
-        json={"status": "ARCHIVED"},
-    )
-    direct_done = client.patch(
-        f"/tasks/{task['id']}/status",
-        json={"status": "DONE"},
-    )
-    in_progress = client.patch(
-        f"/tasks/{task['id']}/status",
-        json={"status": "IN_PROGRESS"},
-    )
-    done = client.patch(
-        f"/tasks/{task['id']}/status",
-        json={"status": "DONE"},
-    )
-    reopen = client.patch(
-        f"/tasks/{task['id']}/status",
-        json={"status": "TODO"},
-    )
+    invalid_status = client.patch(f"/tasks/{task['id']}/status", json={"status": "SHIPPED"})
+    direct_done = client.patch(f"/tasks/{task['id']}/status", json={"status": "DONE"})
+    to_in_progress = client.patch(f"/tasks/{task['id']}/status", json={"status": "IN_PROGRESS"})
+    to_done = client.patch(f"/tasks/{task['id']}/status", json={"status": "DONE"})
+    reopen = client.patch(f"/tasks/{task['id']}/status", json={"status": "TODO"})
 
     assert invalid_status.status_code == 422
     assert direct_done.status_code == 409
-    assert in_progress.status_code == 200
-    assert in_progress.json()["status"] == "IN_PROGRESS"
-    assert done.status_code == 200
-    assert done.json()["status"] == "DONE"
+    assert to_in_progress.status_code == 200
+    assert to_done.status_code == 200
     assert reopen.status_code == 409
 
 
-def test_owner_delete_removes_task_and_is_idempotently_not_found_afterward() -> None:
+# --- Hidden issue 3: unknown actor returns 404 ---
+
+def test_unknown_actor_returns_404_not_403() -> None:
     owner = create_user("owner@example.com")
     task = create_task(owner["id"])
 
-    delete_response = client.delete(
-        f"/tasks/{task['id']}",
-        params={"actor_user_id": owner["id"]},
+    read_response = client.get(f"/tasks/{task['id']}", params={"actor_user_id": 999})
+    delete_response = client.delete(f"/tasks/{task['id']}", params={"actor_user_id": 999})
+
+    assert read_response.status_code == 404
+    assert delete_response.status_code == 404
+
+
+# --- Enhancement 1 quality: due date validation ---
+
+def test_due_date_rejects_invalid_format() -> None:
+    owner = create_user("owner@example.com")
+
+    bad_format = client.post(
+        "/tasks",
+        json={"title": "Bad date", "owner_id": owner["id"], "due_date": "31-12-2099"},
     )
-    read_response = client.get(
-        f"/tasks/{task['id']}",
-        params={"actor_user_id": owner["id"]},
+    not_a_date = client.post(
+        "/tasks",
+        json={"title": "Not a date", "owner_id": owner["id"], "due_date": "next-friday"},
     )
-    second_delete = client.delete(
-        f"/tasks/{task['id']}",
-        params={"actor_user_id": owner["id"]},
+    valid = client.post(
+        "/tasks",
+        json={"title": "Valid date", "owner_id": owner["id"], "due_date": "2099-06-01"},
     )
 
-    assert delete_response.status_code == 200
-    assert delete_response.json() == {"deleted": True, "task_id": task["id"]}
-    assert read_response.status_code == 404
-    assert second_delete.status_code == 404
+    assert bad_format.status_code == 422
+    assert not_a_date.status_code == 422
+    assert valid.status_code == 201
+    assert valid.json()["due_date"] == "2099-06-01"
+
+
+# --- Enhancement 2 quality: task listing filter and order ---
+
+def test_task_listing_is_filtered_and_ordered_by_id() -> None:
+    owner = create_user("owner@example.com")
+    other = create_user("other@example.com")
+    t1 = create_task(owner["id"], "First")
+    t2 = create_task(owner["id"], "Second")
+    create_task(other["id"], "Other owner task")
+
+    owner_tasks = client.get("/tasks", params={"owner_id": owner["id"]})
+    no_tasks = client.get("/tasks", params={"owner_id": 999})
+
+    assert owner_tasks.status_code == 200
+    ids = [t["id"] for t in owner_tasks.json()]
+    assert ids == sorted(ids)
+    assert t1["id"] in ids
+    assert t2["id"] in ids
+    assert all(t["owner_id"] == owner["id"] for t in owner_tasks.json())
+
+    assert no_tasks.status_code == 200
+    assert no_tasks.json() == []

@@ -176,11 +176,11 @@ Use the Phase 2 100-point rubric:
 | Category | Points | Advanced evidence focus |
 |---|---:|---|
 | Public issue resolution | 15 | Visible failing tests fixed without regressions. |
-| Private issue generalization | 20 | Hidden edge cases across authorization, partial update, archive, audit, and lists. |
-| Feature/design implementation | 20 | Team lead permissions, archive semantics, unauthorized response policy, audit behavior. |
+| Private issue generalization | 15 | Hidden edge cases across authorization, partial update, archive, audit, and lists. |
+| Feature/design implementation | 25 | Task dependencies (blocker enforcement, cycle detection) and team activity feed (pagination, access scoping). |
 | Candidate-written tests | 15 | Meaningful tests for authorization, updates, archive/listing, and audit events. |
-| AI collaboration | 20 | Focused AI use without over-delegation or policy redirects. |
-| Regression/code quality | 10 | Existing passing behavior remains stable and maintainable. |
+| AI collaboration | 15 | Focused AI use without over-delegation or policy redirects. |
+| Regression/code quality | 15 | Existing passing behavior remains stable and maintainable. |
 
 ## Reference Solution Direction
 

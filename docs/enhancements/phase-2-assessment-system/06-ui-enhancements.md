@@ -30,6 +30,9 @@ Add:
 - expired state,
 - clear auto-submit state,
 - improved progress feedback for public tests and final submission,
+- non-blocking run/final-submit progress where practical,
+- optional guided evaluator progress when enabled by the employer,
+- IDE-style syntax diagnostics and public-test navigation,
 - clearer instructions that submission-review answers are supporting evidence and implementation/tests matter most,
 - accessible Submission Review panel or tab with completion indicator.
 
@@ -50,8 +53,20 @@ should warn that submission is permanent and show:
 - candidate tests added or updated: yes/no,
 - submission review answered: x/4 required questions.
 
-Do not show hidden-test status before submission. Hidden tests run only after final
-submission.
+Default strict mode must not show hidden-test status before submission. Hidden tests run
+only after final submission in strict mode.
+
+In guided evaluator feedback mode, the candidate workspace may show aggregate evaluator
+progress during active work, for example:
+
+```text
+Evaluator checks: 4 passed, 3 failing
+Details hidden
+```
+
+Guided mode must not expose hidden test names, failure messages, tracebacks, file paths,
+or line numbers. The UI should label this clearly as aggregate evaluator progress and
+state that details remain hidden.
 
 ## Report UI
 
@@ -81,6 +96,19 @@ Use a more polished engineering-product visual system:
 - clear pass/fail/warning status treatment,
 - simple charts before adding a heavy charting dependency.
 
+## Candidate IDE Ergonomics
+
+Planned workspace improvements:
+
+- show Python syntax diagnostics while typing using Monaco markers,
+- display gutter/file-tree indicators for files with syntax or public-test references,
+- parse public pytest output and turn candidate-visible file/line references into links,
+- color-code public test output for pass, fail, warning, and neutral sections,
+- preserve raw output access while making the common failure path easier to scan.
+
+These enhancements must stay within candidate-visible code and public test output. Hidden
+test output must not drive editor hints or clickable locations.
+
 ## Implementation Notes
 
 Implemented locally:
@@ -94,6 +122,10 @@ Implemented locally:
   signals,
 - report page renders assessment/timing metadata, score bars, test result bars,
   feature/design summary, FAVO interpretation, and AI integrity risk.
+- employer invite creation supports strict/guided evaluator feedback mode,
+- candidate workspace shows aggregate evaluator counts only in guided mode,
+- candidate workspace shows lightweight Python diagnostics, file markers, clickable
+  public pytest output, color-coded output, and run duration.
 
 ## Local Validation
 

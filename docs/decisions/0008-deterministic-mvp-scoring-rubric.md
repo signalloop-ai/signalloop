@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted
+Superseded by the Phase 2 rubric redesign (2026-06-20). The current source of truth is
+`RUBRIC` in `apps/api/signalloop_api/reports.py` and pack-specific overrides in
+`DEFAULT_PACKS` in `apps/api/signalloop_api/attempts.py`. See
+`docs/assessment/scoring-rubric.md` for the current rubric tables.
 
 ## Context
 

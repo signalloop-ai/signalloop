@@ -1,10 +1,13 @@
 from pathlib import Path
 from secrets import token_urlsafe
 from datetime import datetime, timezone
+from re import findall
+from time import monotonic
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from signalloop_api.assessment_files import load_candidate_files
 from signalloop_api.auth import get_current_employer
@@ -57,63 +60,69 @@ DEFAULT_PACKS = {
         "version": "standard_v2",
         "candidate_path": "assessment_packs/fastapi_task_api_standard_v2/candidate",
         "evaluator_path": "assessment_packs/fastapi_task_api_standard_v2/evaluator",
-        "seeded_issue_count": 7,
+        "duration_minutes": 60,
+        "seeded_issue_count": 5,
         "seeded_issue_areas": [
             "duplicate email (case-insensitive + whitespace trimming)",
             "blank or whitespace-only task title (with title trimming)",
-            "task priority defaulting, normalization, and validation",
             "owner-only read and delete access",
             "unknown actor access (resource existence leakage)",
             "status transition enforcement (TODO -> IN_PROGRESS -> DONE)",
-            "idempotent owner delete (second delete returns 404)",
         ],
+        # Tests that fail on unmodified starter — used for public issue scoring.
         "initially_failing_tests": [
             "test_duplicate_user_email_is_rejected",
             "test_blank_task_title_is_rejected",
-            "test_task_priority_defaults_and_accepts_high",
             "test_non_owner_cannot_read_task",
         ],
+        # Hidden + enhancement tests used for feature/design scoring.
         "feature_design_tests": [
-            "test_task_priority_defaults_and_accepts_high",
-            "test_task_priority_is_defaulted_normalized_and_validated",
-            "test_non_owner_cannot_read_task",
-            "test_only_owner_can_read_or_delete_task",
-            "test_status_values_and_transitions_are_enforced",
+            "test_due_date_is_optional_and_returned",
+            "test_tasks_can_be_listed_by_owner",
+            "test_due_date_rejects_invalid_format",
+            "test_task_listing_is_filtered_and_ordered_by_id",
         ],
     },
     "fastapi_task_api_advanced_v1": {
-        "title": "FastAPI Team Task API Deep Debugging, Authorization & Product Judgment Assessment",
+        "title": "FastAPI Team Task API Deep Debugging, Authorization & Enhancement Assessment",
         "version": "advanced_v1",
         "candidate_path": "assessment_packs/fastapi_task_api_advanced_v1/candidate",
         "evaluator_path": "assessment_packs/fastapi_task_api_advanced_v1/evaluator",
-        "seeded_issue_count": 9,
+        "duration_minutes": 120,
+        "seeded_issue_count": 7,
         "seeded_issue_areas": [
-            "email normalization and duplicate user detection",
-            "team membership duplicate handling and role validation",
-            "team lead permissions scoped to own team",
             "partial task update preserves omitted fields",
-            "status transition and completion-context behavior",
-            "task audit events are complete and accurate",
-            "archived tasks are hidden from default lists",
-            "pagination and sorting are deterministic",
-            "comment actor validation and task access",
+            "team lead permissions scoped to own team only",
+            "archived tasks hidden from team and user lists",
+            "comment actor requires task access",
+            "partial update authorization enforced for non-owner/non-assignee",
+            "membership role validation (no invalid roles accepted)",
+            "status transition enforcement (TODO -> IN_PROGRESS -> DONE)",
         ],
+        # Tests that fail on unmodified starter — used for public issue scoring.
         "initially_failing_tests": [
-            "test_duplicate_user_email_is_normalized_and_rejected",
             "test_patch_task_preserves_omitted_fields",
-            "test_archived_tasks_are_excluded_from_team_lists",
-            "test_status_transition_requires_in_progress_before_done",
             "test_team_lead_cannot_access_unrelated_team_task",
+            "test_archived_tasks_are_excluded_from_team_lists",
+            "test_comment_requires_task_access",
         ],
+        # Hidden + enhancement tests used for feature/design scoring.
         "feature_design_tests": [
-            "test_membership_role_is_validated_and_duplicates_conflict",
-            "test_team_lead_access_is_limited_to_own_team",
-            "test_partial_update_preserves_description_and_assignee",
-            "test_status_transition_and_audit_events_are_complete",
-            "test_archived_task_is_hidden_and_second_delete_is_not_found",
-            "test_comment_actor_must_have_task_access",
-            "test_team_task_list_is_deterministically_sorted_and_paginated",
+            "test_task_can_block_another_task",
+            "test_team_activity_feed_returns_events",
+            "test_blocker_prevents_in_progress_transition",
+            "test_dependency_cycle_is_rejected",
+            "test_activity_feed_is_paginated_and_team_scoped",
         ],
+        # Pack-specific rubric — overrides global RUBRIC in reports.py.
+        "rubric": {
+            "public_issue_resolution": 15,
+            "private_issue_generalization": 15,
+            "feature_design_implementation": 25,
+            "candidate_tests": 15,
+            "ai_collaboration": 15,
+            "regression_code_quality": 15,
+        },
     },
 }
 
@@ -199,6 +208,7 @@ def attempt_summary(attempt: AssessmentAttempt) -> EmployerAttemptSummary:
         ),
         assessment_level=attempt.assessment_level,
         timing_mode=attempt.timing_mode,
+        evaluator_feedback_mode=attempt.evaluator_feedback_mode,
         duration_minutes=attempt.duration_minutes,
         expires_at=utc_isoformat(attempt.expires_at),
         submission_mode=attempt.submission_mode,
@@ -213,7 +223,10 @@ def attempt_summary(attempt: AssessmentAttempt) -> EmployerAttemptSummary:
 def candidate_attempt_response(session: Session, attempt: AssessmentAttempt) -> CandidateAttemptResponse:
     pack = attempt.assessment_pack
     snapshot = latest_snapshot(session, attempt)
-    files = snapshot.files if snapshot is not None else load_candidate_files(resolve_repo_path(pack.candidate_path))
+    timing_note = "" if attempt.timing_mode == "timed" else " (recommended, not enforced)"
+    subs = {"DURATION_MINUTES": str(attempt.duration_minutes), "TIMING_NOTE": timing_note} if attempt.duration_minutes else {}
+    starter_files = load_candidate_files(resolve_repo_path(pack.candidate_path), subs)
+    files = snapshot.files if snapshot is not None else starter_files
     return CandidateAttemptResponse(
         attempt_id=attempt.id,
         status=attempt.status,
@@ -225,12 +238,14 @@ def candidate_attempt_response(session: Session, attempt: AssessmentAttempt) -> 
             seeded_issue_count=DEFAULT_PACKS.get(pack.slug, {}).get("seeded_issue_count", 0),
         ),
         timing_mode=attempt.timing_mode,
+        evaluator_feedback_mode=attempt.evaluator_feedback_mode,
         duration_minutes=attempt.duration_minutes,
         started_at=utc_isoformat(attempt.started_at),
         expires_at=utc_isoformat(attempt.expires_at),
         submitted_at=utc_isoformat(attempt.submitted_at),
         submission_mode=attempt.submission_mode,
         files=files,
+        initial_files=starter_files,
     )
 
 
@@ -242,13 +257,17 @@ def create_assessment_attempt(
 ) -> CreateAttemptResponse:
     pack_slug = PACK_BY_ASSESSMENT_LEVEL[payload.assessment_level]
     pack = get_or_create_assessment_pack(session, pack_slug)
-    files = load_candidate_files(resolve_repo_path(pack.candidate_path))
+    duration_minutes = payload.duration_minutes or DEFAULT_PACKS.get(pack_slug, {}).get("duration_minutes", 90)
+    timing_note = "" if payload.timing_mode == "timed" else " (recommended, not enforced)"
+    subs = {"DURATION_MINUTES": str(duration_minutes), "TIMING_NOTE": timing_note}
+    files = load_candidate_files(resolve_repo_path(pack.candidate_path), subs)
     attempt = AssessmentAttempt(
         employer_id=current_employer.id,
         assessment_pack_id=pack.id,
         assessment_level=payload.assessment_level,
         timing_mode=payload.timing_mode,
-        duration_minutes=payload.duration_minutes or 90,
+        evaluator_feedback_mode=payload.evaluator_feedback_mode,
+        duration_minutes=duration_minutes,
         expires_at=None,
         candidate_email=str(payload.candidate_email) if payload.candidate_email else None,
         invite_token=generate_unique_invite_token(session),
@@ -269,6 +288,7 @@ def create_assessment_attempt(
             "assessment_pack_slug": pack.slug,
             "assessment_level": attempt.assessment_level,
             "timing_mode": attempt.timing_mode,
+            "evaluator_feedback_mode": attempt.evaluator_feedback_mode,
             "duration_minutes": attempt.duration_minutes,
         },
     )
@@ -373,12 +393,57 @@ def save_candidate_snapshot(
     )
 
 
+def parse_failure_names(result: dict | None) -> set[str]:
+    if result is None:
+        return set()
+    output = "\n".join(part for part in [result.get("stdout") or "", result.get("stderr") or ""] if part)
+    return set(findall(r"_{2,}\s+([a-zA-Z0-9_]+)\s+_{2,}", output))
+
+
+def enhancement_summary(result: dict | None, feature_design_tests: list[str]) -> dict:
+    if not feature_design_tests or result is None or result.get("status") == "error":
+        return {"passed": 0, "failed": 0, "collected": 0}
+    failure_names = parse_failure_names(result)
+    passed = sum(1 for t in feature_design_tests if t not in failure_names)
+    collected = len(feature_design_tests)
+    return {"passed": passed, "failed": collected - passed, "collected": collected}
+
+
+def public_evaluator_summary(result: dict | None) -> dict | None:
+    if result is None:
+        return None
+    output = "\n".join(part for part in [result.get("stdout") or "", result.get("stderr") or ""] if part)
+    collected_match = findall(r"collected (\d+) items?", output)
+    passed_match = findall(r"(\d+) passed", output)
+    failed = len(parse_failure_names(result))
+    collected = int(collected_match[-1]) if collected_match else failed
+    passed = int(passed_match[-1]) if passed_match else max(collected - failed, 0)
+    if result.get("status") == "passed" and collected == 0:
+        collected = 1
+        passed = 1
+    return {
+        "mode": "guided",
+        "status": result.get("status", "error"),
+        "collected": collected,
+        "passed": passed,
+        "failed": max(collected - passed, failed),
+        "details_hidden": True,
+    }
+
+
+def merge_timing(result: dict, key: str, value_ms: int) -> None:
+    timings = dict(result.get("timings") or {})
+    timings[key] = value_ms
+    result["timings"] = timings
+
+
 @router.post("/candidate/invites/{invite_token}/run-public-tests")
 def run_public_tests(
     invite_token: str,
     payload: SaveSnapshotRequest,
     session: Session = Depends(get_session),
 ) -> dict:
+    api_started = monotonic()
     attempt = session.scalar(
         select(AssessmentAttempt).where(AssessmentAttempt.invite_token == invite_token)
     )
@@ -394,11 +459,16 @@ def run_public_tests(
     snapshot = CodeSnapshot(attempt_id=attempt.id, kind="public_test_run", files=payload.files)
     session.add(snapshot)
     session.flush()
+    snapshot_saved = monotonic()
 
+    provider = get_execution_provider()
     try:
-        result = get_execution_provider().run_public(payload.files)
+        result = provider.run_public(payload.files)
     except Exception as exc:
         result = execution_error_result(str(exc))
+    public_completed = monotonic()
+    merge_timing(result, "api_preflight_ms", int((snapshot_saved - api_started) * 1000))
+    merge_timing(result, "api_public_execution_ms", int((public_completed - snapshot_saved) * 1000))
 
     test_run = TestRun(
         attempt_id=attempt.id,
@@ -411,13 +481,55 @@ def run_public_tests(
         duration_ms=result.get("duration_ms", 0),
     )
     session.add(test_run)
+
+    # Always run evaluator tests — enhancement feedback is shown in all modes.
+    try:
+        from signalloop_api.submissions import hidden_test_files_for_attempt
+
+        hidden_tests = hidden_test_files_for_attempt(attempt)
+        evaluator_result = provider.run_hidden(payload.files, hidden_tests)
+    except Exception as exc:
+        evaluator_result = execution_error_result(str(exc))
+
+    pack_config = DEFAULT_PACKS.get(attempt.assessment_pack.slug, {})
+    result["enhancement_feedback"] = enhancement_summary(
+        evaluator_result, pack_config.get("feature_design_tests", [])
+    )
+
+    evaluator_feedback = None
+    if attempt.evaluator_feedback_mode == "guided":
+        guided_test_run = TestRun(
+            attempt_id=attempt.id,
+            code_snapshot_id=snapshot.id,
+            run_type="guided_hidden",
+            status=evaluator_result.get("status", "error"),
+            results=evaluator_result,
+            stdout=evaluator_result.get("stdout", ""),
+            stderr=evaluator_result.get("stderr", ""),
+            duration_ms=evaluator_result.get("duration_ms", 0),
+        )
+        session.add(guided_test_run)
+        evaluator_feedback = public_evaluator_summary(evaluator_result)
+        result["evaluator_feedback"] = evaluator_feedback
+
     record_audit_event(
         session,
         "test_run.public",
         actor_type="candidate",
         attempt_id=attempt.id,
-        event_metadata={"status": result.get("status")},
+        event_metadata={
+            "status": result.get("status"),
+            "evaluator_feedback_mode": attempt.evaluator_feedback_mode,
+            "evaluator_feedback_status": evaluator_feedback.get("status") if evaluator_feedback else None,
+        },
     )
+    session.commit()
+    persisted = monotonic()
+    merge_timing(result, "api_persist_ms", int((persisted - public_completed) * 1000))
+    merge_timing(result, "api_total_ms", int((persisted - api_started) * 1000))
+    test_run.results = result
+    flag_modified(test_run, "results")
+    session.add(test_run)
     session.commit()
 
     return result

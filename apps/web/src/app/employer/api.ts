@@ -35,6 +35,7 @@ export async function fetchAttempts(getAuthToken?: AuthTokenProvider): Promise<E
 export type InviteConfiguration = {
   assessmentLevel: "standard" | "advanced";
   timingMode: "untimed" | "timed";
+  evaluatorFeedbackMode: "strict" | "guided";
   durationMinutes: number;
 };
 
@@ -53,6 +54,7 @@ export async function createInvite(
       candidate_email: candidateEmail || null,
       assessment_level: configuration.assessmentLevel,
       timing_mode: configuration.timingMode,
+      evaluator_feedback_mode: configuration.evaluatorFeedbackMode,
       duration_minutes: configuration.durationMinutes,
     }),
   });

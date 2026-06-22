@@ -8,11 +8,12 @@ The active post-MVP workstream is Phase 2: Assessment System Enhancement.
 
 ## Current phase
 
-Phase 2 documentation and planning.
+Phase 2: Assessment System Enhancement — all 11 planned tasks complete locally.
+Pending: hosted deployment of this session's scoring and report fixes.
 
 ## Last completed phase
 
-Phase 12: Documentation and Handoff.
+Phase 2: Assessment System Enhancement (all tasks).
 
 ## What exists
 
@@ -92,10 +93,109 @@ Phase 12: Documentation and Handoff.
 - Phase 2 enhancement documentation under `docs/enhancements/phase-2-assessment-system/`.
 - Phase 2 planning decisions include Clerk-user-based strict employer isolation,
   structured Submission Review, report-only AI integrity risk, removal of the
-  employer-facing generic confidence label, and richer report/candidate UI polish.
+  employer-facing generic confidence label, richer report/candidate UI polish, and
+  a planned configurable evaluator feedback mode.
+- Evaluator feedback mode is implemented locally. Strict mode remains the default:
+  public test feedback during active work, with hidden/evaluator counts employer-report-only.
+  Guided mode shows aggregate evaluator pass/fail counts during active work while still
+  hiding hidden test names, tracebacks, failure messages, file paths, and line numbers.
+- Execution timing breakdown is implemented locally for API/worker public runs, guided
+  evaluator runs, and final hidden evaluation so latency can be measured before changing
+  ECS/Fargate architecture.
+- Candidate IDE ergonomics are implemented locally: lightweight Python syntax diagnostics,
+  clickable public-test file/line output, color-coded public test output, and file
+  indicators based only on candidate-visible files and public test output.
+- Deterministic API scenario tests cover representative candidate submission outcomes:
+  unchanged starter code, public-only fixes, strong submissions, weak submission review,
+  AI-risk evidence, standard rubric, and advanced rubric/guided mode metadata.
+- Opt-in live OpenAI policy validation exists and passed locally for the real
+  OpenAI-backed AI collaborator prompt across allowed and blocked candidate question types.
 - Advanced FastAPI assessment design is specified in
   `docs/assessment/fastapi-task-api-advanced-v1.md` and implemented in
   `assessment_packs/fastapi_task_api_advanced_v1/`.
+
+## Settled state after June 2026 redesign
+
+- Standard v2 rubric: 15/20/20/15/15/15 (public/private/feature/tests/ai/regression), 60 min default.
+- Advanced v1 rubric: 15/15/25/15/15/15 (feature gets 25 pts), 120 min default.
+- AI collaboration scoring tiers: 0 use = 8/15 (floor), clean use = 15/15, 1 violation = 6/15, 2–3 = 3/15, 4+ = 0/15.
+- LLM-assisted review section hidden from employer report UI (field still present in JSON payload).
+- Assessment pack READMEs include "How your submission is evaluated" section covering quality expectations.
+- API test suite: 76 passed / 11 skipped.
+
+## Settled state after June 2026 proving-tests + AI policy session
+
+- **Candidate test scoring** uses proving tests, not keyword heuristics. A proving test
+  fails on the original starter code AND passes on the candidate's submitted code.
+  Scoring: 0→0, 1→6, 2→11, 3+→15. Verification runs at report-generation time via the
+  new worker endpoint `POST /run-candidate-verification`.
+- **Standard v2** `seeded_issue_count` is now 5 (priority test removed — priority had
+  no public test signal and was unfair to candidates).
+- **AI policy** system prompt leads with "Default: answer the question." The
+  `no_issue_identified` tag fires only for vague "find my bugs" requests with no specific
+  issue, code, or test named. Post-implementation review and conceptual questions are
+  always answered. Code responses must give only the changed lines, not whole functions.
+  Prompt-injection patterns expanded.
+- **Assessment READMEs** use `{{DURATION_MINUTES}}` placeholder substituted at serve
+  time; no more hardcoded time limits in pack files.
+- **Submitted code viewer** appears in the employer report page (tab-based, defaults to
+  `task_api/main.py`, max-height 520 px). The `submitted_code` field is present in the
+  report JSON sorted as: `task_api/` first, `tests/` second, config files last.
+- AI policy test suite: 59 tests (was 10), including 9 prompt-injection cases.
+
+## Settled state after June 2026 progress checklist + enhancement feedback session
+
+- **Enhancement feedback** is always computed and returned on every public test run,
+  regardless of guided/strict mode. The evaluator's hidden tests always run; the
+  `feature_design_tests` list in the pack config determines which hidden tests count as
+  enhancement tests. Applies to standard_v2 and advanced_v1.
+- **`enhancement_summary()` error guard**: if the evaluator Docker run fails,
+  `enhancement_feedback` returns all-zeros rather than incorrectly reporting all tests as
+  passing.
+- **Hidden checks progress item** (guided mode) now shows only the non-enhancement hidden
+  tests (edge-case/quality), so counts are non-overlapping with "Enhancements built".
+  In strict mode, a static row "additional behaviors evaluated at submission" is always
+  shown so candidates know edge-case testing exists.
+- **Candidate test count** correctly shows tests added beyond the original starter.
+  Root cause fixed: `initial_files` is now a separate API field (original starter from
+  pack path, never overwritten by a snapshot). Previously both `files` and `initialFiles`
+  were set to the current snapshot on load, making the diff always zero.
+- **Evaluator notes removed from test output panel**: the "Notes: additional behaviors
+  evaluated…" and "Evaluator checks: N passed…" paragraphs are removed. The progress
+  checklist is now the single source for all evaluator feedback.
+- **Test count**: `initial_files: dict[str, str]` added to `CandidateAttemptResponse`
+  schema.
+
+## Settled state after June 2026 report polish + scoring fixes session
+
+- **Evidence report redesigned**: score summaries always visible; verbose lists
+  (failure names, seeded areas, file diffs, AI prompts, timeline) collapsed behind
+  `<details>/<summary>` Disclosure components. Page is crisp at a glance and detailed
+  on demand.
+- **Regression scoring proportional**: `reg_score = rubric_weight × (1 - regressed/originally_passing)`.
+  A candidate who regresses 1 of 10 tests loses 10% of the regression category, not all of
+  it. Candidate-added tests are excluded from regression detection via `original_test_names`
+  set built from initial files.
+- **Candidate test display**: employer report now shows "N functions added · M modified"
+  instead of file/function/assertion counts. Backend `candidate_test_evidence()` does a
+  name-level function diff — `functions_added` = new test names, `functions_modified` =
+  existing names whose body changed. HTTP assertion count removed from display (kept for
+  scoring heuristic).
+- **Large paste threshold**: `PASTE_LINE_THRESHOLD` raised from 8 → 25 lines. Prevents
+  single test functions from being flagged as suspicious pastes.
+- **Integrity risk thresholds updated**: `large_paste_count >= 3` (was ≥2) triggers
+  "high"; 1–2 large pastes → "medium". Prevents two legitimate large test writes from
+  producing a "high" integrity label.
+- **Submission review format**: employer report now shows only non-empty fields
+  dynamically. Old 4-field form and new 2-field form both display correctly. Candidates
+  who filled only "What changed" see just that field; no empty label/dash rows.
+- **Weak submission review threshold**: `required_question_count` now comes from the
+  form format. New 2-field form has 1 required field (what changed); only an empty
+  submission triggers `weak_review = true`.
+- **`flag_modified` for JSON persistence**: `flag_modified(evidence_report, "report")`
+  added before commit in the report generate endpoint so SQLAlchemy flushes JSON column
+  updates on regenerate.
+- **API test suite**: 127 passed, 11 skipped.
 
 ## What does not exist yet
 
@@ -112,9 +212,11 @@ Continue Phase 2 from:
 Recommended next implementation task:
 
 Local Phase 2 implementation is complete except for external LLM-assisted report
-review. Local Playwright e2e now passes when run against an already-running dev server
-with `PLAYWRIGHT_SKIP_WEBSERVER=1`; decide next whether to implement the bounded LLM
-review prompt or proceed to deployment smoke testing.
+review. Local Playwright e2e passes for the mocked browser suite. Live local browser
+validation also passed against the migrated Postgres/API/worker stack for standard/strict
+and advanced/guided candidate submissions, and Clerk-authenticated employer report views
+rendered for both submitted attempts. The real OpenAI-backed AI collaborator policy
+matrix passed with `RUN_LIVE_AI_TESTS=1`.
 
 Strict employer isolation was implemented locally in:
 
@@ -130,7 +232,7 @@ Advanced pack local validation:
 - Starter public tests: 1 passed, 5 failed on unmodified candidate code.
 - Reference solution public tests: 6 passed.
 - Reference solution hidden tests: 7 passed.
-- API suite after enabling Advanced: 55 passed.
+- API suite after enabling Advanced: 55 passed (subsequently grew to 76 passed / 11 skipped after Phase 2 UX and scoring changes — see `docs/development/changes.md`).
 - Web typecheck/lint/build passed.
 - Playwright e2e: 2 passed, 1 skipped by design.
 - Live local browser smoke was exercised against Standard and Advanced timed invites
