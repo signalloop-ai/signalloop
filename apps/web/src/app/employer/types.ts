@@ -42,6 +42,34 @@ type LargePasteDetection = {
   events: Array<{ file: string; lines_added: number; snapshot_kind: string; at: string; code_preview: string }>;
 };
 
+type IntegrityFactor = {
+  signal: string;
+  value: number;
+  weight: "none" | "low" | "medium" | "high";
+};
+
+type IntegrityScore = {
+  label: "low" | "medium" | "high" | "critical";
+  contributing_factors: IntegrityFactor[];
+  total_weight_points: number;
+};
+
+type ProctoringSnapshot = {
+  timestamp: string | null;
+  trigger: string;
+  url: string;
+};
+
+type ProctoringSignals = {
+  webcam_consented: boolean | null;
+  focus_loss_count: number;
+  focus_loss_duration_seconds: number;
+  fullscreen_exit_count: number;
+  large_paste_count: number;
+  focus_events: Array<{ occurred_at: string | null; duration_seconds: number }>;
+  snapshots: ProctoringSnapshot[];
+};
+
 export type EvidenceReportResponse = {
   attempt_id: number;
   report_id: number;
@@ -117,6 +145,8 @@ export type EvidenceReportResponse = {
       signals: Record<string, number | boolean>;
       score_impact: string;
     };
+    integrity_score?: IntegrityScore;
+    proctoring_signals?: ProctoringSignals;
     favo: Record<string, { label: string; evidence: string }>;
     llm_assisted_review: {
       status: string;

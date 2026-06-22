@@ -4,6 +4,13 @@ from difflib import SequenceMatcher
 from re import DOTALL, MULTILINE, findall, finditer, match as re_match
 from typing import Protocol
 
+try:
+    import boto3
+    from botocore.exceptions import ClientError as BotoClientError
+    _BOTO3_AVAILABLE = True
+except ImportError:
+    _BOTO3_AVAILABLE = False
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -783,6 +790,62 @@ def build_timeline(
     return sorted((event for event in events if event["at"]), key=lambda event: event["at"])
 
 
+def _build_proctoring_signals(
+    attempt: AssessmentAttempt,
+    proctoring_events: list[ProctoringEvent],
+    paste_events: dict,
+) -> dict:
+    focus_events = [e for e in proctoring_events if e.event_type == "focus_returned"]
+    fullscreen_exit_count = sum(1 for e in proctoring_events if e.event_type == "fullscreen_exit")
+    focus_loss_duration_secs = sum(
+        int((e.event_metadata or {}).get("duration_seconds", 0)) for e in focus_events
+    )
+
+    focus_events_list = [
+        {
+            "occurred_at": e.occurred_at.isoformat() if e.occurred_at else None,
+            "duration_seconds": int((e.event_metadata or {}).get("duration_seconds", 0)),
+        }
+        for e in focus_events
+    ]
+
+    snapshot_events = [e for e in proctoring_events if e.event_type == "snapshot"]
+    snapshots_out: list[dict] = []
+    if snapshot_events and _BOTO3_AVAILABLE and settings.s3_bucket:
+        try:
+            s3 = boto3.client("s3")
+            for ev in snapshot_events:
+                meta = ev.event_metadata or {}
+                s3_key = meta.get("s3_key")
+                if not s3_key:
+                    continue
+                try:
+                    url = s3.generate_presigned_url(
+                        "get_object",
+                        Params={"Bucket": settings.s3_bucket, "Key": s3_key},
+                        ExpiresIn=3600,
+                    )
+                    snapshots_out.append({
+                        "timestamp": ev.occurred_at.isoformat() if ev.occurred_at else None,
+                        "trigger": meta.get("trigger", "periodic"),
+                        "url": url,
+                    })
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    return {
+        "webcam_consented": attempt.webcam_consent,
+        "focus_loss_count": len(focus_events),
+        "focus_loss_duration_seconds": focus_loss_duration_secs,
+        "fullscreen_exit_count": fullscreen_exit_count,
+        "large_paste_count": paste_events.get("large_paste_count", 0),
+        "focus_events": focus_events_list,
+        "snapshots": snapshots_out,
+    }
+
+
 def build_report(
     attempt: AssessmentAttempt,
     snapshots: list[CodeSnapshot],
@@ -848,6 +911,7 @@ def build_report(
     )
     # Keep ai_integrity_risk label in sync with the unified score for backwards compat.
     integrity_risk["label"] = integrity_score["label"]
+    proctoring_signals = _build_proctoring_signals(attempt, proctoring_events or [], paste_events)
     favo = build_favo(
         scores=scores,
         candidate_tests=candidate_tests,
@@ -935,6 +999,7 @@ def build_report(
         },
         "ai_integrity_risk": integrity_risk,
         "integrity_score": integrity_score,
+        "proctoring_signals": proctoring_signals,
         "favo": favo,
         "llm_assisted_review": llm_assisted_review_status(),
         "process_evidence": {

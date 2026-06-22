@@ -967,6 +967,81 @@ button:disabled {
   padding: 4px 8px;
 }
 
+/* ── Integrity banner ──────────────────────────────────────────────────────── */
+
+.integrity-banner {
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 24px 8px;
+  padding: 10px 16px;
+}
+
+.integrity-banner.warn {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
+.integrity-banner.error {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #7f1d1d;
+}
+
+/* ── Proctoring signals section ────────────────────────────────────────────── */
+
+.proctoring-table {
+  border-collapse: collapse;
+  font-size: 14px;
+  width: 100%;
+}
+
+.proctoring-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+}
+
+.proctoring-table td:first-child {
+  color: var(--muted);
+  width: 60%;
+}
+
+.proctoring-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── Snapshot thumbnail strip ──────────────────────────────────────────────── */
+
+.snapshot-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.snapshot-thumb-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.snapshot-thumb {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  height: 80px;
+  object-fit: cover;
+  width: auto;
+}
+
+.snapshot-thumb-label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .status-pill.ready {
   background: #e6f4f1;
   color: var(--accent-dark);

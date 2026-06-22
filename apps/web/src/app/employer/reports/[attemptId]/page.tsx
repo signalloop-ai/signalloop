@@ -166,6 +166,127 @@ function formatTimingValue(value: unknown): string {
   return String(value);
 }
 
+function formatDuration(totalSeconds: number): string {
+  if (totalSeconds <= 0) return "0s";
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  if (m === 0) return `${s}s`;
+  if (s === 0) return `${m}m`;
+  return `${m}m ${s}s`;
+}
+
+function formatElapsed(startedAt: string | null | undefined, eventAt: string | null): string {
+  if (!startedAt || !eventAt) return "—";
+  const secs = Math.round((new Date(eventAt).getTime() - new Date(startedAt).getTime()) / 1000);
+  if (secs < 0) return "—";
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
+}
+
+function buildIntegrityFactorSummary(factors: Array<{ signal: string; value: number; weight: string }>): string {
+  const parts: string[] = [];
+  for (const f of factors) {
+    if (f.weight === "none" || f.value === 0) continue;
+    if (f.signal === "focus_loss_count") parts.push(`${f.value} focus-loss event${f.value !== 1 ? "s" : ""}`);
+    else if (f.signal === "fullscreen_exits") parts.push(`${f.value} fullscreen exit${f.value !== 1 ? "s" : ""}`);
+    else if (f.signal === "large_paste_count") parts.push(`${f.value} large paste${f.value !== 1 ? "s" : ""}`);
+    else if (f.signal === "ai_violation_count") parts.push(`${f.value} AI policy violation${f.value !== 1 ? "s" : ""}`);
+    else if (f.signal === "prompt_injection_count" && f.value > 0) parts.push(`${f.value} prompt injection attempt${f.value !== 1 ? "s" : ""}`);
+  }
+  return parts.join(", ");
+}
+
+function IntegrityBanner({ integrityScore, aiRisk }: {
+  integrityScore?: { label: string; contributing_factors: Array<{ signal: string; value: number; weight: string }> } | null;
+  aiRisk?: { label: string } | null;
+}) {
+  const label = integrityScore?.label ?? aiRisk?.label ?? "low";
+  if (label === "low") return null;
+  if (label === "medium") {
+    return (
+      <div className="integrity-banner warn">
+        ⚠ Moderate integrity signals — see Proctoring Signals and AI collaboration sections.
+      </div>
+    );
+  }
+  const summary = integrityScore ? buildIntegrityFactorSummary(integrityScore.contributing_factors) : "";
+  return (
+    <div className="integrity-banner error">
+      ⚠ High integrity risk{summary ? ` — ${summary}` : ""}. Review proctoring signals and AI collaboration evidence carefully before advancing this candidate.
+    </div>
+  );
+}
+
+function ProctoringSignalsSection({ signals, startedAt }: {
+  signals?: { webcam_consented: boolean | null; focus_loss_count: number; focus_loss_duration_seconds: number; fullscreen_exit_count: number; large_paste_count: number; focus_events: Array<{ occurred_at: string | null; duration_seconds: number }>; snapshots: Array<{ timestamp: string | null; trigger: string; url: string }> } | null;
+  startedAt?: string | null;
+}) {
+  if (!signals) {
+    return (
+      <section className="employer-section">
+        <SectionTitle title="Proctoring Signals" />
+        <p className="report-copy report-muted">No proctoring data available for this attempt.</p>
+      </section>
+    );
+  }
+
+  const webcamLabel = signals.webcam_consented === true
+    ? "Webcam enabled"
+    : signals.webcam_consented === false
+    ? "Webcam declined"
+    : "Webcam not requested";
+  const webcamClass = signals.webcam_consented === true ? "ready" : "";
+
+  return (
+    <section className="employer-section">
+      <SectionTitle title="Proctoring Signals" />
+      <div style={{ marginBottom: 12 }}>
+        <span className={`status-pill ${webcamClass}`}>{webcamLabel}</span>
+      </div>
+      <table className="proctoring-table">
+        <tbody>
+          <tr><td>Focus-loss events</td><td><strong>{signals.focus_loss_count}</strong></td></tr>
+          <tr><td>Total time away</td><td><strong>{formatDuration(signals.focus_loss_duration_seconds)}</strong></td></tr>
+          <tr><td>Fullscreen exits</td><td><strong>{signals.fullscreen_exit_count}</strong></td></tr>
+          <tr><td>Large pastes</td><td><strong>{signals.large_paste_count}</strong></td></tr>
+        </tbody>
+      </table>
+      {signals.focus_events.length > 0 ? (
+        <details className="report-disclosure" style={{ marginTop: 12 }}>
+          <summary>Focus-loss timeline ({signals.focus_events.length} events)</summary>
+          <div className="report-disclosure-body">
+            <ul className="report-list">
+              {signals.focus_events.map((ev, i) => (
+                <li key={i}>
+                  {formatElapsed(startedAt, ev.occurred_at)} elapsed — away for {formatDuration(ev.duration_seconds)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </details>
+      ) : null}
+      {signals.webcam_consented === true ? (
+        signals.snapshots.length > 0 ? (
+          <div className="snapshot-strip" style={{ marginTop: 12 }}>
+            {signals.snapshots.map((snap, i) => (
+              <a key={i} href={snap.url} target="_blank" rel="noreferrer" className="snapshot-thumb-link" title={`${snap.trigger} · ${formatElapsed(startedAt, snap.timestamp)}`}>
+                <img src={snap.url} alt={`Snapshot at ${formatElapsed(startedAt, snap.timestamp)}`} className="snapshot-thumb" />
+                <span className="snapshot-thumb-label">{formatElapsed(startedAt, snap.timestamp)}</span>
+              </a>
+            ))}
+          </div>
+        ) : (
+          <p className="report-copy report-muted" style={{ marginTop: 8 }}>No snapshots captured.</p>
+        )
+      ) : (
+        <p className="report-copy report-muted" style={{ marginTop: 8 }}>Candidate did not enable webcam for this assessment.</p>
+      )}
+    </section>
+  );
+}
+
 function formatMs(value: number | undefined): string {
   if (value === undefined) return "—";
   if (value >= 1000) return `${(value / 1000).toFixed(1)}s`;
@@ -266,13 +387,15 @@ export default function ReportDetail() {
                 {r.metadata.assessment.version}
                 {timing?.timing_mode ? ` · ${timing.timing_mode}` : ""}
               </p>
-              {r.ai_integrity_risk.label !== "low" ? (
-                <span className={`status-pill ${riskClass(r.ai_integrity_risk.label)}`} style={{ marginTop: 8, display: "inline-block" }}>
-                  ⚠ AI integrity risk: {r.ai_integrity_risk.label}
+              {(r.integrity_score?.label ?? r.ai_integrity_risk.label) !== "low" ? (
+                <span className={`status-pill ${riskClass(r.integrity_score?.label ?? r.ai_integrity_risk.label)}`} style={{ marginTop: 8, display: "inline-block" }}>
+                  ⚠ Integrity risk: {r.integrity_score?.label ?? r.ai_integrity_risk.label}
                 </span>
               ) : null}
             </div>
           </div>
+
+          <IntegrityBanner integrityScore={r.integrity_score} aiRisk={r.ai_integrity_risk} />
 
           {/* Attempt metadata metrics — with tooltips */}
           <section className="metric-row">
@@ -614,6 +737,8 @@ export default function ReportDetail() {
               </Disclosure>
             </article>
           </section>
+
+          <ProctoringSignalsSection signals={r.proctoring_signals} startedAt={r.metadata.timing?.started_at} />
 
           {/* Submitted code — at the bottom, it's reference material */}
           {r.submitted_code?.files ? (
