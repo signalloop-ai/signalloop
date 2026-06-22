@@ -342,6 +342,7 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
           <h2>Create invite</h2>
         </div>
         <form className="invite-form" onSubmit={submitInvite}>
+          {/* Row 1: email + submit button side by side */}
           <label htmlFor="candidate-email">Candidate email</label>
           <input
             id="candidate-email"
@@ -352,21 +353,18 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
             placeholder="candidate@example.com"
             aria-describedby={candidateEmail && !emailValid ? "email-error" : undefined}
           />
+          <button className="command-button primary" disabled={creating || !emailValid} type="submit">
+            <Plus size={17} aria-hidden="true" />
+            {creating ? "Creating…" : "Create invite"}
+          </button>
           {candidateEmail && !emailValid ? (
-            <span id="email-error" className="submission-error" style={{ marginTop: 0 }}>Enter a valid email address</span>
+            <span id="email-error" className="submission-error" style={{ gridColumn: "1 / -1", marginTop: 0 }}>
+              Enter a valid email address
+            </span>
           ) : null}
 
-          <div className="form-label-row">
-            <label htmlFor="assessment-level">Assessment</label>
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => setShowAssessmentDetail(true)}
-            >
-              <Info size={13} aria-hidden="true" />
-              View details
-            </button>
-          </div>
+          {/* Row 2: assessment select + Details button side by side */}
+          <label htmlFor="assessment-level">Assessment</label>
           <select
             id="assessment-level"
             value={assessmentLevel}
@@ -379,10 +377,20 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
             <option value="standard">Standard FastAPI v2 — 3 bugs · 4 hidden · 2 enhancements · 90 min</option>
             <option value="advanced">Advanced FastAPI v1 — 4 bugs · 3 hidden · 2 enhancements · 120 min</option>
           </select>
+          <button
+            type="button"
+            className="form-action-btn"
+            onClick={() => setShowAssessmentDetail(true)}
+          >
+            <Info size={14} aria-hidden="true" />
+            Details
+          </button>
 
+          {/* Remaining selects span both columns */}
           <label htmlFor="timing-mode">Timing</label>
           <select
             id="timing-mode"
+            style={{ gridColumn: "1 / -1" }}
             value={timingMode}
             onChange={(event) => setTimingMode(event.target.value as InviteConfiguration["timingMode"])}
           >
@@ -394,6 +402,7 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
               <label htmlFor="duration-minutes">Duration</label>
               <select
                 id="duration-minutes"
+                style={{ gridColumn: "1 / -1" }}
                 value={durationMinutes}
                 onChange={(event) => setDurationMinutes(Number(event.target.value))}
               >
@@ -408,17 +417,13 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
           <label htmlFor="evaluator-feedback-mode">Evaluator feedback</label>
           <select
             id="evaluator-feedback-mode"
+            style={{ gridColumn: "1 / -1" }}
             value={evaluatorFeedbackMode}
             onChange={(event) => setEvaluatorFeedbackMode(event.target.value as InviteConfiguration["evaluatorFeedbackMode"])}
           >
             <option value="strict">Strict — hidden results in employer report only</option>
             <option value="guided">Guided — candidate sees aggregate pass/fail counts (no test details)</option>
           </select>
-
-          <button className="command-button primary" disabled={creating || !emailValid} type="submit">
-            <Plus size={17} aria-hidden="true" />
-            {creating ? "Creating…" : "Create invite"}
-          </button>
         </form>
 
         {createdInviteUrl ? (

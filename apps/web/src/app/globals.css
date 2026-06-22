@@ -1236,6 +1236,27 @@ button:disabled {
   text-decoration: underline;
 }
 
+.form-action-btn {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 5px;
+  min-height: 38px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.form-action-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: var(--accent-dark);
+}
+
 .invite-url-input {
   background: #f8fafc;
   border: 1px solid var(--border);
