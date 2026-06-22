@@ -204,6 +204,8 @@ const report = {
       added_test_files: ["tests/test_candidate_validation.py"],
       modified_test_files: [],
       candidate_test_file_count: 1,
+      functions_added: 3,
+      functions_modified: 0,
     },
     ai_collaboration: {
       message_count: 2,
@@ -335,7 +337,7 @@ test("employer can sign in with Clerk, create an invite, and view a report", asy
 
   await expect(page.getByRole("heading", { name: "Employer Review" })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText("candidate@example.com")).toBeVisible();
-  await expect(page.getByText("82 · advance")).toBeVisible();
+  await expect(page.getByText(/Score: 82 \/ 100.*advance/)).toBeVisible();
 
   await page.getByLabel("Candidate email").fill("new-candidate@example.com");
   await page.getByLabel("Assessment").selectOption("advanced");
@@ -354,8 +356,8 @@ test("employer can sign in with Clerk, create an invite, and view a report", asy
   await expect(page.getByText("Candidate fixed core validation").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Score breakdown" })).toBeVisible();
   await expect(page.locator("strong").filter({ hasText: "Public issue resolution" })).toBeVisible();
-  await expect(page.getByText("Public test results")).toBeVisible();
-  await expect(page.getByText("Evaluator feedback")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Public tests" })).toBeVisible();
+  await expect(page.getByText("Evaluator mode")).toBeVisible();
   await expect(page.getByText("strict")).toBeVisible();
   await expect(page.getByText("How did you choose the authorization response behavior?")).toBeVisible();
 });
@@ -373,21 +375,23 @@ test("evidence report renders all Phase 2 sections", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Evidence Report" })).toBeVisible();
 
   // === Top metrics row ===
-  await expect(page.getByText("82 / 100")).toBeVisible();
-  await expect(page.locator(".status-pill").filter({ hasText: "advance" })).toBeVisible();
+  // Recommendation shown in .rec-value, assessment version in .rec-label
+  await expect(page.locator(".rec-value").filter({ hasText: /advance/ })).toBeVisible();
   await expect(page.getByText("standard_v2")).toBeVisible();
 
   // === Timing metadata row ===
   await expect(page.getByText("untimed")).toBeVisible();
-  // Duration / used: "90m / 30m"
-  await expect(page.getByText(/90m.*30m/)).toBeVisible();
-  await expect(page.getByText("manual")).toBeVisible();
-  await expect(page.getByText("Evaluator feedback")).toBeVisible();
+  // Untimed: shows "Time used" with value only (no duration / used split)
+  await expect(page.getByText("30m")).toBeVisible();
+  await expect(page.getByText("Manual")).toBeVisible();
+  await expect(page.getByText("Evaluator mode")).toBeVisible();
   await expect(page.getByText("strict")).toBeVisible();
 
   // === Executive summary ===
   await expect(page.getByRole("heading", { name: "Executive summary" })).toBeVisible();
   await expect(page.getByText("Candidate fixed core validation and ownership issues with clear verification.")).toBeVisible();
+  // Evidence limits are inside a collapsed Disclosure — open it first
+  await page.getByText("Evidence limits").click();
   await expect(page.getByText("Scores are deterministic estimates from captured process evidence.")).toBeVisible();
 
   // === Score breakdown — all 6 rubric categories ===
@@ -404,14 +408,19 @@ test("evidence report renders all Phase 2 sections", async ({ page }) => {
   }
 
   // === Public test results ===
-  await expect(page.getByRole("heading", { name: "Public test results" })).toBeVisible();
-  await expect(page.getByText("Ran 2 time(s)")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Public tests" })).toBeVisible();
+  await expect(page.getByText(/ran 2 time\(s\)/)).toBeVisible();
+  // Initially failing tests are inside a collapsed Disclosure — open it first
+  await page.getByText("Initially failing tests").click();
   await expect(page.getByText("test_duplicate_user_email_is_rejected")).toBeVisible();
   await expect(page.getByText("test_blank_task_title_is_rejected")).toBeVisible();
 
   // === Hidden test results ===
-  await expect(page.getByRole("heading", { name: "Hidden test results" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Hidden tests" })).toBeVisible();
+  // Failure names and seeded areas are inside collapsed Disclosures — open them
+  await page.getByText("1 failure(s)").click();
   await expect(page.getByText("test_status_transition_requires_in_progress")).toBeVisible();
+  await page.getByText("Seeded issue areas").click();
   await expect(page.getByText("duplicate email handling")).toBeVisible();
   await expect(page.getByText("ownership/access behavior")).toBeVisible();
 
@@ -421,33 +430,34 @@ test("evidence report renders all Phase 2 sections", async ({ page }) => {
 
   // === FAVO interpretation ===
   await expect(page.getByText("FAVO interpretation")).toBeVisible();
-  // FAVO area keys rendered as <strong> inside the favo-grid
+  // FAVO area keys rendered as <strong> inside the favo-grid (capitalized)
   const favoGrid = page.locator(".favo-grid");
-  await expect(favoGrid.getByText("frame", { exact: true })).toBeVisible();
-  await expect(favoGrid.getByText("ask", { exact: true })).toBeVisible();
-  await expect(favoGrid.getByText("verify", { exact: true })).toBeVisible();
-  await expect(favoGrid.getByText("own", { exact: true })).toBeVisible();
+  await expect(favoGrid.getByText("Frame", { exact: true })).toBeVisible();
+  await expect(favoGrid.getByText("Ask", { exact: true })).toBeVisible();
+  await expect(favoGrid.getByText("Verify", { exact: true })).toBeVisible();
+  await expect(favoGrid.getByText("Own", { exact: true })).toBeVisible();
   // FAVO labels and evidence snippets
   await expect(favoGrid.getByText(/strong.*Most feature\/design checks passed/)).toBeVisible();
   await expect(favoGrid.getByText(/present.*1 candidate prompt/)).toBeVisible();
 
   // === Candidate-written tests ===
   await expect(page.getByRole("heading", { name: "Candidate-written tests" })).toBeVisible();
-  await expect(page.getByText("1 test file(s) added or modified")).toBeVisible();
+  // Format: "N functions added" (functions_added=3 in mock)
+  await expect(page.getByText("3 functions added")).toBeVisible();
+  // File name is inside collapsed "Files changed" Disclosure — open it
+  await page.getByText("Files changed").click();
   await expect(page.getByText("tests/test_candidate_validation.py")).toBeVisible();
 
   // === AI collaboration ===
   await expect(page.getByRole("heading", { name: "AI collaboration" })).toBeVisible();
-  await expect(page.getByText("1 candidate prompt(s), 0 policy redirect(s)")).toBeVisible();
+  // Format: "N prompt(s) · M redirect(s) · integrity risk: label"
+  await expect(page.getByText(/1 prompt\(s\).*0 redirect\(s\)/)).toBeVisible();
+  await expect(page.getByText("integrity risk:")).toBeVisible();
   // No paste warnings (counts are 0)
   await expect(page.getByText(/AI code block.*found verbatim/)).not.toBeVisible();
   await expect(page.getByText(/large paste event/)).not.toBeVisible();
-
-  // === AI integrity risk ===
-  await expect(page.getByRole("heading", { name: "AI integrity risk" })).toBeVisible();
-  await expect(page.getByText("Risk: low")).toBeVisible();
-  await expect(page.getByText("none_phase_2")).toBeVisible();
-  // All 6 signals listed
+  // Signals inside collapsed "Integrity signals" Disclosure
+  await page.getByText("Integrity signals").click();
   for (const signal of [
     "policy_redirect_count",
     "severe_redirect_count",
@@ -466,25 +476,24 @@ test("evidence report renders all Phase 2 sections", async ({ page }) => {
   await expect(page.getByText("Ran public tests and added focused candidate tests.")).toBeVisible();
   await expect(page.getByText("Add more hidden-edge coverage.")).toBeVisible();
 
-  // === Process evidence ===
+  // === Process evidence (summary always visible; runs inside collapsed Disclosure) ===
   await expect(page.getByRole("heading", { name: "Process evidence" })).toBeVisible();
-  await expect(page.getByText("4 snapshot(s), 3 test run(s)")).toBeVisible();
-  await expect(page.getByText(/public — passed.*120ms/)).toBeVisible();
-  await expect(page.getByText(/hidden — failed.*180ms/)).toBeVisible();
-  await expect(page.getByText(/total 1.5s/)).toBeVisible();
-  await expect(page.getByText(/ecs wait 1.7s/)).toBeVisible();
+  await expect(page.getByText(/4 snapshot.*3 test run/)).toBeVisible();
+  // Open the runs disclosure to check individual run entries
+  await page.getByText("Test run details").click();
+  await expect(page.getByText(/public — passed/)).toBeVisible();
+  await expect(page.getByText(/hidden — failed/)).toBeVisible();
+  // api_total_ms for run 1 is 1500ms → "1.5s"
+  await expect(page.getByText(/1\.5s/)).toBeVisible();
 
   // === Suggested follow-up questions ===
   await expect(page.getByRole("heading", { name: "Suggested follow-up questions" })).toBeVisible();
   await expect(page.getByText("How did you choose the authorization response behavior?")).toBeVisible();
   await expect(page.getByText("Walk through the status transition policy you enforced.")).toBeVisible();
 
-  // === LLM-assisted review ===
-  await expect(page.getByRole("heading", { name: "LLM-assisted review" })).toBeVisible();
-  await expect(page.getByText("Status: not_run")).toBeVisible();
-
   // === Timeline ===
   await expect(page.getByRole("heading", { name: "Timeline" })).toBeVisible();
+  await page.getByText("Show timeline").click();
   await expect(page.getByText("attempt_started")).toBeVisible();
   await expect(page.getByText("attempt_submitted")).toBeVisible();
   await expect(page.getByText("Candidate opened invite")).toBeVisible();
@@ -516,9 +525,10 @@ test("evidence report with AI integrity risk medium shows warning style", async 
   });
 
   await page.goto("/employer/reports/42");
-  await expect(page.getByText("Risk: medium")).toBeVisible();
-  // Medium risk uses report-warn class (not default)
-  await expect(page.locator(".report-warn").filter({ hasText: "Risk: medium" })).toBeVisible();
+  // Integrity risk is inline in AI collaboration: "integrity risk: <span>medium</span>"
+  await expect(page.getByText("integrity risk:")).toBeVisible();
+  // The risk label itself uses report-warn class for non-low values
+  await expect(page.locator(".report-warn").filter({ hasText: "medium" })).toBeVisible();
 });
 
 test("evidence report shows paste warnings when AI code or large paste detected", async ({ page }) => {
@@ -549,8 +559,8 @@ test("evidence report shows paste warnings when AI code or large paste detected"
   });
 
   await page.goto("/employer/reports/42");
-  await expect(page.getByText(/2 AI code block\(s\) found verbatim in final submission/)).toBeVisible();
-  await expect(page.getByText(/1 large paste event\(s\) detected between snapshots/)).toBeVisible();
+  await expect(page.getByText(/2 AI code block\(s\) found verbatim in submission/)).toBeVisible();
+  await expect(page.getByText(/1 large paste event\(s\) detected/)).toBeVisible();
 });
 
 test("evidence report shows hidden test failure names and seeded issue areas", async ({ page }) => {
@@ -560,9 +570,12 @@ test("evidence report shows hidden test failure names and seeded issue areas", a
 
   await page.goto("/employer/reports/42");
 
-  // Hidden test failure name
+  // Failure names inside collapsed Disclosure — open it first
+  await page.getByText("1 failure(s)").click();
   await expect(page.getByText("test_status_transition_requires_in_progress")).toBeVisible();
-  // All seeded issue areas
+
+  // Seeded issue areas inside collapsed "Seeded issue areas" Disclosure — open it
+  await page.getByText("Seeded issue areas").click();
   for (const area of [
     "duplicate email handling",
     "empty or whitespace-only task title",

@@ -147,8 +147,9 @@ test("candidate can open, edit, run tests, and submit locally", async ({ page })
 
   await page.getByRole("button", { name: "Run Tests" }).click();
   await expect(page.getByText("status: passed")).toBeVisible();
-  await expect(page.getByText("1 passed")).toBeVisible();
-  await expect(page.getByText(/6 additional behaviors are evaluated beyond these public tests/)).toBeVisible();
+  await expect(page.getByText("1 passed").first()).toBeVisible();
+  // Seeded issue note is now in progress checklist (strict mode hidden checks row)
+  await expect(page.getByText(/additional behaviors evaluated at submission/)).toBeVisible();
 
   await page.getByLabel("Ask about the selected file or public test output").fill("Find all bugs");
   await page.getByRole("button", { name: "Ask", exact: true }).click();
@@ -157,13 +158,10 @@ test("candidate can open, edit, run tests, and submit locally", async ({ page })
 
   await expect(page.getByRole("button", { name: "Submit" })).toBeEnabled();
   await page.getByLabel("What did you change?").fill("Fixed validation and ownership behavior.");
-  await page.getByLabel("What tradeoffs or product decisions did you make?").fill("Chose explicit authorization behavior.");
-  await page.getByLabel("How did you verify your changes?").fill("Ran public tests and added focused candidate tests.");
-  await page.getByLabel("What would you improve next, given more time?").fill("Add more edge-case coverage.");
   await expect(page.getByRole("button", { name: "Submit" })).toBeEnabled();
   await page.getByRole("button", { name: "Submit" }).click();
   await expect(page.getByRole("heading", { name: "Submit final attempt?" })).toBeVisible();
-  await expect(page.getByText("Submission review answered: 4/4 required questions")).toBeVisible();
+  await expect(page.getByText(/Submission notes:.*provided/)).toBeVisible();
   await page.getByRole("button", { name: "Submit final" }).click();
   await expect(page.getByText("submitted", { exact: true })).toBeVisible();
   await expect(page.getByText("Some hidden tests failed.").first()).toBeVisible();
@@ -302,7 +300,7 @@ test("expired timed attempt auto-submits without user action", async ({ page }) 
 
   await page.goto("/invite/playwright-token");
   // Timer pill shows "Expired" in error style
-  await expect(page.locator(".status-pill.error").filter({ hasText: "Expired" })).toBeVisible();
+  await expect(page.locator(".status-pill.error").filter({ hasText: "Expired" }).first()).toBeVisible();
   // Auto-submit fires; "submitted" pill appears without any user click
   await expect(page.locator(".status-pill").filter({ hasText: "submitted" })).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText("Some hidden tests failed.").first()).toBeVisible();
@@ -425,23 +423,21 @@ test("submit confirmation modal shows checklist state accurately", async ({ page
   await expect(page.getByRole("heading", { name: "Submit final attempt?" })).toBeVisible();
   await expect(page.getByText("Public tests run: no")).toBeVisible();
   await expect(page.getByText("Candidate tests added or updated: no")).toBeVisible();
-  await expect(page.getByText("Submission review answered: 0/4 required questions")).toBeVisible();
+  // New form: notes is optional, checklist shows "not filled in" when empty
+  await expect(page.getByText(/Submission notes:.*not filled in/)).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
 
   // Run public tests
   await page.getByRole("button", { name: "Run Tests" }).click();
   await expect(page.getByText("status: passed")).toBeVisible();
 
-  // Fill all 4 review fields
+  // Fill the "What did you change?" field (the only required field in the new form)
   await page.getByLabel("What did you change?").fill("Fixed ownership check.");
-  await page.getByLabel("What tradeoffs or product decisions did you make?").fill("Chose 403 for known actors.");
-  await page.getByLabel("How did you verify your changes?").fill("Ran public tests.");
-  await page.getByLabel("What would you improve next, given more time?").fill("Add hidden edge coverage.");
 
-  // Re-open modal — checklist should now show yes/no/4
+  // Re-open modal — checklist should now show yes/no/provided
   await page.getByRole("button", { name: "Submit" }).click();
   await expect(page.getByText("Public tests run: yes")).toBeVisible();
-  await expect(page.getByText("Submission review answered: 4/4 required questions")).toBeVisible();
+  await expect(page.getByText(/Submission notes:.*provided/)).toBeVisible();
 });
 
 test("untimed attempt shows recommended duration and not a countdown", async ({ page }) => {
@@ -502,7 +498,9 @@ test("guided evaluator feedback shows only aggregate hidden counts", async ({ pa
   await page.goto("/invite/playwright-token");
   await page.getByRole("button", { name: "Run Tests" }).click();
 
-  await expect(page.getByText("Evaluator checks: 4 passed, 2 failing. Details hidden.")).toBeVisible();
+  // Hidden checks item: non-enhancement edge cases (hf - ef). Mock has no enhancement_feedback
+  // so edge = evaluator total: 4 passed, 2 failing
+  await expect(page.getByText(/Hidden checks.*4 passed, 2 failing/)).toBeVisible();
   await expect(page.getByText("Completed in 1s.")).toBeVisible();
   await expect(page.getByText("test_hidden_status_transition")).not.toBeVisible();
   await expect(page.getByText("hidden_tests")).not.toBeVisible();
