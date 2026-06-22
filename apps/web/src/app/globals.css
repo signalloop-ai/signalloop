@@ -999,19 +999,7 @@ button:disabled {
   width: 100%;
 }
 
-.employer-auth h1,
-.employer-header h1 {
-  font-size: 28px;
-  line-height: 1.1;
-  margin: 0;
-}
-
-.employer-auth p,
-.employer-header p {
-  color: var(--muted);
-  line-height: 1.5;
-  margin: 8px 0 0;
-}
+/* h1/p inside employer pages are now inside .employer-brand */
 
 .auth-status {
   align-items: center;
@@ -1133,15 +1121,13 @@ button:disabled {
 
 .invite-result {
   align-items: center;
-  background: #f8fafc;
   border: 1px solid var(--border);
   border-radius: 6px;
-  color: var(--muted);
   display: flex;
   gap: 8px;
   margin-top: 12px;
   min-width: 0;
-  padding: 10px;
+  padding: 6px 6px 6px 10px;
 }
 
 .invite-result span {
@@ -1193,6 +1179,221 @@ button:disabled {
   gap: 6px;
   margin-bottom: 8px;
   text-decoration: none;
+}
+
+/* ── Employer page additions ── */
+
+.employer-brand {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.employer-brand h1 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.employer-brand p {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 2px 0 0;
+}
+
+.employer-auth .employer-brand {
+  justify-content: flex-start;
+}
+
+.form-label-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  grid-column: 1 / -1;
+  justify-content: space-between;
+}
+
+.form-label-row label {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.text-button {
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--accent-dark);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 4px;
+  padding: 0;
+  text-decoration: none;
+}
+
+.text-button:hover {
+  text-decoration: underline;
+}
+
+.invite-url-input {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  flex: 1;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 8px 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score-badge.none {
+  color: var(--muted);
+}
+
+.attempt-email-meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.attempt-sent-at {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.attempt-level-tag {
+  color: var(--muted);
+  display: block;
+  font-size: 11px;
+  margin-top: 3px;
+}
+
+.attempt-config {
+  color: var(--muted);
+  font-size: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.attempt-recommendation {
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* ── Assessment detail modal ── */
+
+.assessment-detail-modal {
+  max-width: 600px;
+}
+
+.assessment-modal-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.assessment-modal-header h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.assessment-modal-desc {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 6px 0 0;
+}
+
+.assessment-modal-meta {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.assessment-section {
+  border-top: 1px solid var(--border);
+  margin-top: 16px;
+  padding-top: 14px;
+}
+
+.assessment-section-header {
+  align-items: center;
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.assessment-section-note {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+
+.assessment-count-badge {
+  background: #0f766e;
+  border-radius: 10px;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 20px;
+  padding: 1px 6px;
+  text-align: center;
+}
+
+.assessment-count-badge.hidden {
+  background: #7c3aed;
+}
+
+.assessment-count-badge.enhancements {
+  background: #d97706;
+}
+
+.assessment-list {
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.assessment-list li {
+  margin-bottom: 4px;
+}
+
+.assessment-scoring {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.assessment-scoring-row {
+  border-radius: 4px;
+  display: flex;
+  font-size: 13px;
+  justify-content: space-between;
+  padding: 5px 8px;
+}
+
+.assessment-scoring-row:nth-child(odd) {
+  background: #f8fafc;
+}
+
+.assessment-scoring-row.total {
+  background: transparent;
+  border-top: 1px solid var(--border);
+  font-weight: 700;
+  margin-top: 4px;
+  padding-top: 8px;
 }
 
 .report-grid {
