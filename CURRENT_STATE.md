@@ -8,12 +8,14 @@ The active post-MVP workstream is Phase 2: Assessment System Enhancement.
 
 ## Current phase
 
-Phase 2: Assessment System Enhancement — all 11 planned tasks complete locally.
-Pending: hosted deployment of this session's scoring and report fixes.
+**Phase 2 is complete.** All 11 planned Phase 2 tasks are implemented, locally validated,
+and deployed to Render. The current state reflects the June 2026 UI polish session which
+also switched hosted execution to `DirectExecutionProvider` (`EXECUTION_BACKEND=direct`).
 
 ## Last completed phase
 
-Phase 2: Assessment System Enhancement (all tasks).
+Phase 2: Assessment System Enhancement (all tasks, including hosted deployment and
+UX polish close-out).
 
 ## What exists
 
@@ -166,6 +168,37 @@ Phase 2: Assessment System Enhancement (all tasks).
 - **Test count**: `initial_files: dict[str, str]` added to `CandidateAttemptResponse`
   schema.
 
+## Settled state after June 2026 UX polish + DirectExecution session
+
+- **DirectExecutionProvider**: `EXECUTION_BACKEND=direct` runs pytest inline in the API
+  process via subprocess. ~7s vs ~50s ECS cold start. Used on Render for pilot only — no
+  container isolation. Switch to `ecs_fargate` for production. Both
+  `.env.example` and `.env.render-supabase.example` updated to `direct`.
+- **Candidate workspace** fully redesigned as an IDE-style layout: left file explorer,
+  top bar with logo + status chips + progress pills + Run/Submit buttons, right panel
+  with "What to do" (resizable) + AI Collaborator sections, collapsible bottom test
+  output drawer.
+- **Status chips** conditionally render: Public tests, Edge cases, Enhancements, My tests
+  chips only appear when real data exists. Divider hidden when no chips are visible.
+  Status label "started" → "In progress". Duration: "Recommended 90 min".
+- **Chip labels finalized**: "Public" → "Public tests", "Hidden" → "Edge cases",
+  "Enhanced" / "Feature/design" → "Enhancements", "Tests" → "My tests".
+- **Elapsed timer** shown during test run and submission ("Running tests… 3s").
+- **Employer portal** professionally redesigned: SignalLoop logo, auto-poll every 30s
+  (no Refresh button), inline Create invite button next to email field, inline Details
+  button next to assessment select, colored score badge, `timeAgo` helper for sent-at
+  display, assessment detail modal sourced from evaluator rubric MD files, flat table
+  header (no border/card on header row).
+- **Evidence report** professionally redesigned: logo in header, amber Regenerate button
+  with confirm dialog, CSS `data-tooltip` metric card tooltips, follow-up interview
+  questions promoted above score breakdown, FAVO section subtitle, process evidence as
+  mini metric cards, score breakdown bar chart with jump-link labels, "Enhancements"
+  label throughout (was "Feature/design implementation").
+- **Score breakdown**: bar chart labels are anchor `<a>` tags that scroll to the
+  corresponding detail section. Score chip list removed — bar chart is the only
+  summary element.
+- **Web typecheck/build**: passing. All changes pushed to `main` and deployed to Render.
+
 ## Settled state after June 2026 report polish + scoring fixes session
 
 - **Evidence report redesigned**: score summaries always visible; verbose lists
@@ -205,86 +238,21 @@ Phase 2: Assessment System Enhancement (all tasks).
 
 ## Next task
 
-Continue Phase 2 from:
+**Phase 2 is complete. Begin Phase 3.**
 
-`docs/enhancements/phase-2-assessment-system/`
+Phase 3 has not yet been defined. Brainstorm with the team on scope before creating
+phase documentation. Likely candidate themes based on Phase 2 learnings:
 
-Recommended next implementation task:
+- Candidate experience improvements (richer test feedback, better error messages)
+- Employer experience improvements (bulk invite, candidate comparison, export)
+- Scoring accuracy improvements (LLM-assisted review section currently `not_run`)
+- Operational hardening (production-grade execution backend, monitoring, alerts)
+- New assessment packs
 
-Local Phase 2 implementation is complete except for external LLM-assisted report
-review. Local Playwright e2e passes for the mocked browser suite. Live local browser
-validation also passed against the migrated Postgres/API/worker stack for standard/strict
-and advanced/guided candidate submissions, and Clerk-authenticated employer report views
-rendered for both submitted attempts. The real OpenAI-backed AI collaborator policy
-matrix passed with `RUN_LIVE_AI_TESTS=1`.
+Do not start Phase 3 implementation until a phase document exists under
+`docs/enhancements/phase-3-*/`.
 
-Strict employer isolation was implemented locally in:
-
-`docs/enhancements/phase-2-assessment-system/08-multi-tenant-employer-isolation.md`
-
-Do not mutate `assessment_packs/fastapi_task_api_v1/` into the Phase 2 standard pack.
-The versioned standard pack now exists at
-`assessment_packs/fastapi_task_api_standard_v2/`; keep v1 as the historical MVP/pilot
-reference.
-
-Advanced pack local validation:
-
-- Starter public tests: 1 passed, 5 failed on unmodified candidate code.
-- Reference solution public tests: 6 passed.
-- Reference solution hidden tests: 7 passed.
-- API suite after enabling Advanced: 55 passed (subsequently grew to 76 passed / 11 skipped after Phase 2 UX and scoring changes — see `docs/development/changes.md`).
-- Web typecheck/lint/build passed.
-- Playwright e2e: 2 passed, 1 skipped by design.
-- Live local browser smoke was exercised against Standard and Advanced timed invites
-  on a disposable SQLite API at `127.0.0.1:8016`, worker at `127.0.0.1:9000`, and
-  built web server at `127.0.0.1:3100`. This found and fixed UTC timestamp
-  serialization for timed attempts and local employer fallback collision handling.
-- Local Docker assessment runtime must be `signalloop-python-assessment:3.11`; using
-  `python:3.11-slim` causes public/hidden runs to fail before pytest collection.
-- Final Playwright rerun after forcing the corrected runtime image was blocked by the
-  Codex escalation usage limit. Re-run the live smoke locally with fresh invites before
-  deployment.
-
-Historical MVP validation notes:
-
-Recent local validation created submitted attempt 11 and generated evidence report 2 with score 40 and recommendation `needs_review`. Candidate submission, hidden evaluation persistence, report generation, and report rendering were verified locally.
-
-A first automated e2e validation round was completed on 2026-06-17. Three bugs were found and fixed (see `docs/development/changes.md` for full details):
-
-1. `.env` had `NEXT_PUBLIC_API_URL` pointing to port 8000; the running API was on port 8015. Fixed in `.env`.
-2. Hidden evaluation result was inside a scrollable panel and Playwright consistently reported it hidden. Fixed by surfacing the status text in the topbar (always visible).
-3. Employer portal e2e test was blocked by Clerk sign-in gating and a wrong `.nth(1)` link index. Fixed by allowing local dev bypass in `NODE_ENV=development` and correcting the index to `.nth(0)`.
-
-All automated checks now pass per the latest validation notes: API tests, worker tests, web typecheck/lint, and 2 Playwright e2e tests pass (1 skipped by design). A follow-up docs/code review on 2026-06-17 confirmed `cd apps/api && uv run pytest` reports 34 passed and `cd apps/worker && uv run pytest` reports 22 passed.
-
-Hosted deployment work is now in progress using:
-
-`docs/deployment/render-supabase-clerk.md`
-
-ECS/Fargate runner scaffolding exists in `apps/runner` and `infra/aws/ecs`, and the API can switch to it with `EXECUTION_BACKEND=ecs_fargate`. Keep `EXECUTION_BACKEND=http_worker` locally. Do not rely on a raw public worker for production candidate execution.
-
-Hosted smoke on 2026-06-17:
-
-- `https://signalloop-api.onrender.com/health` returned 200.
-- `https://signalloop-web.onrender.com` returned 200.
-- Supabase-backed attempt listing worked.
-- Hosted invite creation and candidate workspace loading worked.
-- Public test execution initially failed with AWS `AccessDenied` for `s3:PutObject` by IAM user `signalloop-render-api` on `s3://SIGNALLOOP_RUN_BUCKET/runs/...`.
-- After fixing the `runs/*` S3 permission, a fresh public test run waited for ECS/Fargate and then failed with S3 `NoSuchKey` while reading `runs/{run_id}/output.json`; check runner task logs and task-role S3 permissions next.
-- After pushing a linux/amd64 image, a fresh public test run returned ECS pytest output but failed with `ModuleNotFoundError: No module named 'fastapi'`; `apps/runner/Dockerfile` now installs `fastapi`, `httpx`, and `uvicorn` to match the local assessment image. Rebuild and push the runner image before the next hosted smoke.
-- After pushing the dependency-fixed runner image, hosted public test execution worked end-to-end. Unchanged starter code returned the expected public result: 2 passed, 2 failed.
-- A hosted submission attempt was marked `submitted`, but hidden evaluation was not persisted after the UI submit wait timed out; generated report showed hidden tests as `missing`.
-- A second hosted submission attempt returned generic 500 after public execution started working. Local hidden runner reproduction returned valid failed hidden-test output, so `apps/api/signalloop_api/submissions.py` now catches all hidden-evaluation exceptions and persists a hidden `error` result instead of leaving submission in a partial state.
-- `cd apps/api && uv run pytest` reports 36 passed with the submission hardening.
-- After Render API redeploy, hosted final submission returned 201 with `hidden_test_status: error`, report generation returned 201 with score 21 and recommendation `do_not_advance`, and the hosted employer report page rendered without console errors.
-- After deploying the hidden-test path-resolution fix, a fresh hosted attempt still returned `hidden_test_status: error`; report generation returned 201 with hidden summary `collected: 0`, `passed: 0`, `failed: 0`, `status: error`.
-- Local `.env` currently points at `localhost:5432/signalloop`, so direct local SQL queries do not inspect the hosted Supabase database used by Render.
-- Added logging around hidden test path resolution, hidden test count, hidden runner start/completion, and hidden exception tracebacks. Deploy this logging patch and inspect Render API logs on the next fresh hosted submission.
-- Root cause was the hidden runner dependency: `submit_final_attempt()` expected `.run(...)`, while `ECSFargateExecutionProvider` exposes `.run_hidden(...)`. After deploying the adapter fix, fresh hosted attempt 7 returned `hidden_test_status: failed` with hidden summary `collected: 6`, `passed: 1`, `failed: 5`.
-- Hosted report generation for attempt 7 returned score 26 and recommendation `do_not_advance`; the hosted employer report page rendered without browser console errors.
-- Full pre-user-testing validation on 2026-06-18 passed: API tests 38 passed, worker tests 22 passed, web typecheck/lint/build passed, Playwright e2e 2 passed/1 skipped, hosted browser-level attempt 8 completed public tests, final submission, hidden tests, report generation, and hosted report rendering with no browser console errors.
-- UX follow-up: public test/final submit latency is expected from the per-run ECS/Fargate task lifecycle. The web app now shows non-blocking inline progress messages while tests/submission are running, and the root route redirects directly to `/employer` to remove the extra landing screen before Clerk login.
-- Employer report rendering worked for the generated report.
+Phase 2 historical reference: see `docs/development/changes.md` for the full session-by-session log. Phase 2 final hosted validation (2026-06-18) passed with API tests 38 passed, worker tests 22 passed, web typecheck/lint/build passed, Playwright e2e 2 passed/1 skipped, and a full browser-level attempt (public tests → submission → hidden evaluation → report generation → report rendering) working on Render without browser console errors.
 
 ## Notes for next coding agent
 

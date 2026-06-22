@@ -5,6 +5,162 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-06-22 — Phase 2 Close-out: Direct Execution + Full UI Polish
+
+### DirectExecutionProvider — inline pytest, no ECS cold start
+
+**Why:** ECS/Fargate per-run tasks averaged ~50s due to container spin-up. For a pilot
+with trusted candidates, running pytest in-process (subprocess isolation only) is
+sufficient and drops the round-trip to ~7s.
+
+**Changed:**
+- New `DirectExecutionProvider` class in `execution.py` with `run_public`, `run_hidden`,
+  and `run_candidate_verification` methods. Each creates a `TemporaryDirectory`, writes
+  candidate + hidden files via `_write_files` / `_write_hidden_tests`, runs pytest via
+  `subprocess.run`, and returns the same result dict shape as the HTTP/ECS providers.
+- `get_execution_provider()` returns `DirectExecutionProvider` when
+  `EXECUTION_BACKEND=direct`.
+- Both `.env.example` and `.env.render-supabase.example` updated to `EXECUTION_BACKEND=direct`.
+- Helper functions `_validate_relative_path`, `_write_files`, `_write_hidden_tests`,
+  `_run_subprocess` extracted as module-level utilities shared across providers.
+
+**Files changed:**
+- `apps/api/signalloop_api/execution.py`
+- `.env.example`, `.env.render-supabase.example`
+
+**Architecture note:** `direct` is pilot-only. Switch to `ecs_fargate` for production
+to restore subprocess isolation in a Docker container per run.
+
+---
+
+### Elapsed timer UI during test run
+
+**Why:** No visual feedback while pytest runs left candidates uncertain if anything was
+happening.
+
+**Changed:**
+- `running` state gates a `setInterval` that increments `runElapsed` every second.
+- Topbar shows "Running tests… 3s" via `publicRunMessage` while running; clears on result.
+- Same pattern for `submitElapsed` / `submissionMessage` during final submission.
+
+**Files changed:**
+- `apps/web/src/app/invite/[inviteToken]/page.tsx`
+
+---
+
+### Candidate workspace — full IDE-style overhaul
+
+**Why:** Candidate workspace had no clear visual hierarchy. Progress, instructions, AI
+chat, and test output competed for space with no logical grouping.
+
+**Changed:**
+- Left sidebar: IDE-style file explorer with `EXPLORER` header and autosave chip.
+- Top bar: SignalLoop SVG logo, status box (progress chips + divider + status pills +
+  operation message), Run Tests + Submit buttons.
+- Right panel: two independent scrollable sections — "What to do" (fixed height,
+  vertically resizable via drag handle) and "AI Collaborator" (grows to fill remaining
+  space).
+- Bottom: collapsible test output drawer (auto-expands when results arrive). Test panel
+  header shows "2/5 failed" or "5/5 passed" count format.
+- Submit: clicking Submit opens a confirm modal containing 4-row status summary +
+  notes textareas + Submit final button. Separate submission drawer removed.
+- Autosave note shown in editor tab bar.
+
+**Files changed:**
+- `apps/web/src/app/invite/[inviteToken]/page.tsx`
+- `apps/web/src/app/globals.css`
+
+---
+
+### Status chips — progressive disclosure + relabeling
+
+**Why:** Showing empty "○ Public · ○ Edge cases · ○ Enhancements · ○ My tests" chips
+before any test run was run was confusing — there was no meaningful data to display.
+
+**Changed:**
+- Progress chips are hidden until there is real data: Public tests chip appears after
+  first run, Edge cases after first run (guided mode), Enhancements after first run (if
+  collected > 0), My tests after candidate adds a test.
+- Divider between chips and status pills only renders when at least one chip is visible.
+- Labels: "Public" → "Public tests", "Hidden" → "Edge cases", "Enhanced" →
+  "Enhancements", "Tests" → "My tests".
+- `attempt.status === "started"` displays as "In progress".
+- Duration pill: "Recommended 90m" → "Recommended 90 min".
+- "What to do" item 5 notes: *"these count at final submission, not on each run."*
+- Submit modal: "Hidden checks" → "Edge cases", "Candidate tests" → "My tests".
+
+**Files changed:**
+- `apps/web/src/app/invite/[inviteToken]/page.tsx`
+
+---
+
+### Employer portal — professional UI overhaul
+
+**Why:** Employer portal looked like a debug tool — no logo, raw table, manual refresh
+button, assessment dropdown with no context, bottom-of-form Create invite button.
+
+**Changed:**
+- SignalLoop logo added to header and auth screen (`employer-brand` component).
+- Manual Refresh button removed; replaced with `setInterval` auto-poll every 30s
+  (a "Refreshing…" chip appears in the section title during the fetch).
+- Professional subtitle: "Manage candidate assessments, track progress, and review
+  AI-assisted evidence reports."
+- Assessment dropdown: option labels show quick summary (e.g.,
+  "Standard FastAPI v2 — 3 bugs · 4 hidden · 2 enhancements · 90 min").
+- "View details" → "Details" button placed inline (col 2) next to the assessment select.
+- Assessment detail modal: sourced from evaluator rubrics; shows public tests, hidden
+  edge cases, enhancements, and scoring weights for both packs.
+- Create invite button moved inline (col 2) next to the email input.
+- Timing / Evaluator selects span both columns to avoid gap.
+- Score column: colored pill badge (green ≥ 80, orange ≥ 60, red < 60).
+- Attempt rows: email stacked with "Sent Xm ago", "started" → "In progress", level tag
+  below status pill.
+- Table header: no border/card — flat uppercase label row sitting above bordered data
+  cards so column labels visually belong to each column below them.
+- Invite URL: rendered as readonly monospace input + Copy button side by side.
+- Empty state: "No candidates invited yet — create an invite above to get started."
+- Metric card labels: "Total attempts" → "Total invites", "Reports" → "Reports ready".
+
+**Files changed:**
+- `apps/web/src/app/employer/page.tsx`
+- `apps/web/src/app/globals.css`
+
+---
+
+### Evidence report — professional UI overhaul
+
+**Why:** Report page had no logo, a redundant Refresh button, raw metric values with no
+explanation, and the most action-oriented content (follow-up interview questions) buried
+near the bottom.
+
+**Changed:**
+- SignalLoop logo + candidate email + assessment name in header. "Evidence Report" title
+  now shows who the report is for without scrolling.
+- Refresh button removed. Regenerate button styled amber (warning) and gated by a
+  `window.confirm` dialog to prevent accidental overwrites.
+- CSS `data-tooltip` system (no JS/library): hovering any metric card shows a dark
+  tooltip explaining the value. Applied to Timing, Time used, Submission, Evaluator mode.
+- AI integrity risk badge surfaced in the recommendation banner when elevated
+  (medium/high/critical) — previously buried in the AI collaboration section.
+- Follow-up interview questions moved above score breakdown — they are the most
+  action-oriented output and now appear right after the executive summary, with a teal
+  left-border callout style.
+- FAVO section subtitle: "Frame · Ask · Verify · Own — how the candidate structured
+  their problem-solving process."
+- Submission review section subtitle: "Candidate's own words on what they changed and why."
+- Process evidence: Snapshots + Test runs shown as mini metric cards (visual iteration
+  signal) instead of plain text.
+- Score breakdown: bar chart labels are anchor jump-links to detail sections below
+  (hover turns teal + underline). Score list with duplicated evidence text removed.
+- "Feature / design implementation" renamed to "Enhancements" everywhere: bar chart
+  label, detail section title, `CATEGORY_LABELS` map, section anchor ID.
+
+**Files changed:**
+- `apps/web/src/app/employer/reports/[attemptId]/page.tsx`
+- `apps/web/src/app/globals.css`
+
+---
+
 ## 2026-06-22 — Report Polish, Scoring Fixes, Integrity Risk Tuning
 
 ### Evidence report redesigned (collapsible sections)

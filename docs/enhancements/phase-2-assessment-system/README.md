@@ -1,6 +1,6 @@
 # Phase 2: Assessment System Enhancement
 
-Status: planning active, implementation not started.
+Status: **complete** — all 8 planned tasks implemented, validated locally and on Render.
 
 ## Purpose
 
