@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { ArrowLeft, RotateCw } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { ReactNode } from "react";
@@ -9,6 +9,19 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, fetchReport, generateReport } from "../../api";
 import type { EvidenceReportResponse } from "../../types";
+
+// ── Shared logo ───────────────────────────────────────────────────────────────
+
+const Logo = () => (
+  <svg className="topbar-logo" width="30" height="30" viewBox="0 0 30 30" fill="none" aria-label="SignalLoop">
+    <rect width="30" height="30" rx="7" fill="#0f766e" />
+    <path d="M15 6C19.97 6 24 10.03 24 15C24 19.97 19.97 24 15 24C10.5 24 6.8 20.7 6.1 16.4" stroke="white" strokeWidth="2.3" strokeLinecap="round" />
+    <path d="M4.5 14.5L6.2 17.2L9 15.5" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="15" cy="6" r="2" fill="#5eead4" />
+  </svg>
+);
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function recommendationLabel(value: string | null): string {
   if (!value) return "No recommendation";
@@ -23,10 +36,19 @@ function recommendationClass(value: string | null): string {
   return "fail";
 }
 
-function SectionTitle({ title }: { title: string }) {
+function riskClass(label: string): string {
+  if (label === "critical" || label === "high") return "error";
+  if (label === "medium") return "warn";
+  return "";
+}
+
+function SectionTitle({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <div className="section-title">
-      <h2>{title}</h2>
+      <div>
+        <h2>{title}</h2>
+        {subtitle ? <p className="report-section-subtitle">{subtitle}</p> : null}
+      </div>
     </div>
   );
 }
@@ -118,16 +140,18 @@ function ScoreRing({ score, max }: { score: number; max: number }) {
 }
 
 function formatTimingValue(value: unknown): string {
-  if (value === null || value === undefined || value === "") return "-";
-  if (typeof value === "number") return `${value}m`;
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "number") return `${value} min`;
   return String(value);
 }
 
 function formatMs(value: number | undefined): string {
-  if (value === undefined) return "-";
+  if (value === undefined) return "—";
   if (value >= 1000) return `${(value / 1000).toFixed(1)}s`;
   return `${value}ms`;
 }
+
+// ── Report page ───────────────────────────────────────────────────────────────
 
 export default function ReportDetail() {
   const params = useParams<{ attemptId: string | string[] }>();
@@ -161,13 +185,12 @@ export default function ReportDetail() {
 
   useEffect(() => {
     if (!isLoaded) return;
-    const timeoutId = window.setTimeout(() => {
-      void loadReport();
-    }, 0);
+    const timeoutId = window.setTimeout(() => void loadReport(), 0);
     return () => window.clearTimeout(timeoutId);
   }, [loadReport, isLoaded]);
 
   async function createReport() {
+    if (!window.confirm("Regenerate will overwrite the existing AI analysis. Continue?")) return;
     setGenerating(true);
     setError(null);
     try {
@@ -187,24 +210,24 @@ export default function ReportDetail() {
   return (
     <main className="employer-page">
       <header className="employer-header">
-        <div>
-          <Link className="back-link" href="/employer">
-            <ArrowLeft size={16} aria-hidden="true" />
-            Back to attempts
-          </Link>
-          <h1>Evidence Report</h1>
-          <p>Attempt #{attemptId}</p>
+        <div className="report-header-brand">
+          <Logo />
+          <div>
+            <Link className="back-link" href="/employer">
+              <ArrowLeft size={16} aria-hidden="true" />
+              Back to attempts
+            </Link>
+            <h1>Evidence Report</h1>
+            <p>
+              {r?.metadata?.candidate_email ?? `Attempt #${attemptId}`}
+              {r?.metadata?.assessment ? ` · ${r.metadata.assessment.title ?? r.metadata.assessment.version}` : ""}
+            </p>
+          </div>
         </div>
-        <div className="topbar-actions">
-          <button className="command-button secondary" disabled={loading} onClick={loadReport}>
-            <RefreshCw size={17} aria-hidden="true" />
-            Refresh
-          </button>
-          <button className="command-button primary" disabled={generating} onClick={createReport}>
-            <RefreshCw size={17} aria-hidden="true" />
-            {generating ? "Generating" : "Regenerate"}
-          </button>
-        </div>
+        <button className="command-button warn" disabled={generating} onClick={createReport}>
+          <RotateCw size={17} aria-hidden="true" />
+          {generating ? "Generating…" : "Regenerate report"}
+        </button>
       </header>
 
       {loading ? <p className="empty-state">Loading or generating report…</p> : null}
@@ -212,40 +235,62 @@ export default function ReportDetail() {
 
       {r ? (
         <>
-          {/* Recommendation banner */}
+          {/* Recommendation banner — with AI risk badge if elevated */}
           <div className={`recommendation-banner ${recommendationClass(report?.recommendation ?? null)}`}>
             <ScoreRing score={report?.score_total ?? 0} max={100} />
-            <div>
+            <div className="rec-body">
               <p className="rec-label">Recommendation</p>
               <p className="rec-value">{recommendationLabel(report?.recommendation ?? null)}</p>
-              <p className="rec-label" style={{ marginTop: 6 }}>Assessment: {r.metadata.assessment.version}</p>
+              <p className="rec-label" style={{ marginTop: 4 }}>
+                {r.metadata.assessment.version}
+                {timing?.timing_mode ? ` · ${timing.timing_mode}` : ""}
+              </p>
+              {r.ai_integrity_risk.label !== "low" ? (
+                <span className={`status-pill ${riskClass(r.ai_integrity_risk.label)}`} style={{ marginTop: 8, display: "inline-block" }}>
+                  ⚠ AI integrity risk: {r.ai_integrity_risk.label}
+                </span>
+              ) : null}
             </div>
           </div>
 
-          {/* Top metrics */}
+          {/* Attempt metadata metrics — with tooltips */}
           <section className="metric-row">
-            <div className="metric">
+            <div
+              className="metric"
+              data-tooltip="Timed = hard cutoff with auto-submit on expiry. Untimed = recommended duration shown, not enforced."
+            >
               <span>Timing</span>
               <strong>{timing?.timing_mode ?? "untimed"}</strong>
             </div>
-            <div className="metric">
-              {timing?.timing_mode === "untimed" ? (
-                <>
-                  <span>Time used</span>
-                  <strong>{formatTimingValue(timing?.time_used_minutes)}</strong>
-                </>
-              ) : (
+            <div
+              className="metric"
+              data-tooltip={timing?.timing_mode === "timed"
+                ? "Allowed duration vs. time the candidate actually used before submitting."
+                : "How long the candidate worked from first open to submission."}
+            >
+              {timing?.timing_mode === "timed" ? (
                 <>
                   <span>Duration / used</span>
                   <strong>{formatTimingValue(timing?.duration_minutes)} / {formatTimingValue(timing?.time_used_minutes)}</strong>
                 </>
+              ) : (
+                <>
+                  <span>Time used</span>
+                  <strong>{formatTimingValue(timing?.time_used_minutes)}</strong>
+                </>
               )}
             </div>
-            <div className="metric">
+            <div
+              className="metric"
+              data-tooltip="Manual = candidate clicked Submit themselves. Auto (expired) = submitted automatically when the time limit ran out."
+            >
               <span>Submission</span>
               <strong>{timing?.submission_mode === "auto_expired" ? "Auto (expired)" : "Manual"}</strong>
             </div>
-            <div className="metric">
+            <div
+              className="metric"
+              data-tooltip="Strict = hidden test counts visible only in this report. Guided = candidate saw aggregate pass/fail counts during the attempt, but not the test details."
+            >
               <span>Evaluator mode</span>
               <strong>{r.metadata.evaluator_feedback_mode ?? "strict"}</strong>
             </div>
@@ -265,6 +310,21 @@ export default function ReportDetail() {
               </Disclosure>
             ) : null}
           </section>
+
+          {/* Follow-up questions — moved here, right after exec summary */}
+          {r.follow_up_questions?.length ? (
+            <section className="employer-section followup-callout">
+              <SectionTitle
+                title="Suggested interview follow-ups"
+                subtitle="Based on gaps, design decisions, and AI collaboration patterns in this submission"
+              />
+              <ol className="question-list">
+                {r.follow_up_questions.map((q: string) => (
+                  <li key={q}>{q}</li>
+                ))}
+              </ol>
+            </section>
+          ) : null}
 
           {/* Score breakdown */}
           <section className="employer-section">
@@ -367,14 +427,19 @@ export default function ReportDetail() {
           {/* Feature/design + FAVO */}
           <section className="report-grid">
             <article id="section-feature-design" className="employer-section">
-              <SectionTitle title="Feature/design implementation" />
+              <SectionTitle title="Feature / design implementation" />
               <p className="report-copy">
-                {featureScore ? `${featureScore.points}/${featureScore.max_points}: ${featureScore.evidence}` : "No feature/design score available."}
+                {featureScore
+                  ? `${featureScore.points}/${featureScore.max_points}: ${featureScore.evidence}`
+                  : "No feature/design score available."}
               </p>
             </article>
 
             <article className="employer-section">
-              <SectionTitle title="FAVO interpretation" />
+              <SectionTitle
+                title="FAVO interpretation"
+                subtitle="Frame · Ask · Verify · Own — how the candidate structured their problem-solving process"
+              />
               <div className="favo-grid">
                 {(["frame", "ask", "verify", "own"] as const).map((key) => {
                   const favoLabels: Record<string, string> = { frame: "Frame", ask: "Ask", verify: "Verify", own: "Own" };
@@ -392,7 +457,7 @@ export default function ReportDetail() {
             </article>
           </section>
 
-          {/* Candidate tests + AI */}
+          {/* Candidate tests + AI collaboration */}
           <section className="report-grid">
             <article id="section-candidate-tests" className="employer-section">
               <SectionTitle title="Candidate-written tests" />
@@ -434,7 +499,8 @@ export default function ReportDetail() {
               <p className="report-copy">
                 {r.ai_collaboration.candidate_prompt_count} prompt(s)
                 · {r.ai_collaboration.policy_redirect_count} redirect(s)
-                · integrity risk: <span className={r.ai_integrity_risk.label === "low" ? "" : "report-warn"}>{r.ai_integrity_risk.label}</span>
+                · integrity risk:{" "}
+                <span className={r.ai_integrity_risk.label !== "low" ? `report-warn` : ""}>{r.ai_integrity_risk.label}</span>
               </p>
               {r.ai_collaboration.pasted_ai_code?.pasted_ai_code_count > 0 ? (
                 <p className="report-copy report-warn">
@@ -469,7 +535,7 @@ export default function ReportDetail() {
 
           {/* Submission review */}
           <section className="employer-section">
-            <SectionTitle title="Submission review" />
+            <SectionTitle title="Submission review" subtitle="Candidate's own words on what they changed and why" />
             {(() => {
               const sr = r.submission_review;
               const entries: { label: string; value: string }[] = [
@@ -495,32 +561,23 @@ export default function ReportDetail() {
             })()}
           </section>
 
-          {/* Submitted code */}
-          {r.submitted_code?.files ? (
-            <section className="employer-section">
-              <SectionTitle title="Submitted code" />
-              <p className="report-copy report-muted">{r.submitted_code.file_count} file(s) submitted.</p>
-              <FileViewer files={r.submitted_code.files} />
-            </section>
-          ) : null}
-
-          {/* Follow-up questions */}
-          <section className="employer-section">
-            <SectionTitle title="Suggested follow-up questions" />
-            <ol className="question-list">
-              {r.follow_up_questions.map((q: string) => (
-                <li key={q}>{q}</li>
-              ))}
-            </ol>
-          </section>
-
-          {/* Process evidence + Timeline — collapsed by default */}
+          {/* Process evidence — snapshot/iteration signal */}
           <section className="report-grid">
             <article className="employer-section">
-              <SectionTitle title="Process evidence" />
-              <p className="report-copy">
-                {r.process_evidence.snapshot_count} snapshot(s) · {r.process_evidence.test_run_count} test run(s)
-              </p>
+              <SectionTitle
+                title="Process evidence"
+                subtitle="How actively the candidate iterated during the attempt"
+              />
+              <div className="process-mini-metrics">
+                <div className="process-mini-metric">
+                  <span>Snapshots</span>
+                  <strong>{r.process_evidence.snapshot_count}</strong>
+                </div>
+                <div className="process-mini-metric">
+                  <span>Test runs</span>
+                  <strong>{r.process_evidence.test_run_count}</strong>
+                </div>
+              </div>
               {r.process_evidence.test_runs?.length ? (
                 <Disclosure label="Test run details">
                   <ul className="report-list">
@@ -556,6 +613,14 @@ export default function ReportDetail() {
               </Disclosure>
             </article>
           </section>
+
+          {/* Submitted code — at the bottom, it's reference material */}
+          {r.submitted_code?.files ? (
+            <section className="employer-section">
+              <SectionTitle title="Submitted code" subtitle={`${r.submitted_code.file_count} file(s) submitted`} />
+              <FileViewer files={r.submitted_code.files} />
+            </section>
+          ) : null}
         </>
       ) : null}
     </main>

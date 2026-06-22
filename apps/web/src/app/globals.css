@@ -1396,6 +1396,116 @@ button:disabled {
   padding-top: 8px;
 }
 
+/* ── Report page additions ── */
+
+/* CSS tooltip — shown on hover via data-tooltip attribute */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  background: #18212f;
+  border-radius: 5px;
+  bottom: calc(100% + 8px);
+  color: white;
+  content: attr(data-tooltip);
+  font-size: 11px;
+  font-weight: 400;
+  left: 50%;
+  line-height: 1.45;
+  max-width: 260px;
+  opacity: 0;
+  padding: 6px 10px;
+  pointer-events: none;
+  position: absolute;
+  text-align: center;
+  transform: translateX(-50%);
+  transition: opacity 0.15s;
+  white-space: normal;
+  width: max-content;
+  z-index: 200;
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+}
+
+.report-header-brand {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+}
+
+.report-header-brand h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 4px 0 0;
+}
+
+.report-header-brand p {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 3px 0 0;
+}
+
+/* Warn / amber variant for destructive-ish actions */
+.command-button.warn {
+  background: #fff7ed;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+}
+
+.command-button.warn:hover:not(:disabled) {
+  background: #fef3c7;
+}
+
+.rec-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.report-section-subtitle {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  margin: 2px 0 0;
+}
+
+/* Follow-up questions callout */
+.followup-callout {
+  background: #f0fdf9;
+  border-left: 4px solid #0f766e;
+}
+
+/* Process evidence iteration metrics */
+.process-mini-metrics {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.process-mini-metric {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: grid;
+  gap: 3px;
+  min-width: 90px;
+  padding: 10px 14px;
+  text-align: center;
+}
+
+.process-mini-metric span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.process-mini-metric strong {
+  font-size: 22px;
+  line-height: 1.1;
+}
+
 .report-grid {
   display: grid;
   gap: 12px;
