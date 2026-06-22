@@ -3,6 +3,8 @@
 import Editor from "@monaco-editor/react";
 import {
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   ClipboardCheck,
   FileCode2,
   FolderTree,
@@ -267,13 +269,16 @@ export default function CandidateWorkspace() {
   ]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
-  const [filePanelWidth, setFilePanelWidth] = useState(240);
+  const [filePanelWidth, setFilePanelWidth] = useState(220);
   const [assistantPanelWidth, setAssistantPanelWidth] = useState(320);
-  const [bottomPanelHeight, setBottomPanelHeight] = useState(240);
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(260);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [editorMounted, setEditorMounted] = useState(false);
+  const [whatToDoCollapsed, setWhatToDoCollapsed] = useState(false);
+  const [testDrawerOpen, setTestDrawerOpen] = useState(false);
+  const [submissionDrawerOpen, setSubmissionDrawerOpen] = useState(false);
+
   const submissionReviewRef = useRef<HTMLTextAreaElement | null>(null);
-  const submissionPanelRef = useRef<HTMLDivElement | null>(null);
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
   const autoSnapshotTimeoutRef = useRef<number | null>(null);
   const editorRef = useRef<EditorHandle | null>(null);
@@ -322,6 +327,25 @@ export default function CandidateWorkspace() {
     return () => window.clearInterval(intervalId);
   }, []);
 
+  useEffect(() => {
+    if (!running) { setRunElapsed(0); return; }
+    setRunElapsed(0);
+    const id = setInterval(() => setRunElapsed((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+
+  useEffect(() => {
+    if (!submitting) { setSubmitElapsed(0); return; }
+    setSubmitElapsed(0);
+    const id = setInterval(() => setSubmitElapsed((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [submitting]);
+
+  // Auto-expand test output drawer when results arrive
+  useEffect(() => {
+    if (testResult || testError) setTestDrawerOpen(true);
+  }, [testResult, testError]);
+
   const sortedFiles = useMemo(() => Object.keys(files).sort(), [files]);
   const activeContent = activePath ? files[activePath] ?? "" : "";
   const syntaxDiagnostics = useMemo(
@@ -330,15 +354,12 @@ export default function CandidateWorkspace() {
   );
   const testOutputText = useMemo(() => resultText(testResult, testError), [testResult, testError]);
 
-  // Pre-process output lines to enable in-panel hyperlinks from the "short test
-  // summary info" section to the full failure detail above it.
   const outputLineAnnotations = useMemo(() => {
     const lines = testOutputText.split("\n");
     const failureLineId: Record<string, string> = {};
     let summaryStartIndex = -1;
 
     lines.forEach((line, i) => {
-      // Failure detail header: _______ test_name _______
       const headerMatch = line.match(/^_{4,}\s+(\S+)\s+_{4,}/);
       if (headerMatch) failureLineId[headerMatch[1]] = `output-failure-${i}`;
       if (line.includes("short test summary info")) summaryStartIndex = i;
@@ -355,6 +376,7 @@ export default function CandidateWorkspace() {
     }
     return referenced;
   }, [files, testOutputText]);
+
   const filesWithDiagnostics = useMemo(() => {
     const referenced = new Set<string>();
     for (const diagnostic of syntaxDiagnostics) {
@@ -362,6 +384,7 @@ export default function CandidateWorkspace() {
     }
     return referenced;
   }, [syntaxDiagnostics]);
+
   const reviewAnsweredCount = submissionReview.changed.trim().length > 0 ? 1 : 0;
   const candidateTestsAdded = useMemo(
     () => Object.keys(files).some((path) => path.startsWith("tests/") && files[path] !== initialFiles[path]),
@@ -377,6 +400,7 @@ export default function CandidateWorkspace() {
       .reduce((n, [p, c]) => n + countTests(c), 0);
     return currentTotal - initialTotal;
   }, [files, initialFiles]);
+
   const publicTestsRun = testResult !== null || testError !== null;
   const canSubmit = !submitted && !submitting;
   const expiresAtMs = attempt?.expires_at ? Date.parse(attempt.expires_at) : null;
@@ -392,9 +416,20 @@ export default function CandidateWorkspace() {
           ? "10 minutes remaining"
           : null;
 
-  function focusSubmission() {
-    setBottomPanelHeight((current) => Math.max(current, 300));
-    window.setTimeout(() => submissionReviewRef.current?.focus(), 0);
+  // Progress values for topbar chips
+  const progressPassed = Number(testResult?.stdout?.match(/(\d+) passed/)?.[1] ?? 0);
+  const progressFailed = Number(testResult?.stdout?.match(/(\d+) failed/)?.[1] ?? 0);
+  const progressAllPass = testResult?.status === "passed";
+
+  // Collapse bottom panel to header-only height when both drawers are closed
+  const effectiveBottomHeight = (testDrawerOpen || submissionDrawerOpen) ? bottomPanelHeight : 50;
+
+  const publicRunMessage = running ? `Running tests… ${runElapsed}s` : null;
+  const submissionMessage = submitting ? `Submitting… ${submitElapsed}s` : null;
+
+  function openSubmission() {
+    setSubmissionDrawerOpen(true);
+    window.setTimeout(() => submissionReviewRef.current?.focus(), 50);
   }
 
   function openFileAtLine(path: string, lineNumber: number) {
@@ -422,27 +457,6 @@ export default function CandidateWorkspace() {
     monaco.editor.setModelMarkers(model, "signalloop-python-diagnostics", markers);
   }, [syntaxDiagnostics, editorMounted]);
 
-  useEffect(() => {
-    if (!running) { setRunElapsed(0); return; }
-    setRunElapsed(0);
-    const id = setInterval(() => setRunElapsed((s) => s + 1), 1000);
-    return () => clearInterval(id);
-  }, [running]);
-
-  useEffect(() => {
-    if (!submitting) { setSubmitElapsed(0); return; }
-    setSubmitElapsed(0);
-    const id = setInterval(() => setSubmitElapsed((s) => s + 1), 1000);
-    return () => clearInterval(id);
-  }, [submitting]);
-
-  const publicRunMessage = running
-    ? `Running tests… ${runElapsed}s`
-    : null;
-  const submissionMessage = submitting
-    ? `Submitting… ${submitElapsed}s`
-    : null;
-
   function startHorizontalResize(
     event: PointerEvent<HTMLDivElement>,
     panel: "files" | "assistant",
@@ -454,7 +468,7 @@ export default function CandidateWorkspace() {
     function onPointerMove(moveEvent: globalThis.PointerEvent) {
       const delta = moveEvent.clientX - startX;
       if (panel === "files") {
-        setFilePanelWidth(Math.min(420, Math.max(180, startWidth + delta)));
+        setFilePanelWidth(Math.min(420, Math.max(160, startWidth + delta)));
       } else {
         setAssistantPanelWidth(Math.min(520, Math.max(260, startWidth - delta)));
       }
@@ -476,7 +490,7 @@ export default function CandidateWorkspace() {
 
     function onPointerMove(moveEvent: globalThis.PointerEvent) {
       const delta = startY - moveEvent.clientY;
-      setBottomPanelHeight(Math.min(430, Math.max(190, startHeight + delta)));
+      setBottomPanelHeight(Math.min(480, Math.max(200, startHeight + delta)));
     }
 
     function onPointerUp() {
@@ -499,7 +513,7 @@ export default function CandidateWorkspace() {
       if (!response.ok) {
         throw new Error(`Snapshot failed with HTTP ${response.status}`);
       }
-      setSaveStatus(kind === "autosave" ? "Auto-snapshot saved." : "Snapshot saved before test run.");
+      setSaveStatus(kind === "autosave" ? "Auto-saved" : "Saved before test run");
     } catch (error) {
       setSaveStatus(error instanceof Error ? error.message : "Snapshot failed.");
     }
@@ -618,10 +632,7 @@ export default function CandidateWorkspace() {
         body: JSON.stringify({
           message,
           selected_context: activePath
-            ? {
-                path: activePath,
-                content: files[activePath] ?? "",
-              }
+            ? { path: activePath, content: files[activePath] ?? "" }
             : undefined,
         }),
       });
@@ -717,10 +728,11 @@ export default function CandidateWorkspace() {
         {
           "--file-panel-width": `${filePanelWidth}px`,
           "--assistant-panel-width": `${assistantPanelWidth}px`,
-          "--bottom-panel-height": `${bottomPanelHeight}px`,
+          "--bottom-panel-height": `${effectiveBottomHeight}px`,
         } as CSSProperties
       }
     >
+      {/* ── TOPBAR ── */}
       <header className="topbar">
         <div className="topbar-title">
           <h1>{attempt.assessment.title}</h1>
@@ -729,6 +741,31 @@ export default function CandidateWorkspace() {
             {attempt.assessment.version}
           </p>
         </div>
+
+        {/* Always-visible progress chips */}
+        <div className="topbar-progress">
+          <span className={`progress-chip ${publicTestsRun ? (progressAllPass ? "done" : "partial") : ""}`}>
+            {publicTestsRun ? (progressAllPass ? "✓" : "◑") : "○"}{" "}
+            Tests{publicTestsRun ? `: ${progressPassed}p${progressFailed ? `, ${progressFailed}f` : ""}` : ""}
+          </span>
+          {attempt.evaluator_feedback_mode === "guided" && testResult?.evaluator_feedback ? (() => {
+            const hf = testResult.evaluator_feedback;
+            const ef = testResult.enhancement_feedback;
+            const edgeFailed = Math.max(0, hf.failed - (ef?.failed ?? 0));
+            return (
+              <span className={`progress-chip ${edgeFailed === 0 ? "done" : "partial"}`}>
+                {edgeFailed === 0 ? "✓" : "◑"} Hidden: {hf.passed}p{edgeFailed ? `, ${edgeFailed}f` : ""}
+              </span>
+            );
+          })() : null}
+          <span className={`progress-chip ${candidateTestsAdded ? "done" : ""}`}>
+            {candidateTestsAdded ? "✓" : "○"} Tests written
+          </span>
+          <span className={`progress-chip ${submissionReview.changed.trim() ? "done" : ""}`}>
+            {submissionReview.changed.trim() ? "✓" : "○"} Notes
+          </span>
+        </div>
+
         <div className="topbar-actions">
           <span className={`status-pill ${submitted ? "ready" : isExpired ? "error" : statusClass(attempt.status)}`}>
             {submitted ? "submitted" : isExpired ? "expired" : attempt.status}
@@ -756,121 +793,22 @@ export default function CandidateWorkspace() {
             <Play size={17} aria-hidden="true" />
             {running ? "Running" : "Run Tests"}
           </button>
-          <button className="command-button secondary" onClick={focusSubmission}>
-            <ClipboardCheck size={17} aria-hidden="true" />
-            Submission
-          </button>
-          <button className="command-button primary" disabled={!canSubmit} onClick={() => setConfirmingSubmit(true)}>
+          <button className="command-button primary" disabled={submitted} onClick={openSubmission}>
             <Send size={17} aria-hidden="true" />
-            {submitting ? "Submitting" : "Submit"}
+            Submit
           </button>
         </div>
       </header>
 
+      {/* ── WORKSPACE GRID ── */}
       <section className="workspace-grid">
+
+        {/* LEFT — IDE File Explorer */}
         <aside className="sidebar">
-          <div className="panel-header">
-            <h2>Files</h2>
-            <p>Candidate-visible workspace files only.</p>
+          <div className="explorer-header">
+            <span>EXPLORER</span>
+            {saveStatus ? <span className="autosave-chip">{saveStatus}</span> : null}
           </div>
-          <div className="workflow-card">
-            <h3>What to do</h3>
-            <ol>
-              <li>
-                Read{" "}
-                {"README.md" in files ? (
-                  <button className="inline-link" onClick={() => setActivePath("README.md")}>README.md</button>
-                ) : "README.md"}{" "}
-                — it has the full scenario, specific bugs, and enhancements.
-              </li>
-              <li>Fix the failing public tests — click <strong>Run Tests</strong> to see which fail.</li>
-              <li>Find and fix hidden issues by reading the code — not all behaviors are covered by public tests. <strong>How</strong> you fix matters: design decisions (e.g., 403 vs 404, input normalization) are evaluated, not just whether a test passes.</li>
-              <li>Implement the enhancements described in README.md — edge cases and validation correctness are evaluated, not just the happy path.</li>
-              <li>Write test cases for your fixes and enhancements — test results are how we measure completion.</li>
-              <li>Fill in optional notes below, then submit.</li>
-            </ol>
-          </div>
-          <div className="workflow-card">
-            <h3>Your progress</h3>
-            <ul className="progress-list">
-              {(() => {
-                const passed = Number(testResult?.stdout?.match(/(\d+) passed/)?.[1] ?? 0);
-                const failed = Number(testResult?.stdout?.match(/(\d+) failed/)?.[1] ?? 0);
-                const allPass = testResult?.status === "passed";
-                const someRun = publicTestsRun;
-                return (
-                  <>
-                    <li className={someRun ? (allPass ? "done" : "partial") : ""}>
-                      {someRun ? (allPass ? "✓" : "◑") : "○"}{" "}
-                      Public tests
-                      {someRun ? (
-                        <> — {passed} passed{failed ? (
-                          <>, <a href="#test-output" className="progress-link">{failed} failing</a></>
-                        ) : ""}</>
-                      ) : " — not run yet"}
-                    </li>
-                    {(() => {
-                      if (attempt.evaluator_feedback_mode === "guided") {
-                        const hf = testResult?.evaluator_feedback;
-                        const ef = testResult?.enhancement_feedback;
-                        const hasResult = hf != null;
-                        const edgePassed = hasResult ? Math.max(0, hf!.passed - (ef?.passed ?? 0)) : 0;
-                        const edgeFailed = hasResult ? Math.max(0, hf!.failed - (ef?.failed ?? 0)) : 0;
-                        return (
-                          <li className={hasResult ? (edgeFailed === 0 ? "done" : "partial") : ""}>
-                            {hasResult ? (edgeFailed === 0 ? "✓" : "◑") : "○"}{" "}
-                            Hidden checks
-                            {hasResult ? (
-                              <> — {edgePassed} passed, {edgeFailed} failing</>
-                            ) : " — run tests to check"}
-                          </li>
-                        );
-                      }
-                      return (
-                        <li>
-                          ○ Hidden checks — additional behaviors evaluated at submission
-                        </li>
-                      );
-                    })()}
-                    {(() => {
-                      const ef = testResult?.enhancement_feedback;
-                      const hasEnhancementResult = (ef?.collected ?? 0) > 0;
-                      return (
-                        <li className={hasEnhancementResult ? (ef!.failed === 0 ? "done" : "partial") : ""}>
-                          {hasEnhancementResult ? (ef!.failed === 0 ? "✓" : "◑") : "○"}{" "}
-                          Enhancements built
-                          {hasEnhancementResult ? (
-                            <> — {ef!.passed}/{ef!.collected} passing
-                            {ef!.failed > 0 ? (
-                              <> (<a href="#test-output" className="progress-link">{ef!.failed} failing</a>)</>
-                            ) : null}</>
-                          ) : " — run tests to check"}
-                        </li>
-                      );
-                    })()}
-                  </>
-                );
-              })()}
-              <li className={candidateTestsAdded ? "done" : ""}>
-                {candidateTestsAdded ? "✓" : "○"} Candidate tests
-                {candidateTestsAdded
-                  ? ` — ${candidateTestCount} added (scored at submission)`
-                  : " — none written yet"}
-              </li>
-              {(() => {
-                const aiCount = chatMessages.filter((m) => m.role === "candidate").length;
-                return (
-                  <li className={aiCount > 0 ? "done" : ""}>
-                    {aiCount > 0 ? "✓" : "○"} AI collaborator{aiCount > 0 ? ` — ${aiCount} question${aiCount === 1 ? "" : "s"} asked` : " — not used yet"}
-                  </li>
-                );
-              })()}
-              <li className={submissionReview.changed.trim().length > 0 ? "done" : ""}>
-                {submissionReview.changed.trim().length > 0 ? "✓" : "○"} Submission notes filled
-              </li>
-            </ul>
-          </div>
-          <p className="autosave-note">Files auto-snapshot every 60s while editing.</p>
           <div className="file-list">
             {sortedFiles.map((path) => (
               <button
@@ -887,6 +825,7 @@ export default function CandidateWorkspace() {
             ))}
           </div>
         </aside>
+
         <div
           className="resize-handle vertical"
           onPointerDown={(event) => startHorizontalResize(event, "files")}
@@ -894,6 +833,7 @@ export default function CandidateWorkspace() {
           aria-label="Resize file panel"
         />
 
+        {/* CENTER — Monaco Editor */}
         <section className="editor-zone">
           <div className="editor-tabs">
             <div className="active-file" title={activePath}>
@@ -933,6 +873,7 @@ export default function CandidateWorkspace() {
             />
           </div>
         </section>
+
         <div
           className="resize-handle vertical"
           onPointerDown={(event) => startHorizontalResize(event, "assistant")}
@@ -940,7 +881,39 @@ export default function CandidateWorkspace() {
           aria-label="Resize AI panel"
         />
 
+        {/* RIGHT — What to do + AI Collaborator */}
         <aside className="assistant-panel">
+          <div className="what-to-do">
+            <button
+              className="what-to-do-header"
+              onClick={() => setWhatToDoCollapsed((c) => !c)}
+              aria-expanded={!whatToDoCollapsed}
+            >
+              <span>What to do</span>
+              {whatToDoCollapsed
+                ? <ChevronRight size={14} aria-hidden="true" />
+                : <ChevronDown size={14} aria-hidden="true" />}
+            </button>
+            {!whatToDoCollapsed && (
+              <div className="what-to-do-body">
+                <ol>
+                  <li>
+                    Read{" "}
+                    {"README.md" in files ? (
+                      <button className="inline-link" onClick={() => setActivePath("README.md")}>README.md</button>
+                    ) : "README.md"}{" "}
+                    — scenario, bugs, and enhancements are all described there.
+                  </li>
+                  <li>Fix the failing public tests — click <strong>Run Tests</strong> to see which fail.</li>
+                  <li>Find and fix hidden issues by reading the code — <strong>how</strong> you fix matters: design decisions (e.g., 403 vs 404) are evaluated, not just whether a test passes.</li>
+                  <li>Implement the enhancements described in README.md — edge cases and validation correctness are evaluated, not just the happy path.</li>
+                  <li>Write test cases for your fixes and enhancements.</li>
+                  <li>Click <strong>Submit</strong> in the top bar when done.</li>
+                </ol>
+              </div>
+            )}
+          </div>
+
           <div className="panel-header">
             <h2>AI Collaborator</h2>
             <p>Constrained to candidate-visible context and one focused issue at a time.</p>
@@ -986,117 +959,163 @@ export default function CandidateWorkspace() {
         </aside>
       </section>
 
+      {/* ── RESIZE HANDLE ── */}
       <div
         className="resize-handle horizontal"
         onPointerDown={startVerticalResize}
         role="separator"
-        aria-label="Resize test and submission panel"
+        aria-label="Resize bottom panel"
       />
 
+      {/* ── BOTTOM PANEL ── */}
       <section className="bottom-panel">
+
+        {/* Test Output Drawer */}
         <div className="test-panel">
           <div className="section-title">
             <h2>Public Test Output</h2>
-            {testResult ? (
-              <span className={`status-pill ${statusClass(testResult.status)}`}>{testResult.status}</span>
-            ) : null}
+            <div className="drawer-title-end">
+              {testResult ? (
+                <span className={`status-pill ${statusClass(testResult.status)}`}>{testResult.status}</span>
+              ) : running ? (
+                <span className="status-pill warn">running</span>
+              ) : null}
+              <button
+                className="icon-button"
+                onClick={() => setTestDrawerOpen((o) => !o)}
+                title={testDrawerOpen ? "Collapse" : "Expand"}
+              >
+                {testDrawerOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </button>
+            </div>
           </div>
-          {testResult && <p className="autosave-note">File paths in the output are clickable — click to jump to that line in the editor.</p>}
-          {publicRunMessage ? <p className="operation-status">{publicRunMessage}</p> : null}
-          {testResult?.timings?.api_total_ms ? (
-            <p className="submission-help">Completed in {Math.round(testResult.timings.api_total_ms / 1000)}s.</p>
-          ) : testResult ? (
-            <p className="submission-help">Completed in {Math.round(testResult.duration_ms / 1000)}s.</p>
-          ) : null}
-          <div id="test-output" className="output" role="log" aria-label="Public test output">
-            {testOutputText.split("\n").map((line, index) => {
-              const ref = findOutputReference(line, files);
-              const { failureLineId, summaryStartIndex } = outputLineAnnotations;
+          {testDrawerOpen && (
+            <>
+              {testResult && (
+                <p className="autosave-note">File paths in the output are clickable — click to jump to that line in the editor.</p>
+              )}
+              {publicRunMessage ? <p className="operation-status">{publicRunMessage}</p> : null}
+              {testResult?.timings?.api_total_ms ? (
+                <p className="submission-help">Completed in {Math.round(testResult.timings.api_total_ms / 1000)}s.</p>
+              ) : testResult ? (
+                <p className="submission-help">Completed in {Math.round(testResult.duration_ms / 1000)}s.</p>
+              ) : null}
+              <div id="test-output" className="output" role="log" aria-label="Public test output">
+                {testOutputText.split("\n").map((line, index) => {
+                  const ref = findOutputReference(line, files);
+                  const { failureLineId, summaryStartIndex } = outputLineAnnotations;
 
-              // Assign an id to failure detail header lines (_____ test_name _____)
-              const headerMatch = line.match(/^_{4,}\s+(\S+)\s+_{4,}/);
-              const lineId = headerMatch ? failureLineId[headerMatch[1]] : undefined;
+                  const headerMatch = line.match(/^_{4,}\s+(\S+)\s+_{4,}/);
+                  const lineId = headerMatch ? failureLineId[headerMatch[1]] : undefined;
 
-              // In the summary section, make FAILED lines scroll to the detail header
-              const inSummary = summaryStartIndex >= 0 && index > summaryStartIndex;
-              const summaryMatch = inSummary ? line.match(/^FAILED\s+[^:]+::(\S+?)(?:\s|$)/) : null;
-              const summaryTargetId = summaryMatch ? failureLineId[summaryMatch[1]] : undefined;
+                  const inSummary = summaryStartIndex >= 0 && index > summaryStartIndex;
+                  const summaryMatch = inSummary ? line.match(/^FAILED\s+[^:]+::(\S+?)(?:\s|$)/) : null;
+                  const summaryTargetId = summaryMatch ? failureLineId[summaryMatch[1]] : undefined;
 
-              return (
-                <div
-                  id={lineId}
-                  className={`output-line ${outputLineClass(line)}`}
-                  key={`${index}-${line}`}
-                >
-                  {summaryTargetId ? (
-                    <a
-                      href={`#${summaryTargetId}`}
-                      className="output-link"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        document.getElementById(summaryTargetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-                      }}
+                  return (
+                    <div
+                      id={lineId}
+                      className={`output-line ${outputLineClass(line)}`}
+                      key={`${index}-${line}`}
                     >
-                      {line || " "}
-                    </a>
-                  ) : ref ? (
-                    <button className="output-link" onClick={() => openFileAtLine(ref.file, ref.lineNumber)}>
-                      {line || " "}
-                    </button>
-                  ) : (
-                    <span>{line || " "}</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                      {summaryTargetId ? (
+                        <a
+                          href={`#${summaryTargetId}`}
+                          className="output-link"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            document.getElementById(summaryTargetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                          }}
+                        >
+                          {line || " "}
+                        </a>
+                      ) : ref ? (
+                        <button className="output-link" onClick={() => openFileAtLine(ref.file, ref.lineNumber)}>
+                          {line || " "}
+                        </button>
+                      ) : (
+                        <span>{line || " "}</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
 
-        <div className="submission-panel" ref={submissionPanelRef}>
+        {/* Submission Drawer */}
+        <div className="submission-panel">
           <div className="section-title">
             <h2>Final Submission</h2>
-            {submitted ? (
-              <span className="status-pill ready">
-                <ClipboardCheck size={13} aria-hidden="true" /> Recorded
-              </span>
-            ) : null}
+            <div className="drawer-title-end">
+              {submitted ? (
+                <span className="status-pill ready">
+                  <ClipboardCheck size={13} aria-hidden="true" /> Recorded
+                </span>
+              ) : null}
+              <button
+                className="icon-button"
+                onClick={() => setSubmissionDrawerOpen((o) => !o)}
+                title={submissionDrawerOpen ? "Collapse" : "Expand"}
+              >
+                {submissionDrawerOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </button>
+            </div>
           </div>
-          {!submitted ? (
-            <p className="submission-help">
-              Both fields are optional. If time expires, your current files are submitted automatically.
-            </p>
-          ) : null}
-          {submissionResult ? (
-            <p className="submission-status">
-              {submissionResult.hidden_test_status === "passed"
-                ? "All hidden tests passed."
-                : "Some hidden tests failed."}
-            </p>
-          ) : null}
-          {submissionMessage ? <p className="operation-status">{submissionMessage}</p> : null}
-          {submitError ? <p className="submission-error">{submitError}</p> : null}
-          {saveStatus ? <p className="submission-status">{saveStatus}</p> : null}
-          <div className="submission-grid">
-            <label htmlFor="review-changed">What did you change? Any decisions or tradeoffs? (optional)</label>
-            <textarea
-              id="review-changed"
-              ref={submissionReviewRef}
-              placeholder="Summarize the changes you made, any authorization or status policies you chose, and how you verified them."
-              value={submissionReview.changed}
-              disabled={submitted}
-              onChange={(event) => setSubmissionReview((current) => ({ ...current, changed: event.target.value }))}
-            />
-            <label htmlFor="review-notes">Feedback about this assessment, or any issues you faced? (optional)</label>
-            <textarea
-              id="review-notes"
-              placeholder="Optional: anything the evaluator should know, or feedback about the assignment itself."
-              value={submissionReview.notes}
-              disabled={submitted}
-              onChange={(event) => setSubmissionReview((current) => ({ ...current, notes: event.target.value }))}
-            />
-          </div>
+          {submissionDrawerOpen && (
+            <>
+              {!submitted ? (
+                <p className="submission-help">
+                  Both fields are optional. If time expires, your current files are submitted automatically.
+                </p>
+              ) : null}
+              {submissionResult ? (
+                <p className="submission-status">
+                  {submissionResult.hidden_test_status === "passed"
+                    ? "All hidden tests passed."
+                    : "Some hidden tests failed."}
+                </p>
+              ) : null}
+              {submissionMessage ? <p className="operation-status">{submissionMessage}</p> : null}
+              {submitError ? <p className="submission-error">{submitError}</p> : null}
+              <div className="submission-grid">
+                <label htmlFor="review-changed">What did you change? Any decisions or tradeoffs? (optional)</label>
+                <textarea
+                  id="review-changed"
+                  ref={submissionReviewRef}
+                  placeholder="Summarize the changes you made, any authorization or status policies you chose, and how you verified them."
+                  value={submissionReview.changed}
+                  disabled={submitted}
+                  onChange={(event) => setSubmissionReview((current) => ({ ...current, changed: event.target.value }))}
+                />
+                <label htmlFor="review-notes">Feedback about this assessment, or any issues you faced? (optional)</label>
+                <textarea
+                  id="review-notes"
+                  placeholder="Optional: anything the evaluator should know, or feedback about the assignment itself."
+                  value={submissionReview.notes}
+                  disabled={submitted}
+                  onChange={(event) => setSubmissionReview((current) => ({ ...current, notes: event.target.value }))}
+                />
+              </div>
+              {!submitted && (
+                <div className="submission-actions">
+                  <button
+                    className="command-button primary"
+                    disabled={!canSubmit}
+                    onClick={() => setConfirmingSubmit(true)}
+                  >
+                    <Send size={17} aria-hidden="true" />
+                    {submitting ? "Submitting…" : "Submit final"}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </section>
+
+      {/* ── CONFIRM MODAL ── */}
       {confirmingSubmit ? (
         <div className="modal-backdrop" role="presentation">
           <section className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="submit-confirm-title">
