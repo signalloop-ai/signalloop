@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from signalloop_api.ai import router as ai_router
 from signalloop_api.attempts import router as attempts_router
 from signalloop_api.config import settings
+from signalloop_api.proctoring import router as proctoring_router
 from signalloop_api.rate_limit import RateLimitMiddleware
 from signalloop_api.reports import router as reports_router
 from signalloop_api.submissions import router as submissions_router
@@ -64,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(ai_router)
     app.include_router(submissions_router)
     app.include_router(reports_router)
+    app.include_router(proctoring_router)
 
     return app
 

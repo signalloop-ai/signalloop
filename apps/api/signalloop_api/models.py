@@ -67,6 +67,7 @@ class AssessmentAttempt(TimestampMixin, Base):
     ai_interactions: Mapped[list["AIInteraction"]] = relationship(back_populates="attempt")
     final_submission: Mapped[Optional["FinalSubmission"]] = relationship(back_populates="attempt")
     evidence_report: Mapped[Optional["EvidenceReport"]] = relationship(back_populates="attempt")
+    proctoring_events: Mapped[list["ProctoringEvent"]] = relationship(back_populates="attempt")
 
 
 class CodeSnapshot(TimestampMixin, Base):
@@ -151,3 +152,23 @@ class AuditEvent(TimestampMixin, Base):
     actor_type: Mapped[str] = mapped_column(String(50))
     attempt_id: Mapped[Optional[int]] = mapped_column(ForeignKey("assessment_attempts.id"))
     event_metadata: Mapped[dict] = mapped_column("metadata", JSON)
+
+
+VALID_PROCTORING_EVENT_TYPES = frozenset({
+    "fullscreen_exit",
+    "fullscreen_enter",
+    "focus_lost",
+    "focus_returned",
+})
+
+
+class ProctoringEvent(Base):
+    __tablename__ = "proctoring_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    attempt_id: Mapped[int] = mapped_column(ForeignKey("assessment_attempts.id"), index=True)
+    event_type: Mapped[str] = mapped_column(String(50))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    event_metadata: Mapped[Optional[dict]] = mapped_column("metadata", JSON)
+
+    attempt: Mapped[AssessmentAttempt] = relationship(back_populates="proctoring_events")

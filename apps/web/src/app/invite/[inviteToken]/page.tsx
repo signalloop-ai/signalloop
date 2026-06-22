@@ -283,6 +283,10 @@ export default function CandidateWorkspace() {
   const monacoRef = useRef<MonacoHandle | null>(null);
   const autoSubmittedRef = useRef(false);
 
+  type ProctoringQueueItem = { event_type: string; occurred_at: string; metadata?: Record<string, unknown> };
+  const proctoringQueueRef = useRef<ProctoringQueueItem[]>([]);
+  const blurredAtRef = useRef<number | null>(null);
+
   useEffect(() => {
     async function loadInvite() {
       setLoading(true);
@@ -573,11 +577,37 @@ export default function CandidateWorkspace() {
     }
   }
 
+  const flushProctoringEvents = useCallback(async () => {
+    if (!inviteToken || proctoringQueueRef.current.length === 0) return;
+    const batch = proctoringQueueRef.current.splice(0);
+    try {
+      await fetch(`${apiBaseUrl}/candidate/invites/${inviteToken}/proctoring-events/batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ events: batch }),
+        keepalive: true,
+      });
+    } catch {
+      // Re-queue on network failure so events aren't lost between flushes.
+      proctoringQueueRef.current.unshift(...batch);
+    }
+  }, [inviteToken]);
+
+  function queueProctoringEvent(event_type: string, metadata?: Record<string, unknown>) {
+    proctoringQueueRef.current.push({
+      event_type,
+      occurred_at: new Date().toISOString(),
+      ...(metadata ? { metadata } : {}),
+    });
+  }
+
   const submitFinal = useCallback(async (submissionMode: "manual" | "auto_expired" = "manual") => {
     if (submissionMode === "manual" && !canSubmit) return;
     setSubmitting(true);
     setConfirmingSubmit(false);
     setSubmitError(null);
+    // Flush any buffered proctoring events before the submission lands.
+    await flushProctoringEvents();
     const finalExplanation = [
       submissionReview.changed.trim() ? `What changed: ${submissionReview.changed.trim()}` : "",
       submissionReview.notes.trim() ? `Additional notes: ${submissionReview.notes.trim()}` : "",
@@ -622,13 +652,80 @@ export default function CandidateWorkspace() {
     } finally {
       setSubmitting(false);
     }
-  }, [canSubmit, files, inviteToken, submissionReview]);
+  }, [canSubmit, files, flushProctoringEvents, inviteToken, submissionReview]);
 
   useEffect(() => {
     if (!isExpired || submitted || submitting || autoSubmittedRef.current) return;
     autoSubmittedRef.current = true;
     void submitFinal("auto_expired");
   }, [isExpired, submitted, submitting, submitFinal]);
+
+  // Request fullscreen when candidate accepts the assessment, log exits/returns.
+  useEffect(() => {
+    if (!accepted || submitted) return;
+
+    void document.documentElement.requestFullscreen().catch(() => {
+      // Browser or user declined — not an error, proceed without fullscreen.
+    });
+
+    function onFullscreenChange() {
+      if (!document.fullscreenElement) {
+        queueProctoringEvent("fullscreen_exit");
+      } else {
+        queueProctoringEvent("fullscreen_enter");
+      }
+    }
+
+    function onVisibilityChange() {
+      if (document.hidden) {
+        blurredAtRef.current = Date.now();
+        queueProctoringEvent("focus_lost");
+      } else if (blurredAtRef.current !== null) {
+        const duration_seconds = Math.round((Date.now() - blurredAtRef.current) / 1000);
+        blurredAtRef.current = null;
+        queueProctoringEvent("focus_returned", { duration_seconds });
+      }
+    }
+
+    function onWindowBlur() {
+      if (blurredAtRef.current === null) {
+        blurredAtRef.current = Date.now();
+        queueProctoringEvent("focus_lost");
+      }
+    }
+
+    function onWindowFocus() {
+      if (blurredAtRef.current !== null) {
+        const duration_seconds = Math.round((Date.now() - blurredAtRef.current) / 1000);
+        blurredAtRef.current = null;
+        // Only log if away more than 5 seconds to avoid noise from quick OS interactions.
+        if (duration_seconds >= 5) {
+          queueProctoringEvent("focus_returned", { duration_seconds });
+        }
+      }
+    }
+
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("blur", onWindowBlur);
+    window.addEventListener("focus", onWindowFocus);
+
+    // Flush every 30 seconds.
+    const flushInterval = window.setInterval(() => { void flushProctoringEvents(); }, 30_000);
+
+    // Best-effort flush on unload (keepalive: true allows it to complete after page close).
+    function onBeforeUnload() { void flushProctoringEvents(); }
+    window.addEventListener("beforeunload", onBeforeUnload);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("blur", onWindowBlur);
+      window.removeEventListener("focus", onWindowFocus);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      window.clearInterval(flushInterval);
+    };
+  }, [accepted, submitted, flushProctoringEvents]);
 
   async function sendChatMessage() {
     const message = chatInput.trim();

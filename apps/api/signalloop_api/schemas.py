@@ -120,3 +120,13 @@ class EvidenceReportResponse(BaseModel):
     recommendation: Optional[str]
     score_total: Optional[int]
     report: dict
+
+
+class ProctoringEventItem(BaseModel):
+    event_type: str
+    occurred_at: str
+    metadata: Optional[dict] = None
+
+
+class ProctoringEventBatchRequest(BaseModel):
+    events: list[ProctoringEventItem] = Field(min_length=1, max_length=50)
