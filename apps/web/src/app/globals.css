@@ -1506,6 +1506,51 @@ button:disabled {
   line-height: 1.1;
 }
 
+/* Score breakdown quick-reference chips */
+.score-quick-ref {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.score-ref-link {
+  text-decoration: none;
+}
+
+.score-ref-chip {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 88px;
+  padding: 8px 14px;
+  text-align: center;
+  transition: filter 0.1s;
+}
+
+.score-ref-link:hover .score-ref-chip {
+  filter: brightness(0.96);
+}
+
+.score-ref-chip.score-ref-good  { background: #f0fdf9; border-color: #99f6e4; }
+.score-ref-chip.score-ref-warn  { background: #fff7ed; border-color: #fcd34d; }
+.score-ref-chip.score-ref-danger { background: #fef2f2; border-color: #fca5a5; }
+
+.score-ref-label {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.score-ref-pts {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
 .report-grid {
   display: grid;
   gap: 12px;

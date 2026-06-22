@@ -139,6 +139,23 @@ function ScoreRing({ score, max }: { score: number; max: number }) {
   );
 }
 
+const SECTION_ANCHORS: Record<string, string> = {
+  public_issue_resolution: "section-public-tests",
+  private_issue_generalization: "section-hidden-tests",
+  feature_design_implementation: "section-feature-design",
+  candidate_tests: "section-candidate-tests",
+  ai_collaboration: "section-ai-collaboration",
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  public_issue_resolution: "Public tests",
+  private_issue_generalization: "Hidden tests",
+  feature_design_implementation: "Feature design",
+  candidate_tests: "Candidate tests",
+  ai_collaboration: "AI collaboration",
+  regression_code_quality: "Regression",
+};
+
 function formatTimingValue(value: unknown): string {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "number") return `${value} min`;
@@ -328,35 +345,38 @@ export default function ReportDetail() {
 
           {/* Score breakdown */}
           <section className="employer-section">
-            <SectionTitle title="Score breakdown" />
+            <SectionTitle
+              title="Score breakdown"
+              subtitle="Click any category to jump to the detailed section below"
+            />
             <div className="chart-list">
               {r.scores.categories.map((cat: { category: string; points: number; max_points: number }) => (
-                <ChartBar key={cat.category} label={cat.category} value={cat.points} max={cat.max_points} />
+                <ChartBar
+                  key={cat.category}
+                  label={CATEGORY_LABELS[cat.category] ?? cat.category.replaceAll("_", " ")}
+                  value={cat.points}
+                  max={cat.max_points}
+                />
               ))}
             </div>
-            <div className="score-list">
-              {r.scores.categories.map((cat: { category: string; points: number; max_points: number; evidence: string }) => {
-                const sectionId: Record<string, string> = {
-                  public_issue_resolution: "section-public-tests",
-                  private_issue_generalization: "section-hidden-tests",
-                  feature_design_implementation: "section-feature-design",
-                  candidate_tests: "section-candidate-tests",
-                  ai_collaboration: "section-ai-collaboration",
-                  regression_code_quality: "section-public-tests",
-                };
-                const anchor = sectionId[cat.category];
-                return (
-                  <div className="score-row" key={cat.category}>
-                    <div>
-                      <strong>
-                        {anchor ? (
-                          <a href={`#${anchor}`} className="score-row-link">{cat.category}</a>
-                        ) : cat.category}
-                      </strong>
-                      <p>{cat.evidence}</p>
-                    </div>
-                    <span>{cat.points}/{cat.max_points}</span>
-                  </div>
+            <div className="score-quick-ref">
+              {r.scores.categories.map((cat: { category: string; points: number; max_points: number }) => {
+                const anchor = SECTION_ANCHORS[cat.category];
+                const label = CATEGORY_LABELS[cat.category] ?? cat.category.replaceAll("_", " ");
+                const pct = percentage(cat.points, cat.max_points);
+                const colorCls = barColorClass(pct);
+                const chip = (
+                  <span className={`score-ref-chip score-ref-${colorCls}`}>
+                    <span className="score-ref-label">{label}</span>
+                    <span className="score-ref-pts">{cat.points}/{cat.max_points}</span>
+                  </span>
+                );
+                return anchor ? (
+                  <a key={cat.category} href={`#${anchor}`} className="score-ref-link" title={`Jump to ${label}`}>
+                    {chip}
+                  </a>
+                ) : (
+                  <span key={cat.category}>{chip}</span>
                 );
               })}
             </div>
