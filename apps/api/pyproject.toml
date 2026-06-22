@@ -11,6 +11,7 @@ dependencies = [
     "httpx==0.27.2",
     "psycopg[binary]==3.2.3",
     "pydantic==2.10.4",
+    "pyjwt[crypto]==2.10.1",
     "pytest==8.3.4",
     "sqlalchemy==2.0.36",
     "uvicorn==0.34.0",
@@ -19,3 +20,6 @@ dependencies = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+    "schema_health: tests that require the real Postgres DB to be running",
+]

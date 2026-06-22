@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import logging
 from pathlib import Path
+from time import monotonic
 from typing import Protocol
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,6 +15,7 @@ from signalloop_api.database import get_session
 from signalloop_api.execution import HTTPWorkerExecutionProvider, execution_error_result
 from signalloop_api.models import AssessmentAttempt, CodeSnapshot, FinalSubmission, TestRun
 from signalloop_api.schemas import FinalSubmissionRequest, FinalSubmissionResponse
+from signalloop_api.timebox import attempt_is_expired
 
 
 router = APIRouter()
@@ -116,6 +118,7 @@ def submit_final_attempt(
     session: Session = Depends(get_session),
     hidden_test_runner: HiddenTestRunner = Depends(get_hidden_test_runner),
 ) -> FinalSubmissionResponse:
+    api_started = monotonic()
     attempt = session.scalar(
         select(AssessmentAttempt).where(AssessmentAttempt.invite_token == invite_token)
     )
@@ -125,6 +128,7 @@ def submit_final_attempt(
         raise HTTPException(status_code=409, detail="Final submission is immutable")
 
     submitted_at = datetime.now(timezone.utc)
+    submission_mode = "auto_expired" if payload.submission_mode == "auto_expired" or attempt_is_expired(attempt, submitted_at) else "manual"
     snapshot = CodeSnapshot(attempt_id=attempt.id, kind="final_submission", files=payload.files)
     session.add(snapshot)
     session.flush()
@@ -138,18 +142,20 @@ def submit_final_attempt(
     )
     attempt.status = "submitted"
     attempt.submitted_at = submitted_at
+    attempt.submission_mode = submission_mode
     session.add(final_submission)
     record_audit_event(
         session,
         "submission.created",
         actor_type="candidate",
         attempt_id=attempt.id,
-        event_metadata={"file_count": len(payload.files)},
+        event_metadata={"file_count": len(payload.files), "submission_mode": submission_mode},
     )
     session.commit()
     session.refresh(snapshot)
     session.refresh(final_submission)
     session.refresh(attempt)
+    submission_persisted = monotonic()
 
     try:
         hidden_tests = hidden_test_files_for_attempt(attempt)
@@ -161,7 +167,13 @@ def submit_final_attempt(
                 "file_count": len(payload.files),
             },
         )
+        hidden_started = monotonic()
         hidden_result = hidden_test_runner.run(payload.files, hidden_tests)
+        hidden_completed = monotonic()
+        timings = dict(hidden_result.get("timings") or {})
+        timings["api_submission_persist_ms"] = int((submission_persisted - api_started) * 1000)
+        timings["api_hidden_execution_ms"] = int((hidden_completed - hidden_started) * 1000)
+        hidden_result["timings"] = timings
         logger.info(
             "Hidden evaluation completed",
             extra={
@@ -176,6 +188,9 @@ def submit_final_attempt(
             extra={"attempt_id": attempt.id},
         )
         hidden_result = hidden_test_error_result(str(exc))
+        timings = dict(hidden_result.get("timings") or {})
+        timings["api_submission_persist_ms"] = int((submission_persisted - api_started) * 1000)
+        hidden_result["timings"] = timings
 
     hidden_test_run = persist_hidden_test_run(session, attempt, snapshot, hidden_result)
     record_audit_event(
@@ -185,6 +200,12 @@ def submit_final_attempt(
         attempt_id=attempt.id,
         event_metadata={"status": hidden_test_run.status, "test_run_id": hidden_test_run.id},
     )
+    session.commit()
+    completed = monotonic()
+    hidden_result_timings = dict(hidden_test_run.results.get("timings") or {})
+    hidden_result_timings["api_total_ms"] = int((completed - api_started) * 1000)
+    hidden_test_run.results = {**hidden_test_run.results, "timings": hidden_result_timings}
+    session.add(hidden_test_run)
     session.commit()
 
     return FinalSubmissionResponse(

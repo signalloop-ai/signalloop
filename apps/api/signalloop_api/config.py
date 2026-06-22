@@ -1,4 +1,5 @@
 from functools import lru_cache
+from base64 import urlsafe_b64decode
 from os import environ, getenv
 from pathlib import Path
 
@@ -42,6 +43,22 @@ def parse_csv(value: str | None) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def derive_clerk_issuer_from_publishable_key(value: str | None) -> str | None:
+    if not value or "_" not in value:
+        return None
+    encoded = value.rsplit("_", 1)[-1]
+    padding = "=" * (-len(encoded) % 4)
+    try:
+        decoded = urlsafe_b64decode(encoded + padding).decode("utf-8").rstrip("$")
+    except Exception:
+        return None
+    if not decoded:
+        return None
+    if decoded.startswith("http://") or decoded.startswith("https://"):
+        return decoded
+    return f"https://{decoded}"
+
+
 class Settings:
     def __init__(self) -> None:
         api_dir = Path(__file__).resolve().parents[1]
@@ -76,6 +93,15 @@ class Settings:
         self.openai_model = getenv("OPENAI_MODEL", "gpt-5")
         self.clerk_secret_key = getenv("CLERK_SECRET_KEY")
         self.environment = getenv("SIGNALLOOP_ENV", "local")
+        self.clerk_publishable_key = getenv("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY")
+        self.clerk_jwt_issuer = getenv("CLERK_JWT_ISSUER") or derive_clerk_issuer_from_publishable_key(
+            self.clerk_publishable_key
+        )
+        self.clerk_jwks_url = getenv("CLERK_JWKS_URL") or (
+            f"{self.clerk_jwt_issuer.rstrip('/')}/.well-known/jwks.json"
+            if self.clerk_jwt_issuer
+            else None
+        )
         self.rate_limit_enabled = parse_bool(getenv("RATE_LIMIT_ENABLED"), default=True)
         self.rate_limit_per_minute = parse_int(getenv("RATE_LIMIT_PER_MINUTE"), default=120)
         self.cors_origins = [

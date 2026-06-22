@@ -28,12 +28,16 @@ The system prompt requires JSON output with:
 
 When `allowed` is false, the assistant returns the fixed policy redirect message. Known disallowed tags include:
 
+- `no_issue_identified` — candidate has not named a specific issue yet (redirect, not block)
 - `enumerate_defects`
 - `full_solution`
 - `issue_by_issue_patch`
 - `missing_tests`
 - `final_explanation`
 - `hidden_tests`
+- `choose_design` — candidate asks AI to pick their design decision (tradeoff redirect)
+- `prompt_injection` — candidate attempts to override policy or reveal evaluator-only information
+- `anti_decomposition` — multi-turn sequence cumulatively builds full solution
 
 Keep a pattern-based fallback classifier for local fallback behavior and for cases where the provider response cannot be parsed as valid JSON.
 

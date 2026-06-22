@@ -1,30 +1,19 @@
 "use client";
 
-import { SignInButton, UserButton, useUser } from "@clerk/nextjs";
+import { SignInButton, UserButton, useAuth, useUser } from "@clerk/nextjs";
 import { ClipboardCopy, FileText, LogIn, Plus, RefreshCw, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { createInvite, fetchAttempts } from "./api";
+import { createInvite, fetchAttempts, type AuthTokenProvider, type InviteConfiguration } from "./api";
 import type { EmployerAttemptSummary } from "./types";
-
-const clerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
-const isDev = process.env.NODE_ENV !== "production";
-
-function formatDate(value: string | null): string {
-  if (!value) return "Not submitted";
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
 
 function recommendationLabel(value: string | null): string {
   if (!value) return "No report";
   return value.replaceAll("_", " ");
 }
 
-function AuthPanel({ onLocalLogin }: { onLocalLogin: () => void }) {
+function AuthPanel() {
   return (
     <main className="employer-page">
       <section className="employer-auth">
@@ -34,35 +23,36 @@ function AuthPanel({ onLocalLogin }: { onLocalLogin: () => void }) {
         </div>
         <div className="auth-status">
           <ShieldCheck size={18} aria-hidden="true" />
-          <span>{clerkConfigured ? "Clerk employer login is configured" : "Local dev login active until Clerk keys are configured"}</span>
+          <span>Sign in with your employer account to continue.</span>
         </div>
-        {clerkConfigured ? (
-          <SignInButton mode="modal">
-            <button className="command-button primary">
-              <LogIn size={18} aria-hidden="true" />
-              Sign in with Clerk
-            </button>
-          </SignInButton>
-        ) : null}
-        {(!clerkConfigured || isDev) ? (
-          <button className="command-button primary" onClick={onLocalLogin}>
+        <SignInButton mode="modal">
+          <button className="command-button primary">
             <LogIn size={18} aria-hidden="true" />
-            Use local employer login
+            Sign in
           </button>
-        ) : null}
+        </SignInButton>
       </section>
     </main>
   );
 }
 
-function EmployerDashboard({ onLocalSignOut }: { onLocalSignOut?: () => void }) {
+function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: AuthTokenProvider; isClerkLoaded: boolean }) {
   const [attempts, setAttempts] = useState<EmployerAttemptSummary[]>([]);
   const [candidateEmail, setCandidateEmail] = useState("");
+  const [assessmentLevel, setAssessmentLevel] = useState<InviteConfiguration["assessmentLevel"]>("standard");
+  const [timingMode, setTimingMode] = useState<InviteConfiguration["timingMode"]>("untimed");
+  const [evaluatorFeedbackMode, setEvaluatorFeedbackMode] = useState<InviteConfiguration["evaluatorFeedbackMode"]>("strict");
+  const [durationMinutes, setDurationMinutes] = useState(90);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdInviteUrl, setCreatedInviteUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const emailValid = useMemo(() => {
+    const trimmed = candidateEmail.trim();
+    return trimmed.length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+  }, [candidateEmail]);
 
   const submittedCount = useMemo(
     () => attempts.filter((attempt) => attempt.status === "submitted").length,
@@ -77,20 +67,21 @@ function EmployerDashboard({ onLocalSignOut }: { onLocalSignOut?: () => void }) 
     setLoading(true);
     setError(null);
     try {
-      setAttempts(await fetchAttempts());
+      setAttempts(await fetchAttempts(getAuthToken));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Attempt list failed");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getAuthToken]);
 
   useEffect(() => {
+    if (!isClerkLoaded) return;
     const timeoutId = window.setTimeout(() => {
       void refreshAttempts();
     }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [refreshAttempts]);
+  }, [refreshAttempts, isClerkLoaded]);
 
   function copyInviteUrl() {
     if (!createdInviteUrl) return;
@@ -104,7 +95,11 @@ function EmployerDashboard({ onLocalSignOut }: { onLocalSignOut?: () => void }) 
     setCreating(true);
     setError(null);
     try {
-      const updatedAttempts = await createInvite(candidateEmail.trim());
+      const updatedAttempts = await createInvite(
+        candidateEmail.trim(),
+        { assessmentLevel, timingMode, evaluatorFeedbackMode, durationMinutes },
+        getAuthToken,
+      );
       setAttempts(updatedAttempts);
       setCreatedInviteUrl(updatedAttempts[0]?.invite_url ?? null);
       setCandidateEmail("");
@@ -126,12 +121,7 @@ function EmployerDashboard({ onLocalSignOut }: { onLocalSignOut?: () => void }) 
           <RefreshCw size={17} aria-hidden="true" />
           {loading ? "Refreshing" : "Refresh"}
         </button>
-        {clerkConfigured ? <UserButton /> : null}
-        {onLocalSignOut ? (
-          <button className="command-button secondary" onClick={onLocalSignOut}>
-            Sign out
-          </button>
-        ) : null}
+        <UserButton />
       </header>
 
       <section className="metric-row">
@@ -158,11 +148,65 @@ function EmployerDashboard({ onLocalSignOut }: { onLocalSignOut?: () => void }) 
           <input
             id="candidate-email"
             type="email"
+            required
             value={candidateEmail}
             onChange={(event) => setCandidateEmail(event.target.value)}
             placeholder="candidate@example.com"
+            aria-describedby={candidateEmail && !emailValid ? "email-error" : undefined}
           />
-          <button className="command-button primary" disabled={creating} type="submit">
+          {candidateEmail && !emailValid ? (
+            <span id="email-error" className="submission-error" style={{ marginTop: 0 }}>Enter a valid email address</span>
+          ) : null}
+          <label htmlFor="assessment-level">Assessment</label>
+          <select
+            id="assessment-level"
+            value={assessmentLevel}
+            onChange={(event) => {
+              const nextLevel = event.target.value as InviteConfiguration["assessmentLevel"];
+              setAssessmentLevel(nextLevel);
+              setDurationMinutes(nextLevel === "advanced" ? 120 : 90);
+            }}
+          >
+            <option value="standard">Standard FastAPI v2</option>
+            <option value="advanced">Advanced FastAPI v1</option>
+          </select>
+          <label htmlFor="timing-mode">Timing</label>
+          <select
+            id="timing-mode"
+            value={timingMode}
+            onChange={(event) => setTimingMode(event.target.value as InviteConfiguration["timingMode"])}
+          >
+            <option value="untimed">Untimed, recommended time only</option>
+            <option value="timed">Timed</option>
+          </select>
+          {timingMode === "timed" ? (
+            <>
+              <label htmlFor="duration-minutes">Duration</label>
+              <select
+                id="duration-minutes"
+                value={durationMinutes}
+                onChange={(event) => setDurationMinutes(Number(event.target.value))}
+              >
+                <option value={60}>60 minutes</option>
+                <option value={90}>90 minutes</option>
+                <option value={120}>120 minutes</option>
+                <option value={150}>150 minutes</option>
+              </select>
+            </>
+          ) : null}
+          <label htmlFor="evaluator-feedback-mode">Evaluator feedback</label>
+          <select
+            id="evaluator-feedback-mode"
+            value={evaluatorFeedbackMode}
+            onChange={(event) => setEvaluatorFeedbackMode(event.target.value as InviteConfiguration["evaluatorFeedbackMode"])}
+          >
+            <option value="strict">Strict: hidden counts in employer report only</option>
+            <option value="guided">Guided: show aggregate evaluator progress</option>
+          </select>
+          <p className="submission-help">
+            Guided mode shows candidates aggregate evaluator pass/fail counts only. Details stay hidden.
+          </p>
+          <button className="command-button primary" disabled={creating || !emailValid} type="submit">
             <Plus size={17} aria-hidden="true" />
             {creating ? "Creating" : "Create invite"}
           </button>
@@ -187,7 +231,7 @@ function EmployerDashboard({ onLocalSignOut }: { onLocalSignOut?: () => void }) 
           <div className="attempt-row table-head">
             <span>Candidate</span>
             <span>Status</span>
-            <span>Submitted</span>
+            <span>Timing</span>
             <span>Report</span>
             <span>Action</span>
           </div>
@@ -195,10 +239,17 @@ function EmployerDashboard({ onLocalSignOut }: { onLocalSignOut?: () => void }) 
             <div className="attempt-row" key={attempt.attempt_id}>
               <span>{attempt.candidate_email ?? "No email"}</span>
               <span className={`status-pill ${attempt.status === "submitted" ? "ready" : "warn"}`}>
-                {attempt.status}
+                {attempt.assessment_level} · {attempt.status}
               </span>
-              <span>{formatDate(attempt.submitted_at)}</span>
-              <span>{attempt.score_total ?? "-"} · {recommendationLabel(attempt.recommendation)}</span>
+              <span>
+                {attempt.timing_mode === "timed" ? `Timed ${attempt.duration_minutes}m` : "Untimed"}
+                {" · "}
+                {attempt.evaluator_feedback_mode}
+              </span>
+              <span>
+                {attempt.score_total != null ? `Score: ${attempt.score_total} / 100` : "—"}
+                {attempt.recommendation ? ` · ${recommendationLabel(attempt.recommendation)}` : ""}
+              </span>
               {attempt.status === "submitted" ? (
                 <Link className="command-button secondary" href={`/employer/reports/${attempt.attempt_id}`}>
                   <FileText size={16} aria-hidden="true" />
@@ -216,8 +267,9 @@ function EmployerDashboard({ onLocalSignOut }: { onLocalSignOut?: () => void }) 
   );
 }
 
-function ClerkEmployerPortal() {
+export default function EmployerPortal() {
   const { isLoaded, isSignedIn } = useUser();
+  const { getToken } = useAuth();
 
   if (!isLoaded) {
     return (
@@ -228,67 +280,8 @@ function ClerkEmployerPortal() {
   }
 
   if (!isSignedIn) {
-    return <AuthPanel onLocalLogin={() => undefined} />;
+    return <AuthPanel />;
   }
 
-  return <EmployerDashboard />;
-}
-
-function DevPortal({
-  localSessionActive,
-  startDevSession,
-  endDevSession,
-}: {
-  localSessionActive: boolean;
-  startDevSession: () => void;
-  endDevSession: () => void;
-}) {
-  const { isLoaded, isSignedIn } = useUser();
-
-  if (!isLoaded) {
-    return (
-      <main className="employer-page">
-        <p className="empty-state">Loading employer session.</p>
-      </main>
-    );
-  }
-
-  if (isSignedIn || localSessionActive) {
-    return <EmployerDashboard onLocalSignOut={!isSignedIn ? endDevSession : undefined} />;
-  }
-
-  return <AuthPanel onLocalLogin={startDevSession} />;
-}
-
-export default function EmployerPortal() {
-  const [localSessionActive, setLocalSessionActive] = useState(() => {
-    if (typeof window === "undefined" || (clerkConfigured && !isDev)) {
-      return false;
-    }
-    return localStorage.getItem("signalloop:employerSession") === "active";
-  });
-
-  function startDevSession() {
-    localStorage.setItem("signalloop:employerSession", "active");
-    setLocalSessionActive(true);
-  }
-
-  function endDevSession() {
-    localStorage.removeItem("signalloop:employerSession");
-    setLocalSessionActive(false);
-  }
-
-  if (clerkConfigured && !isDev) {
-    return <ClerkEmployerPortal />;
-  }
-
-  if (clerkConfigured && isDev) {
-    return <DevPortal localSessionActive={localSessionActive} startDevSession={startDevSession} endDevSession={endDevSession} />;
-  }
-
-  if (!localSessionActive) {
-    return <AuthPanel onLocalLogin={startDevSession} />;
-  }
-
-  return <EmployerDashboard onLocalSignOut={endDevSession} />;
+  return <EmployerDashboard getAuthToken={getToken} isClerkLoaded={isLoaded} />;
 }

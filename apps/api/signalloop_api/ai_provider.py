@@ -3,7 +3,7 @@ from typing import Protocol
 
 import httpx
 
-from signalloop_api.ai_policy import AIDecision, DISALLOWED_TAGS, REDIRECT_MESSAGE, SYSTEM_PROMPT, fallback_classify
+from signalloop_api.ai_policy import AIDecision, DISALLOWED_TAGS, REDIRECT_MESSAGE, SOCRATIC_REDIRECT_MESSAGE, SYSTEM_PROMPT, fallback_classify
 from signalloop_api.config import settings
 
 
@@ -16,7 +16,7 @@ class LocalGuidanceProvider:
     def evaluate(self, message: str, context: dict | None, recent_messages: list[str]) -> AIDecision:
         decision = fallback_classify(message, recent_messages)
         if not decision.allowed:
-            return AIDecision(allowed=False, policy_tags=decision.tags, message=REDIRECT_MESSAGE)
+            return AIDecision(allowed=False, policy_tags=decision.tags, message=decision.redirect_message or REDIRECT_MESSAGE)
         context_note = ""
         if context and context.get("path"):
             context_note = f" For `{context['path']}`, focus on the specific behavior you selected."
@@ -81,18 +81,23 @@ def parse_ai_decision(raw: str, original_message: str, recent_messages: list[str
         data = json.loads(raw)
         allowed = bool(data.get("allowed", True))
         policy_tags = [t for t in data.get("policy_tags", []) if isinstance(t, str)]
-        message = str(data.get("message", "")).strip() or "I could not generate a response."
+        message = str(data.get("message", "")).strip()
 
         # If the LLM said allowed but included a disallowed tag, trust the tag.
         if policy_tags and any(t in DISALLOWED_TAGS for t in policy_tags):
             allowed = False
         if not allowed and not message:
-            message = REDIRECT_MESSAGE
+            message = SOCRATIC_REDIRECT_MESSAGE if "no_issue_identified" in policy_tags else REDIRECT_MESSAGE
+        if allowed and not message:
+            message = "I could not generate a response."
 
         return AIDecision(allowed=allowed, policy_tags=policy_tags, message=message)
     except (json.JSONDecodeError, KeyError, TypeError):
         decision = fallback_classify(original_message, recent_messages)
-        msg = REDIRECT_MESSAGE if not decision.allowed else "I could not generate a response."
+        if not decision.allowed:
+            msg = decision.redirect_message or REDIRECT_MESSAGE
+        else:
+            msg = "I could not generate a response."
         return AIDecision(allowed=decision.allowed, policy_tags=decision.tags, message=msg)
 
 

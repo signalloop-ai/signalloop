@@ -1,8 +1,10 @@
 "use client";
 
+import { useAuth } from "@clerk/nextjs";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, fetchReport, generateReport } from "../../api";
@@ -29,14 +31,109 @@ function SectionTitle({ title }: { title: string }) {
   );
 }
 
-function JsonBlock({ value }: { value: unknown }) {
-  return <pre className="report-json">{JSON.stringify(value, null, 2)}</pre>;
+function Disclosure({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <details className="report-disclosure">
+      <summary>{label}</summary>
+      <div className="report-disclosure-body">{children}</div>
+    </details>
+  );
+}
+
+function FileViewer({ files }: { files: Record<string, string> }) {
+  const paths = Object.keys(files);
+  const defaultOpen = paths.find((p) => p.startsWith("task_api/")) ?? paths[0] ?? null;
+  const [openFile, setOpenFile] = useState<string | null>(defaultOpen);
+
+  if (!paths.length) return <p className="report-copy">No files submitted.</p>;
+
+  return (
+    <div className="file-viewer">
+      <div className="file-viewer-list">
+        {paths.map((path) => (
+          <button
+            key={path}
+            className={`file-viewer-tab${openFile === path ? " active" : ""}`}
+            onClick={() => setOpenFile(openFile === path ? null : path)}
+          >
+            {path}
+          </button>
+        ))}
+      </div>
+      {openFile && files[openFile] !== undefined ? (
+        <pre className="file-viewer-content"><code>{files[openFile]}</code></pre>
+      ) : null}
+    </div>
+  );
+}
+
+function percentage(points: number, maxPoints: number): number {
+  if (!maxPoints) return 0;
+  return Math.max(0, Math.min(100, Math.round((points / maxPoints) * 100)));
+}
+
+function barColorClass(pct: number): string {
+  if (pct >= 70) return "good";
+  if (pct >= 40) return "warn";
+  return "danger";
+}
+
+function ChartBar({ label, value, max }: { label: string; value: number; max: number }) {
+  const pct = percentage(value, max);
+  return (
+    <div className="chart-bar">
+      <div className="chart-bar-label">
+        <span>{label}</span>
+        <strong>{value}/{max}</strong>
+      </div>
+      <div className={`chart-track ${barColorClass(pct)}`} aria-hidden="true">
+        <span style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function TestResultBar({ label, passed, collected }: { label: string; passed: number; collected: number }) {
+  return <ChartBar label={label} value={passed} max={collected || 1} />;
+}
+
+function ScoreRing({ score, max }: { score: number; max: number }) {
+  const pct = Math.max(0, Math.min(1, score / max));
+  const r = 38;
+  const circ = 2 * Math.PI * r;
+  const dash = pct * circ;
+  const color = pct >= 0.7 ? "#0f766e" : pct >= 0.4 ? "#d97706" : "#dc2626";
+  return (
+    <svg width="96" height="96" viewBox="0 0 96 96" aria-hidden="true">
+      <circle cx="48" cy="48" r={r} fill="none" stroke="#e8edf3" strokeWidth="10" />
+      <circle
+        cx="48" cy="48" r={r} fill="none" stroke={color} strokeWidth="10"
+        strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+        transform="rotate(-90 48 48)"
+      />
+      <text x="48" y="44" textAnchor="middle" fontSize="22" fontWeight="700" fill="#18212f">{score}</text>
+      <text x="48" y="62" textAnchor="middle" fontSize="12" fill="#607083">/ {max}</text>
+    </svg>
+  );
+}
+
+function formatTimingValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "number") return `${value}m`;
+  return String(value);
+}
+
+function formatMs(value: number | undefined): string {
+  if (value === undefined) return "-";
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}s`;
+  return `${value}ms`;
 }
 
 export default function ReportDetail() {
   const params = useParams<{ attemptId: string | string[] }>();
   const attemptIdParam = params.attemptId;
   const attemptId = Array.isArray(attemptIdParam) ? attemptIdParam[0] : attemptIdParam;
+  const { getToken, isLoaded } = useAuth();
   const [report, setReport] = useState<EvidenceReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -46,11 +143,11 @@ export default function ReportDetail() {
     setLoading(true);
     setError(null);
     try {
-      setReport(await fetchReport(attemptId));
+      setReport(await fetchReport(attemptId, getToken));
     } catch (loadError) {
       if (loadError instanceof ApiError && loadError.status === 404) {
         try {
-          setReport(await generateReport(attemptId));
+          setReport(await generateReport(attemptId, getToken));
         } catch (generateError) {
           setError(generateError instanceof Error ? generateError.message : "Report generation failed");
         }
@@ -60,20 +157,21 @@ export default function ReportDetail() {
     } finally {
       setLoading(false);
     }
-  }, [attemptId]);
+  }, [attemptId, getToken]);
 
   useEffect(() => {
+    if (!isLoaded) return;
     const timeoutId = window.setTimeout(() => {
       void loadReport();
     }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [loadReport]);
+  }, [loadReport, isLoaded]);
 
   async function createReport() {
     setGenerating(true);
     setError(null);
     try {
-      setReport(await generateReport(attemptId));
+      setReport(await generateReport(attemptId, getToken));
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : "Report generation failed");
     } finally {
@@ -82,6 +180,9 @@ export default function ReportDetail() {
   }
 
   const r = report?.report;
+  const timing = r?.metadata?.timing;
+  const featureScore = r?.feature_design_implementation
+    ?? r?.scores?.categories?.find((cat: { category: string }) => cat.category === "Feature/design implementation");
 
   return (
     <main className="employer-page">
@@ -111,21 +212,42 @@ export default function ReportDetail() {
 
       {r ? (
         <>
+          {/* Recommendation banner */}
+          <div className={`recommendation-banner ${recommendationClass(report?.recommendation ?? null)}`}>
+            <ScoreRing score={report?.score_total ?? 0} max={100} />
+            <div>
+              <p className="rec-label">Recommendation</p>
+              <p className="rec-value">{recommendationLabel(report?.recommendation ?? null)}</p>
+              <p className="rec-label" style={{ marginTop: 6 }}>Assessment: {r.metadata.assessment.version}</p>
+            </div>
+          </div>
+
           {/* Top metrics */}
           <section className="metric-row">
             <div className="metric">
-              <span>Score</span>
-              <strong>{report?.score_total ?? "-"} / 100</strong>
+              <span>Timing</span>
+              <strong>{timing?.timing_mode ?? "untimed"}</strong>
             </div>
             <div className="metric">
-              <span>Recommendation</span>
-              <strong className={`status-pill ${recommendationClass(report?.recommendation ?? null)}`}>
-                {recommendationLabel(report?.recommendation ?? null)}
-              </strong>
+              {timing?.timing_mode === "untimed" ? (
+                <>
+                  <span>Time used</span>
+                  <strong>{formatTimingValue(timing?.time_used_minutes)}</strong>
+                </>
+              ) : (
+                <>
+                  <span>Duration / used</span>
+                  <strong>{formatTimingValue(timing?.duration_minutes)} / {formatTimingValue(timing?.time_used_minutes)}</strong>
+                </>
+              )}
             </div>
             <div className="metric">
-              <span>Confidence</span>
-              <strong>{r.scores.confidence}</strong>
+              <span>Submission</span>
+              <strong>{timing?.submission_mode === "auto_expired" ? "Auto (expired)" : "Manual"}</strong>
+            </div>
+            <div className="metric">
+              <span>Evaluator mode</span>
+              <strong>{r.metadata.evaluator_feedback_mode ?? "strict"}</strong>
             </div>
           </section>
 
@@ -134,113 +256,198 @@ export default function ReportDetail() {
             <SectionTitle title="Executive summary" />
             <p className="report-copy">{r.executive_summary.summary}</p>
             {r.executive_summary.evidence_limits?.length ? (
-              <ul className="report-notes">
-                {r.executive_summary.evidence_limits.map((note: string) => (
-                  <li key={note}>{note}</li>
-                ))}
-              </ul>
+              <Disclosure label="Evidence limits">
+                <ul className="report-list">
+                  {r.executive_summary.evidence_limits.map((note: string) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+              </Disclosure>
             ) : null}
           </section>
 
           {/* Score breakdown */}
           <section className="employer-section">
             <SectionTitle title="Score breakdown" />
-            <div className="score-list">
-              {r.scores.categories.map((cat: { category: string; points: number; max_points: number; evidence: string }) => (
-                <div className="score-row" key={cat.category}>
-                  <div>
-                    <strong>{cat.category}</strong>
-                    <p>{cat.evidence}</p>
-                  </div>
-                  <span>{cat.points}/{cat.max_points}</span>
-                </div>
+            <div className="chart-list">
+              {r.scores.categories.map((cat: { category: string; points: number; max_points: number }) => (
+                <ChartBar key={cat.category} label={cat.category} value={cat.points} max={cat.max_points} />
               ))}
+            </div>
+            <div className="score-list">
+              {r.scores.categories.map((cat: { category: string; points: number; max_points: number; evidence: string }) => {
+                const sectionId: Record<string, string> = {
+                  public_issue_resolution: "section-public-tests",
+                  private_issue_generalization: "section-hidden-tests",
+                  feature_design_implementation: "section-feature-design",
+                  candidate_tests: "section-candidate-tests",
+                  ai_collaboration: "section-ai-collaboration",
+                  regression_code_quality: "section-public-tests",
+                };
+                const anchor = sectionId[cat.category];
+                return (
+                  <div className="score-row" key={cat.category}>
+                    <div>
+                      <strong>
+                        {anchor ? (
+                          <a href={`#${anchor}`} className="score-row-link">{cat.category}</a>
+                        ) : cat.category}
+                      </strong>
+                      <p>{cat.evidence}</p>
+                    </div>
+                    <span>{cat.points}/{cat.max_points}</span>
+                  </div>
+                );
+              })}
             </div>
           </section>
 
-          {/* Public + hidden test results */}
+          {/* Test results */}
           <section className="report-grid">
-            <article className="employer-section">
-              <SectionTitle title="Public test results" />
+            <article id="section-public-tests" className="employer-section">
+              <SectionTitle title="Public tests" />
+              <TestResultBar
+                label="Public tests"
+                passed={r.public_test_results.last_run_summary.passed}
+                collected={r.public_test_results.last_run_summary.collected}
+              />
               <p className="report-copy">
-                Ran {r.public_test_results.run_count} time(s). Last run: {r.public_test_results.last_run_summary.status} —{" "}
-                {r.public_test_results.last_run_summary.passed}/{r.public_test_results.last_run_summary.collected} passed.
+                {r.public_test_results.last_run_summary.passed}/{r.public_test_results.last_run_summary.collected} passed
+                · ran {r.public_test_results.run_count} time(s)
               </p>
               {r.public_test_results.last_run_summary.failure_names?.length ? (
-                <>
-                  <p className="report-label">Failures:</p>
+                <Disclosure label={`${r.public_test_results.last_run_summary.failure_names.length} failure(s)`}>
                   <ul className="report-list">
                     {r.public_test_results.last_run_summary.failure_names.map((name: string) => (
                       <li key={name}>{name}</li>
                     ))}
                   </ul>
-                </>
+                </Disclosure>
               ) : null}
-              <p className="report-label">Initially failing (count toward score):</p>
-              <ul className="report-list">
-                {r.public_test_results.initially_failing_tests.map((name: string) => (
-                  <li key={name}>{name}</li>
-                ))}
-              </ul>
+              {r.public_test_results.initially_failing_tests?.length ? (
+                <Disclosure label="Initially failing tests">
+                  <ul className="report-list">
+                    {r.public_test_results.initially_failing_tests.map((name: string) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                </Disclosure>
+              ) : null}
             </article>
 
-            <article className="employer-section">
-              <SectionTitle title="Hidden test results" />
+            <article id="section-hidden-tests" className="employer-section">
+              <SectionTitle title="Hidden tests" />
+              <TestResultBar
+                label="Hidden tests"
+                passed={r.hidden_test_results.summary.passed}
+                collected={r.hidden_test_results.summary.collected}
+              />
               <p className="report-copy">
-                Status: {r.hidden_test_results.summary.status} —{" "}
-                {r.hidden_test_results.summary.passed}/{r.hidden_test_results.summary.collected} passed.
+                {r.hidden_test_results.summary.passed}/{r.hidden_test_results.summary.collected} passed
               </p>
               {r.hidden_test_results.summary.failure_names?.length ? (
-                <>
-                  <p className="report-label">Failures:</p>
+                <Disclosure label={`${r.hidden_test_results.summary.failure_names.length} failure(s)`}>
                   <ul className="report-list">
                     {r.hidden_test_results.summary.failure_names.map((name: string) => (
                       <li key={name}>{name}</li>
                     ))}
                   </ul>
-                </>
+                </Disclosure>
               ) : null}
-              <p className="report-label">Seeded issue areas:</p>
-              <ul className="report-list">
-                {r.hidden_test_results.seeded_issue_areas.map((area: string) => (
-                  <li key={area}>{area}</li>
-                ))}
-              </ul>
+              <Disclosure label="Seeded issue areas">
+                <ul className="report-list">
+                  {r.hidden_test_results.seeded_issue_areas.map((area: string) => (
+                    <li key={area}>{area}</li>
+                  ))}
+                </ul>
+              </Disclosure>
             </article>
           </section>
 
-          {/* Candidate tests + AI collaboration */}
+          {/* Feature/design + FAVO */}
           <section className="report-grid">
-            <article className="employer-section">
-              <SectionTitle title="Candidate-written tests" />
-              <p className="report-copy">{r.candidate_tests.candidate_test_file_count} test file(s) added or modified.</p>
-              {r.candidate_tests.added_test_files?.length ? (
-                <>
-                  <p className="report-label">Added:</p>
-                  <ul className="report-list">
-                    {r.candidate_tests.added_test_files.map((f: string) => <li key={f}>{f}</li>)}
-                  </ul>
-                </>
-              ) : null}
-              {r.candidate_tests.modified_test_files?.length ? (
-                <>
-                  <p className="report-label">Modified:</p>
-                  <ul className="report-list">
-                    {r.candidate_tests.modified_test_files.map((f: string) => <li key={f}>{f}</li>)}
-                  </ul>
-                </>
-              ) : null}
+            <article id="section-feature-design" className="employer-section">
+              <SectionTitle title="Feature/design implementation" />
+              <p className="report-copy">
+                {featureScore ? `${featureScore.points}/${featureScore.max_points}: ${featureScore.evidence}` : "No feature/design score available."}
+              </p>
             </article>
 
             <article className="employer-section">
+              <SectionTitle title="FAVO interpretation" />
+              <div className="favo-grid">
+                {(["frame", "ask", "verify", "own"] as const).map((key) => {
+                  const favoLabels: Record<string, string> = { frame: "Frame", ask: "Ask", verify: "Verify", own: "Own" };
+                  const value = r.favo[key] as { label: string; evidence: string } | undefined;
+                  if (!value) return null;
+                  return (
+                    <span key={key}>
+                      <strong>{favoLabels[key]}</strong>
+                      <em>{value.label}</em>
+                      {value.evidence}
+                    </span>
+                  );
+                })}
+              </div>
+            </article>
+          </section>
+
+          {/* Candidate tests + AI */}
+          <section className="report-grid">
+            <article id="section-candidate-tests" className="employer-section">
+              <SectionTitle title="Candidate-written tests" />
+              <p className="report-copy">
+                {(() => {
+                  const added = r.candidate_tests.functions_added ?? r.candidate_tests.candidate_test_function_count ?? 0;
+                  const modified = r.candidate_tests.functions_modified ?? 0;
+                  if (added === 0 && modified === 0) return "No candidate-written test functions detected.";
+                  const parts = [];
+                  if (added > 0) parts.push(`${added} function${added === 1 ? "" : "s"} added`);
+                  if (modified > 0) parts.push(`${modified} modified`);
+                  return parts.join(" · ");
+                })()}
+              </p>
+              {(r.candidate_tests.added_test_files?.length || r.candidate_tests.modified_test_files?.length) ? (
+                <Disclosure label="Files changed">
+                  {r.candidate_tests.added_test_files?.length ? (
+                    <>
+                      <p className="report-label">Added:</p>
+                      <ul className="report-list">
+                        {r.candidate_tests.added_test_files.map((f: string) => <li key={f}>{f}</li>)}
+                      </ul>
+                    </>
+                  ) : null}
+                  {r.candidate_tests.modified_test_files?.length ? (
+                    <>
+                      <p className="report-label">Modified:</p>
+                      <ul className="report-list">
+                        {r.candidate_tests.modified_test_files.map((f: string) => <li key={f}>{f}</li>)}
+                      </ul>
+                    </>
+                  ) : null}
+                </Disclosure>
+              ) : null}
+            </article>
+
+            <article id="section-ai-collaboration" className="employer-section">
               <SectionTitle title="AI collaboration" />
               <p className="report-copy">
-                {r.ai_collaboration.candidate_prompt_count} candidate prompt(s),{" "}
-                {r.ai_collaboration.policy_redirect_count} policy redirect(s).
+                {r.ai_collaboration.candidate_prompt_count} prompt(s)
+                · {r.ai_collaboration.policy_redirect_count} redirect(s)
+                · integrity risk: <span className={r.ai_integrity_risk.label === "low" ? "" : "report-warn"}>{r.ai_integrity_risk.label}</span>
               </p>
+              {r.ai_collaboration.pasted_ai_code?.pasted_ai_code_count > 0 ? (
+                <p className="report-copy report-warn">
+                  ⚠ {r.ai_collaboration.pasted_ai_code.pasted_ai_code_count} AI code block(s) found verbatim in submission.
+                </p>
+              ) : null}
+              {r.ai_collaboration.large_paste_events?.large_paste_count > 0 ? (
+                <p className="report-copy report-warn">
+                  ⚠ {r.ai_collaboration.large_paste_events.large_paste_count} large paste event(s) detected.
+                </p>
+              ) : null}
               {r.ai_collaboration.flagged_prompts?.length ? (
-                <>
-                  <p className="report-label">Flagged prompts:</p>
+                <Disclosure label={`${r.ai_collaboration.flagged_prompts.length} flagged prompt(s)`}>
                   <ul className="report-list">
                     {r.ai_collaboration.flagged_prompts.map((fp: { message: string; policy_tags: string[]; at: string }) => (
                       <li key={fp.at}>
@@ -248,47 +455,54 @@ export default function ReportDetail() {
                       </li>
                     ))}
                   </ul>
-                </>
+                </Disclosure>
               ) : null}
-              {r.ai_collaboration.pasted_ai_code?.pasted_ai_code_count > 0 ? (
-                <p className="report-copy report-warn">
-                  ⚠ {r.ai_collaboration.pasted_ai_code.pasted_ai_code_count} AI code block(s) found verbatim in final submission.
-                </p>
-              ) : null}
-              {r.ai_collaboration.large_paste_events?.large_paste_count > 0 ? (
-                <p className="report-copy report-warn">
-                  ⚠ {r.ai_collaboration.large_paste_events.large_paste_count} large paste event(s) detected between snapshots.
-                </p>
-              ) : null}
-            </article>
-          </section>
-
-          {/* Explanation + process evidence */}
-          <section className="report-grid">
-            <article className="employer-section">
-              <SectionTitle title="Explanation submitted" />
-              <p className="report-label">Final explanation:</p>
-              <p className="report-copy">{r.explanation_submitted.final_explanation || "—"}</p>
-              <p className="report-label">Decision log:</p>
-              <p className="report-copy">{r.explanation_submitted.decision_log || "—"}</p>
-            </article>
-
-            <article className="employer-section">
-              <SectionTitle title="Process evidence" />
-              <p className="report-copy">
-                {r.process_evidence.snapshot_count} snapshot(s), {r.process_evidence.test_run_count} test run(s).
-              </p>
-              {r.process_evidence.test_runs?.length ? (
+              <Disclosure label="Integrity signals">
                 <ul className="report-list">
-                  {r.process_evidence.test_runs.map((run: { id: number; type: string; status: string; duration_ms: number }) => (
-                    <li key={run.id}>
-                      {run.type} — {run.status} ({run.duration_ms}ms)
-                    </li>
+                  {Object.entries(r.ai_integrity_risk.signals).map(([name, value]) => (
+                    <li key={name}>{name}: {String(value)}</li>
                   ))}
                 </ul>
-              ) : null}
+              </Disclosure>
             </article>
           </section>
+
+          {/* Submission review */}
+          <section className="employer-section">
+            <SectionTitle title="Submission review" />
+            {(() => {
+              const sr = r.submission_review;
+              const entries: { label: string; value: string }[] = [
+                { label: "What changed", value: sr.what_changed || "" },
+                { label: "Tradeoffs / decisions", value: sr.tradeoffs_or_product_decisions || "" },
+                { label: "Verification", value: sr.verification || "" },
+                { label: "Given more time", value: sr.improvements_with_more_time || "" },
+                { label: "Notes", value: sr.additional_notes || "" },
+              ].filter((e) => e.value.trim().length > 0);
+              if (entries.length === 0) {
+                return <p className="report-copy report-muted">No submission notes provided.</p>;
+              }
+              return (
+                <div className="report-grid">
+                  {entries.map((e) => (
+                    <article key={e.label}>
+                      <p className="report-label">{e.label}</p>
+                      <p className="report-copy">{e.value}</p>
+                    </article>
+                  ))}
+                </div>
+              );
+            })()}
+          </section>
+
+          {/* Submitted code */}
+          {r.submitted_code?.files ? (
+            <section className="employer-section">
+              <SectionTitle title="Submitted code" />
+              <p className="report-copy report-muted">{r.submitted_code.file_count} file(s) submitted.</p>
+              <FileViewer files={r.submitted_code.files} />
+            </section>
+          ) : null}
 
           {/* Follow-up questions */}
           <section className="employer-section">
@@ -300,18 +514,47 @@ export default function ReportDetail() {
             </ol>
           </section>
 
-          {/* Timeline */}
-          <section className="employer-section">
-            <SectionTitle title="Timeline" />
-            <ul className="report-list timeline-list">
-              {r.timeline.map((event: { at: string; type: string; summary: string }) => (
-                <li key={`${event.at}-${event.type}`}>
-                  <span className="timeline-time">{new Date(event.at).toLocaleTimeString()}</span>
-                  <span className="timeline-type">{event.type}</span>
-                  <span>{event.summary}</span>
-                </li>
-              ))}
-            </ul>
+          {/* Process evidence + Timeline — collapsed by default */}
+          <section className="report-grid">
+            <article className="employer-section">
+              <SectionTitle title="Process evidence" />
+              <p className="report-copy">
+                {r.process_evidence.snapshot_count} snapshot(s) · {r.process_evidence.test_run_count} test run(s)
+              </p>
+              {r.process_evidence.test_runs?.length ? (
+                <Disclosure label="Test run details">
+                  <ul className="report-list">
+                    {r.process_evidence.test_runs.map((run: { id: number; type: string; status: string; duration_ms: number; timings?: Record<string, number> }) => (
+                      <li key={run.id}>
+                        {run.type} — {run.status}
+                        {run.timings && Object.keys(run.timings).length ? (
+                          <span className="report-muted">
+                            {" "}· {formatMs(run.timings.api_total_ms ?? run.timings.worker_total_ms)}
+                            {run.timings.worker_pytest_ms !== undefined ? ` · pytest ${formatMs(run.timings.worker_pytest_ms)}` : ""}
+                          </span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </Disclosure>
+              ) : null}
+            </article>
+
+            <article className="employer-section">
+              <SectionTitle title="Timeline" />
+              <p className="report-copy">{r.timeline.length} event(s)</p>
+              <Disclosure label="Show timeline">
+                <ul className="report-list timeline-list">
+                  {r.timeline.map((event: { at: string; type: string; summary: string }) => (
+                    <li key={`${event.at}-${event.type}`}>
+                      <span className="timeline-time">{new Date(event.at).toLocaleTimeString()}</span>
+                      <span className="timeline-type">{event.type}</span>
+                      <span>{event.summary}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Disclosure>
+            </article>
           </section>
         </>
       ) : null}

@@ -1,12 +1,28 @@
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
+
+
+VALID_DURATIONS = {60, 90, 120, 150}
+DEFAULT_DURATIONS = {"standard": 90, "advanced": 120}
 
 
 class CreateAttemptRequest(BaseModel):
-    assessment_pack_slug: str = "fastapi_task_api_v1"
+    assessment_pack_slug: str = "fastapi_task_api_standard_v2"
+    assessment_level: Literal["standard", "advanced"] = "standard"
+    timing_mode: Literal["untimed", "timed"] = "untimed"
+    evaluator_feedback_mode: Literal["strict", "guided"] = "strict"
+    duration_minutes: Optional[int] = None
     candidate_email: Optional[EmailStr] = None
     employer_id: Optional[int] = None
+
+    @model_validator(mode="after")
+    def validate_configuration(self) -> "CreateAttemptRequest":
+        if self.duration_minutes is None:
+            self.duration_minutes = DEFAULT_DURATIONS[self.assessment_level]
+        if self.duration_minutes not in VALID_DURATIONS:
+            raise ValueError("duration_minutes must be one of 60, 90, 120, or 150")
+        return self
 
 
 class CreateAttemptResponse(BaseModel):
@@ -28,7 +44,15 @@ class CandidateAttemptResponse(BaseModel):
     status: str
     candidate_email: Optional[str]
     assessment: AssessmentMetadata
+    timing_mode: str
+    evaluator_feedback_mode: str
+    duration_minutes: int
+    started_at: Optional[str]
+    expires_at: Optional[str]
+    submitted_at: Optional[str]
+    submission_mode: Optional[str]
     files: dict[str, str]
+    initial_files: dict[str, str]
 
 
 class EmployerAttemptSummary(BaseModel):
@@ -38,6 +62,12 @@ class EmployerAttemptSummary(BaseModel):
     invite_token: str
     invite_url: str
     assessment: AssessmentMetadata
+    assessment_level: str
+    timing_mode: str
+    evaluator_feedback_mode: str
+    duration_minutes: int
+    expires_at: Optional[str]
+    submission_mode: Optional[str]
     created_at: str
     submitted_at: Optional[str]
     report_id: Optional[int]
@@ -59,8 +89,9 @@ class SnapshotResponse(BaseModel):
 
 class FinalSubmissionRequest(BaseModel):
     files: dict[str, str] = Field(min_length=1)
-    final_explanation: str = Field(min_length=1)
+    final_explanation: str = ""
     decision_log: str = ""
+    submission_mode: Literal["manual", "auto_expired"] = "manual"
 
 
 class FinalSubmissionResponse(BaseModel):

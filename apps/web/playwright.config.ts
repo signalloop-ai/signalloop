@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000";
+const skipWebServer = process.env.PLAYWRIGHT_SKIP_WEBSERVER === "1";
+
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 30_000,
@@ -7,16 +10,18 @@ export default defineConfig({
     timeout: 5_000,
   },
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL,
     trace: "retain-on-failure",
   },
-  webServer: {
-    command:
-      "NEXT_PUBLIC_API_URL=http://127.0.0.1:8015 npm run dev -- -H 127.0.0.1 --port 3000",
-    url: "http://127.0.0.1:3000",
-    reuseExistingServer: true,
-    timeout: 60_000,
-  },
+  webServer: skipWebServer
+    ? undefined
+    : {
+        command:
+          "NEXT_PUBLIC_API_URL=http://127.0.0.1:8015 npm run dev -- -H 127.0.0.1 --port 3000",
+        url: baseURL,
+        reuseExistingServer: true,
+        timeout: 60_000,
+      },
   projects: [
     {
       name: "chromium",

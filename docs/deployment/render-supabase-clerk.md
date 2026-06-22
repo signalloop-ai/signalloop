@@ -75,9 +75,12 @@ Set these values:
 ```env
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_or_pk_test_...
 CLERK_SECRET_KEY=sk_live_or_sk_test_...
+CLERK_JWT_ISSUER=https://YOUR-CLERK-DOMAIN
+CLERK_JWKS_URL=https://YOUR-CLERK-DOMAIN/.well-known/jwks.json
 ```
 
-The web app needs `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`. The backend keeps `CLERK_SECRET_KEY` available for server-side auth hardening.
+The web app needs `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`. Employer API routes verify the
+Clerk session token and scope attempts/reports to the authenticated Clerk user.
 
 ## Render API Service
 
@@ -107,6 +110,9 @@ CORS_ORIGINS=https://YOUR-WEB-SERVICE.onrender.com
 OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-5
 CLERK_SECRET_KEY=...
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...
+CLERK_JWT_ISSUER=https://YOUR-CLERK-DOMAIN
+CLERK_JWKS_URL=https://YOUR-CLERK-DOMAIN/.well-known/jwks.json
 EXECUTION_BACKEND=http_worker
 EXECUTION_WORKER_URL=https://YOUR-EXECUTION-RUNTIME
 ASSESSMENT_RUNTIME_IMAGE=signalloop-python-assessment:3.11

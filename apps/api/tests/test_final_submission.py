@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
@@ -6,16 +7,16 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from signalloop_api.auth import get_current_employer
 from signalloop_api.database import get_session
 from signalloop_api.main import app
-from signalloop_api.models import AssessmentAttempt, AuditEvent, CodeSnapshot, FinalSubmission, TestRun
+from signalloop_api.models import AssessmentAttempt, AuditEvent, CodeSnapshot, Employer, FinalSubmission, TestRun
 from signalloop_api.submissions import (
     ExecutionProviderHiddenTestRunner,
     HTTPHiddenTestRunner,
     get_hidden_test_runner,
     hidden_test_files_for_attempt,
 )
-from tests.test_attempt_lifecycle import session_factory as session_factory_fixture
 
 
 class FakeHiddenTestRunner:
@@ -47,6 +48,7 @@ def hidden_runner() -> FakeHiddenTestRunner:
 def client(
     session_factory: sessionmaker[Session],
     hidden_runner: FakeHiddenTestRunner,
+    default_employer: Employer,
 ) -> Generator[TestClient, None, None]:
     def override_get_session() -> Generator[Session, None, None]:
         session = session_factory()
@@ -55,13 +57,14 @@ def client(
         finally:
             session.close()
 
+    def override_get_current_employer() -> Employer:
+        return default_employer
+
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_current_employer] = override_get_current_employer
     app.dependency_overrides[get_hidden_test_runner] = lambda: hidden_runner
     yield TestClient(app)
     app.dependency_overrides.clear()
-
-
-session_factory = session_factory_fixture
 
 
 def create_attempt(client: TestClient) -> str:
@@ -103,6 +106,7 @@ def test_final_submission_locks_attempt_and_persists_hidden_result(
         assert attempt is not None
         assert attempt.status == "submitted"
         assert attempt.submitted_at is not None
+        assert attempt.submission_mode == "manual"
 
         final_submission = session.scalar(select(FinalSubmission).where(FinalSubmission.attempt_id == attempt.id))
         assert final_submission is not None
@@ -146,8 +150,51 @@ def test_final_submission_is_immutable_and_blocks_later_snapshots(client: TestCl
     assert snapshot.status_code == 409
 
 
+def test_final_submission_after_expiry_is_recorded_as_auto_expired(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+) -> None:
+    created = client.post(
+        "/assessment-attempts",
+        json={"timing_mode": "timed", "duration_minutes": 60},
+    ).json()
+    token = created["invite_token"]
+    accepted = client.post(f"/candidate/invites/{token}/accept")
+    assert accepted.status_code == 200
+
+    with session_factory() as session:
+        attempt = session.get(AssessmentAttempt, created["attempt_id"])
+        assert attempt is not None
+        attempt.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        session.commit()
+
+    submitted = client.post(
+        f"/candidate/invites/{token}/submit",
+        json={
+            "files": {"task_api/main.py": "print('expired browser state')\n"},
+            "final_explanation": "",
+            "decision_log": "",
+            "submission_mode": "auto_expired",
+        },
+    )
+
+    assert submitted.status_code == 201
+    assert submitted.json()["status"] == "submitted"
+
+    with session_factory() as session:
+        attempt = session.get(AssessmentAttempt, created["attempt_id"])
+        assert attempt is not None
+        assert attempt.submission_mode == "auto_expired"
+        assert attempt.final_submission is not None
+        assert attempt.final_submission.final_explanation == ""
+        assert attempt.final_submission.code_snapshot.files == {
+            "task_api/main.py": "print('expired browser state')\n",
+        }
+
+
 def test_final_submission_persists_hidden_error_when_runner_raises(
     session_factory: sessionmaker[Session],
+    default_employer: Employer,
 ) -> None:
     def override_get_session() -> Generator[Session, None, None]:
         session = session_factory()
@@ -156,7 +203,11 @@ def test_final_submission_persists_hidden_error_when_runner_raises(
         finally:
             session.close()
 
+    def override_get_current_employer() -> Employer:
+        return default_employer
+
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_current_employer] = override_get_current_employer
     app.dependency_overrides[get_hidden_test_runner] = lambda: RaisingHiddenTestRunner()
 
     with TestClient(app) as client:

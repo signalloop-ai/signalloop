@@ -7,6 +7,7 @@ from signalloop_api.audit import record_audit_event
 from signalloop_api.database import get_session
 from signalloop_api.models import AIInteraction, AssessmentAttempt
 from signalloop_api.schemas import AIMessageRequest, AIMessageResponse
+from signalloop_api.timebox import enforce_not_expired
 
 
 router = APIRouter()
@@ -38,6 +39,9 @@ def send_ai_message(
     )
     if attempt is None:
         raise HTTPException(status_code=404, detail="Invite not found")
+    if attempt.status == "submitted":
+        raise HTTPException(status_code=409, detail="Attempt is already submitted")
+    enforce_not_expired(session, attempt)
 
     selected_context = validate_selected_context(payload.selected_context)
     recent_messages = [

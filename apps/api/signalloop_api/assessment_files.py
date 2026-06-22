@@ -1,12 +1,23 @@
 from pathlib import Path
 
 
-IGNORED_DIRS = {"__pycache__", ".pytest_cache", ".venv", ".git"}
+IGNORED_DIRS = {"__pycache__", ".pytest_cache", ".venv", ".git", ".uv-cache"}
 IGNORED_FILENAMES = {".gitkeep", "uv.lock", "FINAL_EXPLANATION.md"}
 IGNORED_SUFFIXES = {".pyc", ".pyo"}
 
 
-def load_candidate_files(candidate_path: Path) -> dict[str, str]:
+def apply_placeholders(files: dict[str, str], substitutions: dict[str, str]) -> dict[str, str]:
+    if not substitutions:
+        return files
+    result = {}
+    for path, content in files.items():
+        for key, value in substitutions.items():
+            content = content.replace(f"{{{{{key}}}}}", value)
+        result[path] = content
+    return result
+
+
+def load_candidate_files(candidate_path: Path, substitutions: dict[str, str] | None = None) -> dict[str, str]:
     root = candidate_path.resolve()
     if not root.exists() or not root.is_dir():
         raise FileNotFoundError(f"Candidate path not found: {root}")
@@ -23,7 +34,7 @@ def load_candidate_files(candidate_path: Path) -> dict[str, str]:
         if path.suffix in IGNORED_SUFFIXES:
             continue
         files["/".join(relative_parts)] = path.read_text(encoding="utf-8")
-    return files
+    return apply_placeholders(files, substitutions or {})
 
 
 def load_hidden_test_files(evaluator_path: Path) -> dict[str, str]:

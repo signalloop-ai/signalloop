@@ -72,6 +72,7 @@ def test_public_test_endpoint_returns_structured_result(monkeypatch) -> None:
         "stdout": "1 passed",
         "stderr": "",
         "duration_ms": 12,
+        "timings": {},
     }
 
 
@@ -105,4 +106,39 @@ def test_hidden_test_endpoint_returns_structured_result(monkeypatch) -> None:
         "stdout": "",
         "stderr": "hidden failure",
         "duration_ms": 15,
+        "timings": {},
     }
+
+
+def test_candidate_verification_endpoint_runs_candidate_tests_against_original(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run_hidden_tests_in_workspace(payload, workspace):
+        captured["files"] = payload.files
+        captured["hidden_tests"] = payload.hidden_tests
+        return PublicTestRunResult(
+            status="failed",
+            exit_code=1,
+            stdout="____ test_duplicate_email_check ____\n",
+            stderr="",
+            duration_ms=25,
+        )
+
+    monkeypatch.setattr(main, "run_hidden_tests_in_workspace", fake_run_hidden_tests_in_workspace)
+    client = TestClient(app)
+
+    response = client.post(
+        "/run-candidate-verification",
+        json={
+            "files": {"task_api/main.py": "# original starter code"},
+            "hidden_tests": {"tests/test_candidate.py": "def test_duplicate_email_check(): assert False"},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "failed"
+    assert "test_duplicate_email_check" in body["stdout"]
+    # Verify the original impl files were passed as `files`, not tests
+    assert "task_api/main.py" in captured["files"]
+    assert "tests/test_candidate.py" in captured["hidden_tests"]

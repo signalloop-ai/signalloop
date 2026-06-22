@@ -13,13 +13,21 @@ Before making changes, read:
 1. `CURRENT_STATE.md`
 2. `docs/architecture/technical-product-architecture-spec.md`
 3. `docs/execution/coding-agent-execution-plan.md`
-4. The specific phase file under `docs/execution/phases/`
+4. The active workstream file named in `CURRENT_STATE.md`
 
 The technical spec defines what the product and system should be.
 
-The execution plan defines what to build and in what order.
+The execution plan defines the completed MVP build order and remains historical context.
 
-The phase file defines the current bounded implementation task.
+The active workstream file defines the current bounded enhancement task.
+
+The original MVP Phase 1-12 plan is complete. Current post-MVP work should use:
+
+```text
+docs/enhancements/phase-2-assessment-system/
+```
+
+unless `CURRENT_STATE.md` names a different active workstream.
 
 ## Repository structure
 
@@ -34,7 +42,7 @@ docs/            Product, architecture, execution, assessment, decisions.
 
 ## Implementation rules
 
-Work one phase at a time.
+Work one phase or enhancement task at a time.
 
 Do not implement future-phase features unless explicitly requested.
 
@@ -52,23 +60,23 @@ Do not add:
 
 ## Required workflow
 
-Before coding a phase:
+Before coding a phase or enhancement task:
 
 1. Read this file.
 2. Read `CURRENT_STATE.md`.
 3. Read the technical spec.
 4. Read the execution plan.
-5. Read the current phase file.
+5. Read the active workstream/task file.
 6. Summarize the goal and intended files to change.
 
-After coding a phase:
+After coding a phase or enhancement task:
 
 1. Summarize what changed.
 2. List files created/modified.
 3. List tests added/updated.
 4. Show commands to run.
 5. Update `CURRENT_STATE.md`.
-6. Create or update ADRs if an architecture decision changed.
+6. Create or update ADRs if an architecture, scoring, or AI safety decision changed.
 7. Mention unresolved issues.
 
 ## Stop conditions

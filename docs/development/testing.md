@@ -12,7 +12,7 @@ uv run pytest
 Expected current result:
 
 ```text
-34 passed
+76 passed, 11 skipped
 ```
 
 Run the Alembic migration chain against a disposable SQLite database:
@@ -22,7 +22,7 @@ cd apps/api
 DATABASE_URL=sqlite:////tmp/signalloop_migration_check.db uv run alembic upgrade head
 ```
 
-The migration chain should apply through `0002_create_audit_events`.
+The migration chain should apply through `0005_add_evaluator_feedback_mode`.
 
 ## Worker
 
@@ -49,38 +49,71 @@ npm run build
 npm run test:e2e
 ```
 
+If a dev server is already running on `127.0.0.1:3000`, reuse it instead of asking
+Playwright to start another server:
+
+```sh
+PLAYWRIGHT_SKIP_WEBSERVER=1 npm run test:e2e -- --workers=1
+```
+
 Expected current Playwright result:
 
 ```text
-2 passed, 1 skipped
+17 passed, 2 skipped
 ```
 
-The skipped test is `live-full-stack-smoke.spec.ts`. It requires real local services and `LIVE_INVITE_TOKEN`.
+The skipped tests are live-service tests. They require real local services and invite tokens:
 
-The employer Playwright test uses the local development login fallback. In development
-(`NODE_ENV=development`), the "Use local employer login" button is always shown, even
-when `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is set. This means the Playwright test passes
-against the dev server regardless of Clerk configuration. In a production build the
-Clerk-only path is enforced.
+- `live-full-stack-smoke.spec.ts` requires `LIVE_INVITE_TOKEN`.
+- `real-api-invite-flow.spec.ts` requires `RUN_REAL_API_TESTS=1` and `REAL_API_INVITE_TOKEN`.
+
+The employer Playwright test mocks Clerk's browser session and mocks employer API calls.
+The real employer portal requires Clerk locally and in production; there is no local
+employer-login fallback.
+
+The API suite includes deterministic submission-scenario coverage for unchanged,
+public-only, strong, weak-review, AI-risk, standard, and advanced assessment outcomes.
+
+Live OpenAI policy validation is opt-in because it makes real network calls and can be
+slower/flakier than deterministic tests:
+
+```sh
+cd apps/api
+RUN_LIVE_AI_TESTS=1 uv run pytest tests/test_live_ai_policy.py -q
+```
+
+Expected latest live result:
+
+```text
+8 passed
+```
+
+Real Postgres schema health checks are opt-in:
+
+```sh
+cd apps/api
+RUN_SCHEMA_HEALTH_TESTS=1 uv run pytest tests/test_schema_health.py -v
+```
 
 ## Live Local Smoke
 
 For a full manual local smoke:
 
 1. Start Postgres and run API migrations.
-2. Build the worker runtime image.
-3. Start worker on `127.0.0.1:9000`.
-4. Start API on the port configured in `NEXT_PUBLIC_API_URL` and `playwright.config.ts`
+2. Confirm `cd apps/api && uv run alembic current` shows the latest head revision.
+3. Build the worker runtime image.
+4. Start worker on `127.0.0.1:9000`.
+5. Start API on the port configured in `NEXT_PUBLIC_API_URL` and `playwright.config.ts`
    (`127.0.0.1:8015` in the current local validation setup).
-5. Start web on `127.0.0.1:3000`.
-6. Open `/employer`.
-7. Sign in with Clerk, or use local development login if Clerk keys are not configured.
-8. Create an invite.
-9. Open the candidate invite.
-10. Run public tests.
-11. Ask the AI collaborator a bounded question.
-12. Submit final code/explanation/decision log.
-13. Generate and view the evidence report in the employer portal.
+6. Start web on `127.0.0.1:3000`.
+7. Open `/employer`.
+8. Sign in with Clerk.
+9. Create an invite.
+10. Open the candidate invite.
+11. Run public tests.
+12. Ask the AI collaborator a bounded question.
+13. Submit final code and structured Submission Review.
+14. Generate and view the evidence report in the employer portal.
 
 To run the live Playwright smoke after creating an invite:
 
@@ -89,6 +122,22 @@ cd apps/web
 LIVE_INVITE_TOKEN=... npm run test:e2e
 ```
 
+When running the live smoke on a non-default web port, keep these values aligned:
+
+- API `PUBLIC_BASE_URL`
+- API `CORS_ORIGINS`
+- web `NEXT_PUBLIC_API_URL`
+- Playwright `PLAYWRIGHT_BASE_URL`
+
+For local Docker worker execution, the API must use:
+
+```sh
+ASSESSMENT_RUNTIME_IMAGE=signalloop-python-assessment:3.11
+```
+
+The generic `python:3.11-slim` image does not include pytest or FastAPI assessment
+dependencies and will make public/hidden runs fail before tests are collected.
+
 ## Hosted Smoke
 
-Render/Supabase/Clerk hosted testing has not been completed yet. Use `docs/deployment/render-supabase-clerk.md` when moving beyond local validation.
+Render/Supabase/Clerk hosted smoke is complete. End-to-end validation (attempt 8, 2026-06-18) confirmed: public test execution via ECS/Fargate, final submission, hidden evaluation, report generation, and employer report rendering all worked with no browser console errors against the Supabase-backed hosted stack. Use `docs/deployment/render-supabase-clerk.md` for deployment reference.
