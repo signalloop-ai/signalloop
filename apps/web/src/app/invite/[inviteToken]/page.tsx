@@ -762,46 +762,47 @@ export default function CandidateWorkspace() {
         <div className="topbar-actions">
           {/* Grouped status & state box */}
           <div className="status-box">
-            {/* Progress counts */}
-            <span className={`progress-chip ${publicTestsRun ? (progressAllPass ? "done" : "partial") : ""}`}>
-              {publicTestsRun ? (progressAllPass ? "✓" : "◑") : "○"}{" "}
-              Public{publicTestsRun
-                ? (progressPassed + progressFailed > 0
-                    ? ` ${progressPassed}p${progressFailed ? ` ${progressFailed}f` : ""}`
-                    : ` ${testResult?.status}`)
-                : ""}
-            </span>
+            {/* Progress chips — only visible once there is real data to show */}
+            {publicTestsRun ? (
+              <span className={`progress-chip ${progressAllPass ? "done" : "partial"}`}>
+                {progressAllPass ? "✓" : "◑"}{" "}
+                Public tests{progressPassed + progressFailed > 0
+                  ? ` ${progressPassed}p${progressFailed ? ` ${progressFailed}f` : ""}`
+                  : ` ${testResult?.status}`}
+              </span>
+            ) : null}
             {attempt.evaluator_feedback_mode === "guided" ? (() => {
               const hf = testResult?.evaluator_feedback;
               const ef = testResult?.enhancement_feedback;
               const hasResult = hf != null;
-              const edgeFailed = hasResult ? Math.max(0, hf!.failed - (ef?.failed ?? 0)) : 0;
-              const edgePassed = hasResult ? Math.max(0, hf!.passed - (ef?.passed ?? 0)) : 0;
+              if (!hasResult) return null;
+              const edgeFailed = Math.max(0, hf!.failed - (ef?.failed ?? 0));
+              const edgePassed = Math.max(0, hf!.passed - (ef?.passed ?? 0));
               return (
-                <span className={`progress-chip ${hasResult ? (edgeFailed === 0 ? "done" : "partial") : ""}`}>
-                  {hasResult ? (edgeFailed === 0 ? "✓" : "◑") : "○"}{" "}
-                  Hidden{hasResult ? ` ${edgePassed}p${edgeFailed ? ` ${edgeFailed}f` : ""}` : ""}
+                <span className={`progress-chip ${edgeFailed === 0 ? "done" : "partial"}`}>
+                  {edgeFailed === 0 ? "✓" : "◑"}{" "}
+                  Edge cases {edgePassed}p{edgeFailed ? ` ${edgeFailed}f` : ""}
                 </span>
               );
             })() : null}
             {(() => {
               const ef = testResult?.enhancement_feedback;
               const hasResult = (ef?.collected ?? 0) > 0;
+              if (!hasResult) return null;
               return (
-                <span className={`progress-chip ${hasResult ? (ef!.failed === 0 ? "done" : "partial") : ""}`}>
-                  {hasResult ? (ef!.failed === 0 ? "✓" : "◑") : "○"}{" "}
-                  Enhanced{hasResult ? ` ${ef!.passed}/${ef!.collected}` : ""}
+                <span className={`progress-chip ${ef!.failed === 0 ? "done" : "partial"}`}>
+                  {ef!.failed === 0 ? "✓" : "◑"}{" "}
+                  Enhancements {ef!.passed}/{ef!.collected}
                 </span>
               );
             })()}
-            <span className={`progress-chip ${candidateTestsAdded ? "done" : ""}`}>
-              {candidateTestsAdded ? "✓" : "○"}{" "}
-              Tests{candidateTestsAdded ? ` +${candidateTestCount}` : ""}
-            </span>
-            <span className="status-box-divider" />
+            {candidateTestsAdded ? (
+              <span className="progress-chip done">✓ My tests +{candidateTestCount}</span>
+            ) : null}
+            {(publicTestsRun || candidateTestsAdded) ? <span className="status-box-divider" /> : null}
             {/* Attempt state & timer */}
             <span className={`status-pill ${submitted ? "ready" : isExpired ? "error" : statusClass(attempt.status)}`}>
-              {submitted ? "submitted" : isExpired ? "expired" : attempt.status}
+              {submitted ? "submitted" : isExpired ? "expired" : attempt.status === "started" ? "In progress" : attempt.status}
             </span>
             {isTimed && !submitted && msRemaining !== null ? (
               <span className={`status-pill ${isExpired ? "error" : timerWarning ? "warn" : "ready"}`}>
@@ -809,7 +810,7 @@ export default function CandidateWorkspace() {
               </span>
             ) : null}
             {isTimed && submitted && isExpired ? <span className="status-pill error">Expired</span> : null}
-            {!isTimed ? <span className="status-pill ready">Recommended {attempt.duration_minutes}m</span> : null}
+            {!isTimed ? <span className="status-pill ready">Recommended {attempt.duration_minutes} min</span> : null}
             {timerWarning && !isExpired ? <span className="status-pill warn">{timerWarning}</span> : null}
             {submissionResult ? (
               <span className={`status-pill ${submissionResult.hidden_test_status === "passed" ? "ready" : "warn"}`}>
@@ -934,7 +935,7 @@ export default function CandidateWorkspace() {
                 <li>Fix the failing public tests — click <strong>Run Tests</strong> to see which fail.</li>
                 <li>Find and fix hidden issues by reading the code — <strong>how</strong> you fix matters: design decisions (e.g., 403 vs 404) are evaluated, not just whether a test passes.</li>
                 <li>Implement the enhancements described in README.md — edge cases and validation correctness are evaluated, not just the happy path.</li>
-                <li>Write test cases for your fixes and enhancements.</li>
+                <li>Write test cases for your fixes and enhancements — <em>these count at final submission, not on each run.</em></li>
                 <li>Click <strong>Submit</strong> in the top bar when done.</li>
               </ol>
             </div>
@@ -1129,9 +1130,9 @@ export default function CandidateWorkspace() {
                       {hasResult ? (edgeFailed === 0 ? "✓" : "◑") : "○"}
                     </span>
                     <div>
-                      <strong>Hidden checks</strong>
+                      <strong>Edge cases</strong>
                       <span>{hasResult ? `${edgePassed} passed${edgeFailed ? `, ${edgeFailed} failing` : ""}` : "Run tests to check"}</span>
-                      <em>Edge cases and policy correctness beyond the public tests</em>
+                      <em>Hidden edge cases and policy correctness beyond the public tests</em>
                     </div>
                   </div>
                 );
@@ -1157,9 +1158,9 @@ export default function CandidateWorkspace() {
                   {candidateTestsAdded ? "✓" : "○"}
                 </span>
                 <div>
-                  <strong>Candidate tests</strong>
+                  <strong>My tests</strong>
                   <span>{candidateTestsAdded ? `${candidateTestCount} written` : "None added yet"}</span>
-                  <em>Tests you wrote for your fixes and enhancements — scored at submission</em>
+                  <em>Tests you wrote — scored at submission, not on each run</em>
                 </div>
               </div>
             </div>
