@@ -15,6 +15,7 @@
       "name": "runner",
       "image": "ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/signalloop-assessment-runner:latest",
       "essential": true,
+      "command": ["python", "-m", "signalloop_runner.main"],
       "environment": [
         {
           "name": "SIGNALLOOP_RUNNER_INPUT",

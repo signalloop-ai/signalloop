@@ -13,4 +13,7 @@ RUN python -m pip install --no-cache-dir \
 WORKDIR /app
 COPY signalloop_runner /app/signalloop_runner
 
-ENTRYPOINT ["python", "-m", "signalloop_runner.main"]
+# Default: HTTP server mode for always-on deployments (Render, ECS Service).
+# ECS batch mode (S3 read/write): override with
+#   command: ["python", "-m", "signalloop_runner.main"]
+CMD ["uvicorn", "signalloop_runner.server:app", "--host", "0.0.0.0", "--port", "9000"]
