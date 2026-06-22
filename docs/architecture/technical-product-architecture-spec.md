@@ -1,7 +1,7 @@
 # SignalLoop Technical Product & Architecture Specification
 
-Version: 2.0
-Status: Phase 2 source of truth — updated 2026-06-19
+Version: 3.0
+Status: Phase 3 planning complete — updated 2026-06-22
 
 ## 1. Purpose
 
@@ -9,7 +9,7 @@ This document combines product-technical architecture, assessment design, candid
 
 ## 2. System overview
 
-SignalLoop MVP consists of:
+SignalLoop consists of:
 
 ```text
 Candidate Browser
@@ -19,6 +19,7 @@ Candidate Browser
   -> Assessment Pack Store
   -> Database
   -> AI Provider
+  -> S3 (test payloads + webcam snapshots)
   -> Employer Report UI
 ```
 
@@ -253,9 +254,12 @@ Capture:
 - selected code context,
 - final submission,
 - structured submission-review answers,
-- hidden test results.
-- evaluator feedback mode.
-- execution timing breakdown where available.
+- hidden test results,
+- evaluator feedback mode,
+- execution timing breakdown where available,
+- browser proctoring events (fullscreen exits, focus loss/return with duration),
+- webcam consent decision,
+- periodic webcam JPEG snapshots (if consented), stored in S3.
 
 ## 15. Engineering Evidence Report
 
@@ -276,18 +280,19 @@ Sections:
 2. Overall recommendation
 3. Scores and rubric weights
 4. Timing metadata (mode, duration, time used, submission mode)
-5. Public test results
-6. Hidden test results (seeded issue coverage)
-7. Feature/design implementation
-8. Candidate-written tests
-9. AI collaboration (flagged prompts, paste detection, large paste events)
-10. AI integrity risk (low/medium/high/critical label with signals)
-11. FAVO interpretation (Frame/Ask/Verify/Own derived from evidence)
-12. LLM-assisted review status (`not_run` until bounded prompt is added)
-13. Process evidence (snapshots, test runs)
-14. Submission Review
-15. Timeline
-16. Follow-up questions (candidate-specific, generated from evidence)
+5. Follow-up interview questions
+6. Public test results
+7. Hidden test results (seeded issue coverage)
+8. Enhancements
+9. Candidate-written tests
+10. AI collaboration (flagged prompts, paste detection, large paste events)
+11. Unified integrity score (low/medium/high/critical — combines AI signals + proctoring signals)
+12. FAVO interpretation (Frame/Ask/Verify/Own derived from evidence)
+13. LLM-assisted review status (`not_run` until bounded prompt is added)
+14. Process evidence (snapshots, test runs)
+15. Proctoring Signals (focus-loss events, fullscreen exits, webcam snapshot strip)
+16. Submission Review
+17. Timeline
 
 ## 16. Scoring rubric
 
@@ -331,17 +336,35 @@ Recommendation thresholds: ≥80 → strong_advance, ≥60 → advance_with_foll
 
 ## 17. Integrity roadmap
 
-MVP has no video proctoring. Phase 2 uses process evidence and the AI integrity risk label.
+### Phase 2 (implemented)
 
-Implemented in Phase 2:
 - AI policy redirect logging (all tags persisted per interaction).
 - Paste detection: verbatim AI code block matching against final submission.
 - Large paste event detection: snapshot-to-snapshot diff flagging sudden large additions.
 - AI integrity risk label (low/medium/high/critical) derived from signals above.
 - `no_issue_identified` redirect — logged when candidate hasn't named an issue yet.
 
-Later phases may add browser focus events, tab-switch signals, optional screen recording,
-proctored mode, and candidate-specific assessment variants.
+### Phase 3 (planned — see `docs/enhancements/phase-3-proctoring/`)
+
+- Browser event logging: fullscreen exit, focus loss, focus return (with duration).
+- Webcam consent screen (opt-in, never mandatory). If consented: periodic JPEG
+  snapshots every 5 minutes + on focus return > 30s + at submission.
+- Snapshots stored in S3 at `snapshots/{attempt_id}/{timestamp}.jpg`.
+- Unified integrity score replacing the Phase 2 `ai_integrity_risk` field.
+  Combines AI collaboration signals + proctoring signals. All thresholds are
+  configurable in `INTEGRITY_THRESHOLDS` (`integrity_config.py`).
+- Employer report: "Proctoring Signals" section with event summary, focus-loss
+  timeline, and webcam snapshot thumbnail strip.
+
+### Explicitly out of scope (all phases)
+
+- Continuous video recording or streaming
+- Screen recording
+- Paste blocking
+- Dev tools detection (unreliable, produces false positives)
+- OS-level window switch interception
+- Face analysis or biometric processing
+- Mandatory webcam
 
 ## 18. Code boundary
 
@@ -524,11 +547,59 @@ Strict Clerk-user-based isolation implemented:
 
 ### Deployment architecture
 
-No deployment stack changes in Phase 2.
+Phase 2 switched hosted execution to `EXECUTION_BACKEND=direct` — pytest runs
+inline in the API process via subprocess (no ECS cold start, ~7s vs ~50s).
+This is pilot-only; switch to `ecs_fargate` for production to restore isolation.
 
 - Web/API: Render.
 - Database: Supabase (Postgres).
 - Employer auth: Clerk.
-- Local execution: Docker worker (`http_worker` backend).
-- Hosted candidate execution: AWS ECS/Fargate per-run tasks (`ecs_fargate` backend).
+- Local execution: Docker worker (`http_worker` backend) or `direct`.
+- Hosted candidate execution: `direct` (pilot); `ecs_fargate` (production path).
+- File storage: AWS S3 (`signalloop-runner-payloads` bucket).
+  - `runs/` prefix: ECS runner test payloads and outputs.
+  - `snapshots/` prefix: Phase 3 webcam snapshots.
 - Backend switches via `EXECUTION_BACKEND` env var (`apps/api/signalloop_api/execution.py`).
+
+## 21. Phase 3: Evidence-Based Proctoring
+
+Status: planning complete, implementation not started.
+Full detail: `docs/enhancements/phase-3-proctoring/`.
+
+### What Phase 3 adds
+
+**Browser event logging** — candidate workspace emits structured events to the backend:
+- `fullscreen_exit` / `fullscreen_enter` — tracked via Fullscreen API
+- `focus_lost` / `focus_returned` (with duration in seconds) — tracked via
+  `visibilitychange` and `window.blur/focus`
+
+Events are buffered client-side and flushed in batches every 30 seconds, on
+page unload, and before final submission. Stored in new `proctoring_events` table.
+
+**Webcam consent and snapshots** — optional, never mandatory:
+- Consent screen shown once at workspace load, before assessment begins.
+- If granted: JPEG snapshot (640px wide) captured every 5 min, on focus return
+  > 30s, and at submission. Uploaded via S3 presigned PUT URL.
+- S3 path: `snapshots/{attempt_id}/{unix_timestamp}.jpg`.
+- Employer report shows thumbnail strip with timestamps and trigger labels.
+
+**Unified integrity score** — replaces `ai_integrity_risk` field:
+- Combines Phase 2 AI signals (violations, pastes, prompt injection) with
+  Phase 3 proctoring signals (focus loss, fullscreen exits).
+- Label: `low / medium / high / critical`.
+- All thresholds in `INTEGRITY_THRESHOLDS` dict (`integrity_config.py`) — no
+  magic numbers in logic.
+- Old `ai_integrity_risk` field kept for backwards compatibility, derived from
+  `integrity_score.label`.
+
+**Employer report: Proctoring Signals section** — new section after Process Evidence:
+- Webcam consent chip, event summary table, focus-loss timeline (collapsed),
+  snapshot thumbnail strip.
+- Unified integrity banner replaces the Phase 2 AI risk banner.
+
+### What Phase 3 explicitly does not do
+
+- Block paste, fullscreen exit, tab switching, or any candidate action.
+- Record audio, continuous video, or screen content.
+- Perform face detection or biometric analysis.
+- Make webcam mandatory.
