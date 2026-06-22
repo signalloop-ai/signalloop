@@ -949,7 +949,7 @@ export default function CandidateWorkspace() {
     );
   }
 
-  if (showWebcamPrompt) {
+  if (showWebcamPrompt && !submitted) {
     return (
       <main className="onboarding">
         <section className="onboarding-panel webcam-consent-panel">

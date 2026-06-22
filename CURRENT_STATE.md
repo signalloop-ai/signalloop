@@ -230,6 +230,26 @@ UX polish close-out).
   updates on regenerate.
 - **API test suite**: 127 passed, 11 skipped.
 
+## Settled state after June 2026 Phase 3 proctoring session
+
+- **Webcam consent prompt**: candidate sees an opt-in webcam prompt before the workspace
+  loads. Consent is recorded via `POST /candidate/invites/{token}/webcam-consent`. "Skip"
+  dismisses the prompt and shows the workspace without webcam.
+- **Proctoring events**: focus-loss and fullscreen-exit events are queued client-side and
+  flushed in batches via `POST /candidate/invites/{token}/proctoring-events/batch`.
+  Events are flushed before final submission.
+- **Snapshot thumbnails**: employer report shows webcam snapshot thumbnails in a
+  `.snapshot-strip` for attempts with webcam consent.
+- **Focus-loss timeline**: employer report shows a collapsible "Focus-loss timeline (N events)"
+  table with duration and timestamps.
+- **Integrity score banners**: employer report shows no banner (low), amber (medium), or
+  red (high/critical) integrity banners with contributing factor summaries.
+- **Submission mode**: `auto_expired` submission mode is tracked and displayed; webcam
+  prompt auto-hides when `submitted=true` to avoid blocking the auto-submit flow.
+- **E2E test coverage**: 30 tests across candidate-workspace, employer-portal, and
+  phase-3-proctoring specs all pass with `--workers=1`.
+- **API test suite**: all passing.
+
 ## What does not exist yet
 
 - External LLM-assisted report review is not invoked yet; reports include
@@ -238,19 +258,11 @@ UX polish close-out).
 
 ## Next task
 
-**Phase 2 is complete. Begin Phase 3.**
+**Phase 3 is complete.**
 
-Phase 3 has not yet been defined. Brainstorm with the team on scope before creating
-phase documentation. Likely candidate themes based on Phase 2 learnings:
-
-- Candidate experience improvements (richer test feedback, better error messages)
-- Employer experience improvements (bulk invite, candidate comparison, export)
-- Scoring accuracy improvements (LLM-assisted review section currently `not_run`)
-- Operational hardening (production-grade execution backend, monitoring, alerts)
-- New assessment packs
-
-Do not start Phase 3 implementation until a phase document exists under
-`docs/enhancements/phase-3-*/`.
+Phase 3 (proctoring signals) is implemented and validated. All e2e tests pass.
+The `phase-3-proctoring` branch contains all Phase 3 work (Tasks 03 and 04)
+and is ready to merge to main.
 
 Phase 2 historical reference: see `docs/development/changes.md` for the full session-by-session log. Phase 2 final hosted validation (2026-06-18) passed with API tests 38 passed, worker tests 22 passed, web typecheck/lint/build passed, Playwright e2e 2 passed/1 skipped, and a full browser-level attempt (public tests → submission → hidden evaluation → report generation → report rendering) working on Render without browser console errors.
 

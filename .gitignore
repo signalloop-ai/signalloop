@@ -47,3 +47,4 @@ htmlcov/
 *.zip
 *.tar
 *.tar.gz
+.opencode
