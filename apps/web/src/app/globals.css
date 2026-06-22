@@ -251,45 +251,39 @@ button:disabled {
   white-space: nowrap;
 }
 
-.what-to-do {
+.right-section {
   border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.what-to-do-header {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  color: var(--text);
-  cursor: pointer;
   display: flex;
-  font-size: 13px;
-  font-weight: 600;
-  gap: 6px;
-  justify-content: space-between;
-  padding: 10px 14px;
-  width: 100%;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.what-to-do-header:hover {
-  background: var(--panel-2);
+.right-section-grow {
+  flex: 1;
+  flex-shrink: 1;
 }
 
-.what-to-do-body {
-  padding: 0 14px 12px;
+.right-section-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 14px 14px;
 }
 
-.what-to-do-body ol {
+.what-to-do-list {
   color: var(--muted);
   display: grid;
   font-size: 12px;
-  gap: 5px;
-  line-height: 1.35;
+  gap: 6px;
+  line-height: 1.4;
   margin: 0;
   padding-left: 18px;
 }
 
-.what-to-do-body strong {
+.what-to-do-list strong {
   color: var(--text);
 }
 

@@ -274,7 +274,7 @@ export default function CandidateWorkspace() {
   const [bottomPanelHeight, setBottomPanelHeight] = useState(260);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [editorMounted, setEditorMounted] = useState(false);
-  const [whatToDoCollapsed, setWhatToDoCollapsed] = useState(false);
+  const [whatToDoHeight, setWhatToDoHeight] = useState(210);
   const [testDrawerOpen, setTestDrawerOpen] = useState(false);
 
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
@@ -465,6 +465,25 @@ export default function CandidateWorkspace() {
       } else {
         setAssistantPanelWidth(Math.min(520, Math.max(260, startWidth - delta)));
       }
+    }
+
+    function onPointerUp() {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }
+
+  function startWhatToDoResize(event: PointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = whatToDoHeight;
+
+    function onPointerMove(moveEvent: globalThis.PointerEvent) {
+      const delta = moveEvent.clientY - startY;
+      setWhatToDoHeight(Math.min(480, Math.max(80, startHeight + delta)));
     }
 
     function onPointerUp() {
@@ -895,81 +914,85 @@ export default function CandidateWorkspace() {
           aria-label="Resize AI panel"
         />
 
-        {/* RIGHT — What to do + AI Collaborator */}
+        {/* RIGHT — two independent sections with their own scroll */}
         <aside className="assistant-panel">
-          <div className="what-to-do">
-            <button
-              className="what-to-do-header"
-              onClick={() => setWhatToDoCollapsed((c) => !c)}
-              aria-expanded={!whatToDoCollapsed}
-            >
-              <span>What to do</span>
-              {whatToDoCollapsed
-                ? <ChevronRight size={14} aria-hidden="true" />
-                : <ChevronDown size={14} aria-hidden="true" />}
-            </button>
-            {!whatToDoCollapsed && (
-              <div className="what-to-do-body">
-                <ol>
-                  <li>
-                    Read{" "}
-                    {"README.md" in files ? (
-                      <button className="inline-link" onClick={() => setActivePath("README.md")}>README.md</button>
-                    ) : "README.md"}{" "}
-                    — scenario, bugs, and enhancements are all described there.
-                  </li>
-                  <li>Fix the failing public tests — click <strong>Run Tests</strong> to see which fail.</li>
-                  <li>Find and fix hidden issues by reading the code — <strong>how</strong> you fix matters: design decisions (e.g., 403 vs 404) are evaluated, not just whether a test passes.</li>
-                  <li>Implement the enhancements described in README.md — edge cases and validation correctness are evaluated, not just the happy path.</li>
-                  <li>Write test cases for your fixes and enhancements.</li>
-                  <li>Click <strong>Submit</strong> in the top bar when done.</li>
-                </ol>
-              </div>
-            )}
+
+          {/* Section 1: What to do */}
+          <div className="right-section" style={{ height: `${whatToDoHeight}px` }}>
+            <div className="panel-header">
+              <h2>What to do</h2>
+            </div>
+            <div className="right-section-body">
+              <ol className="what-to-do-list">
+                <li>
+                  Read{" "}
+                  {"README.md" in files ? (
+                    <button className="inline-link" onClick={() => setActivePath("README.md")}>README.md</button>
+                  ) : "README.md"}{" "}
+                  — scenario, bugs, and enhancements are all described there.
+                </li>
+                <li>Fix the failing public tests — click <strong>Run Tests</strong> to see which fail.</li>
+                <li>Find and fix hidden issues by reading the code — <strong>how</strong> you fix matters: design decisions (e.g., 403 vs 404) are evaluated, not just whether a test passes.</li>
+                <li>Implement the enhancements described in README.md — edge cases and validation correctness are evaluated, not just the happy path.</li>
+                <li>Write test cases for your fixes and enhancements.</li>
+                <li>Click <strong>Submit</strong> in the top bar when done.</li>
+              </ol>
+            </div>
           </div>
 
-          <div className="panel-header">
-            <h2>AI Collaborator</h2>
-            <p>Constrained to candidate-visible context and one focused issue at a time.</p>
-          </div>
-          <div className="assistant-chat">
-            <div className="chat-messages" aria-label="AI messages" ref={chatMessagesRef}>
-              {chatMessages.map((message, index) => (
-                <div className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>
-                  <div className="chat-role">
-                    <MessageSquare size={14} aria-hidden="true" />
-                    <span>{message.role === "candidate" ? "You" : "Assistant"}</span>
-                  </div>
-                  <p>{message.content}</p>
-                  {message.tags?.length ? (
-                    <div className="tag-row">
-                      {message.tags.map((tag) => (
-                        <span className={`status-pill ${message.allowed === false ? "error" : "ready"}`} key={tag}>
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ))}
+          <div
+            className="resize-handle horizontal"
+            onPointerDown={startWhatToDoResize}
+            role="separator"
+            aria-label="Resize what to do panel"
+          />
+
+          {/* Section 2: AI Collaborator */}
+          <div className="right-section right-section-grow">
+            <div className="panel-header">
+              <h2>AI Collaborator</h2>
+              <p>Constrained to candidate-visible context and one focused issue at a time.</p>
             </div>
-            <label htmlFor="assistant-message">Ask about the selected file or public test output</label>
-            <textarea
-              id="assistant-message"
-              value={chatInput}
-              onChange={(event) => setChatInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  void sendChatMessage();
-                }
-              }}
-            />
-            <button className="command-button primary" disabled={chatLoading || !chatInput.trim()} onClick={sendChatMessage}>
-              <Send size={17} aria-hidden="true" />
-              {chatLoading ? "Sending" : "Ask"}
-            </button>
+            <div className="assistant-chat">
+              <div className="chat-messages" aria-label="AI messages" ref={chatMessagesRef}>
+                {chatMessages.map((message, index) => (
+                  <div className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>
+                    <div className="chat-role">
+                      <MessageSquare size={14} aria-hidden="true" />
+                      <span>{message.role === "candidate" ? "You" : "Assistant"}</span>
+                    </div>
+                    <p>{message.content}</p>
+                    {message.tags?.length ? (
+                      <div className="tag-row">
+                        {message.tags.map((tag) => (
+                          <span className={`status-pill ${message.allowed === false ? "error" : "ready"}`} key={tag}>
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              <label htmlFor="assistant-message">Ask about the selected file or public test output</label>
+              <textarea
+                id="assistant-message"
+                value={chatInput}
+                onChange={(event) => setChatInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void sendChatMessage();
+                  }
+                }}
+              />
+              <button className="command-button primary" disabled={chatLoading || !chatInput.trim()} onClick={sendChatMessage}>
+                <Send size={17} aria-hidden="true" />
+                {chatLoading ? "Sending" : "Ask"}
+              </button>
+            </div>
           </div>
+
         </aside>
       </section>
 
