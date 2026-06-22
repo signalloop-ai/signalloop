@@ -1,5 +1,6 @@
 from pathlib import Path
 from secrets import token_urlsafe
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from re import findall
 from time import monotonic
@@ -462,10 +463,24 @@ def run_public_tests(
     snapshot_saved = monotonic()
 
     provider = get_execution_provider()
-    try:
-        result = provider.run_public(payload.files)
-    except Exception as exc:
-        result = execution_error_result(str(exc))
+    from signalloop_api.submissions import hidden_test_files_for_attempt
+    hidden_tests = hidden_test_files_for_attempt(attempt)
+
+    # Run public and evaluator tests concurrently — both take the same input
+    # and are independent, so there's no reason to wait for one before starting
+    # the other (each ECS cold start is ~45s).
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        f_public = pool.submit(provider.run_public, payload.files)
+        f_hidden = pool.submit(provider.run_hidden, payload.files, hidden_tests)
+        try:
+            result = f_public.result()
+        except Exception as exc:
+            result = execution_error_result(str(exc))
+        try:
+            evaluator_result = f_hidden.result()
+        except Exception as exc:
+            evaluator_result = execution_error_result(str(exc))
+
     public_completed = monotonic()
     merge_timing(result, "api_preflight_ms", int((snapshot_saved - api_started) * 1000))
     merge_timing(result, "api_public_execution_ms", int((public_completed - snapshot_saved) * 1000))
@@ -481,15 +496,6 @@ def run_public_tests(
         duration_ms=result.get("duration_ms", 0),
     )
     session.add(test_run)
-
-    # Always run evaluator tests — enhancement feedback is shown in all modes.
-    try:
-        from signalloop_api.submissions import hidden_test_files_for_attempt
-
-        hidden_tests = hidden_test_files_for_attempt(attempt)
-        evaluator_result = provider.run_hidden(payload.files, hidden_tests)
-    except Exception as exc:
-        evaluator_result = execution_error_result(str(exc))
 
     pack_config = DEFAULT_PACKS.get(attempt.assessment_pack.slug, {})
     result["enhancement_feedback"] = enhancement_summary(
