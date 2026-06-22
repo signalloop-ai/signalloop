@@ -239,6 +239,8 @@ export default function CandidateWorkspace() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<string>("");
   const [running, setRunning] = useState(false);
+  const [runElapsed, setRunElapsed] = useState(0);
+  const [submitElapsed, setSubmitElapsed] = useState(0);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
   const [initialFiles, setInitialFiles] = useState<Record<string, string>>({});
@@ -420,11 +422,25 @@ export default function CandidateWorkspace() {
     monaco.editor.setModelMarkers(model, "signalloop-python-diagnostics", markers);
   }, [syntaxDiagnostics, editorMounted]);
 
+  useEffect(() => {
+    if (!running) { setRunElapsed(0); return; }
+    setRunElapsed(0);
+    const id = setInterval(() => setRunElapsed((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+
+  useEffect(() => {
+    if (!submitting) { setSubmitElapsed(0); return; }
+    setSubmitElapsed(0);
+    const id = setInterval(() => setSubmitElapsed((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [submitting]);
+
   const publicRunMessage = running
-    ? "Running public tests in an isolated AWS task. This usually takes 20-30 seconds; the result applies to the code snapshot from when you clicked Run Tests."
+    ? `Running tests… ${runElapsed}s`
     : null;
   const submissionMessage = submitting
-    ? "Submitting final code and running hidden evaluation in an isolated AWS task. This usually takes 20-30 seconds; keep this tab open until the result appears."
+    ? `Submitting… ${submitElapsed}s`
     : null;
 
   function startHorizontalResize(
