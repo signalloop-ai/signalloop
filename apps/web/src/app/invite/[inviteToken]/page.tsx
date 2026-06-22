@@ -276,9 +276,7 @@ export default function CandidateWorkspace() {
   const [editorMounted, setEditorMounted] = useState(false);
   const [whatToDoCollapsed, setWhatToDoCollapsed] = useState(false);
   const [testDrawerOpen, setTestDrawerOpen] = useState(false);
-  const [submissionDrawerOpen, setSubmissionDrawerOpen] = useState(false);
 
-  const submissionReviewRef = useRef<HTMLTextAreaElement | null>(null);
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
   const autoSnapshotTimeoutRef = useRef<number | null>(null);
   const editorRef = useRef<EditorHandle | null>(null);
@@ -421,16 +419,11 @@ export default function CandidateWorkspace() {
   const progressFailed = Number(testResult?.stdout?.match(/(\d+) failed/)?.[1] ?? 0);
   const progressAllPass = testResult?.status === "passed";
 
-  // Collapse bottom panel to header-only height when both drawers are closed
-  const effectiveBottomHeight = (testDrawerOpen || submissionDrawerOpen) ? bottomPanelHeight : 50;
+  // Collapse bottom panel to header-only height when test drawer is closed
+  const effectiveBottomHeight = testDrawerOpen ? bottomPanelHeight : 50;
 
   const publicRunMessage = running ? `Running tests… ${runElapsed}s` : null;
   const submissionMessage = submitting ? `Submitting… ${submitElapsed}s` : null;
-
-  function openSubmission() {
-    setSubmissionDrawerOpen(true);
-    window.setTimeout(() => submissionReviewRef.current?.focus(), 50);
-  }
 
   function openFileAtLine(path: string, lineNumber: number) {
     setActivePath(path);
@@ -735,65 +728,45 @@ export default function CandidateWorkspace() {
       {/* ── TOPBAR ── */}
       <header className="topbar">
         <div className="topbar-title">
-          <h1>{attempt.assessment.title}</h1>
-          <p>
-            Attempt #{attempt.attempt_id} · {attempt.candidate_email ?? "candidate invite"} ·{" "}
-            {attempt.assessment.version}
-          </p>
-        </div>
-
-        {/* Always-visible progress chips */}
-        <div className="topbar-progress">
-          <span className={`progress-chip ${publicTestsRun ? (progressAllPass ? "done" : "partial") : ""}`}>
-            {publicTestsRun ? (progressAllPass ? "✓" : "◑") : "○"}{" "}
-            Tests{publicTestsRun ? `: ${progressPassed}p${progressFailed ? `, ${progressFailed}f` : ""}` : ""}
-          </span>
-          {attempt.evaluator_feedback_mode === "guided" && testResult?.evaluator_feedback ? (() => {
-            const hf = testResult.evaluator_feedback;
-            const ef = testResult.enhancement_feedback;
-            const edgeFailed = Math.max(0, hf.failed - (ef?.failed ?? 0));
-            return (
-              <span className={`progress-chip ${edgeFailed === 0 ? "done" : "partial"}`}>
-                {edgeFailed === 0 ? "✓" : "◑"} Hidden: {hf.passed}p{edgeFailed ? `, ${edgeFailed}f` : ""}
-              </span>
-            );
-          })() : null}
-          <span className={`progress-chip ${candidateTestsAdded ? "done" : ""}`}>
-            {candidateTestsAdded ? "✓" : "○"} Tests written
-          </span>
-          <span className={`progress-chip ${submissionReview.changed.trim() ? "done" : ""}`}>
-            {submissionReview.changed.trim() ? "✓" : "○"} Notes
-          </span>
+          <svg className="topbar-logo" width="30" height="30" viewBox="0 0 30 30" fill="none" aria-label="SignalLoop">
+            <rect width="30" height="30" rx="7" fill="#0f766e"/>
+            <path d="M15 6C19.97 6 24 10.03 24 15C24 19.97 19.97 24 15 24C10.5 24 6.8 20.7 6.1 16.4" stroke="white" strokeWidth="2.3" strokeLinecap="round"/>
+            <path d="M4.5 14.5L6.2 17.2L9 15.5" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"/>
+            <circle cx="15" cy="6" r="2" fill="#5eead4"/>
+          </svg>
+          <div>
+            <h1>{attempt.assessment.title}</h1>
+            <p>SignalLoop · Attempt #{attempt.attempt_id} · {attempt.candidate_email ?? "candidate invite"} · {attempt.assessment.version}</p>
+          </div>
         </div>
 
         <div className="topbar-actions">
-          <span className={`status-pill ${submitted ? "ready" : isExpired ? "error" : statusClass(attempt.status)}`}>
-            {submitted ? "submitted" : isExpired ? "expired" : attempt.status}
-          </span>
-          {isTimed && !submitted && msRemaining !== null ? (
-            <span className={`status-pill ${isExpired ? "error" : timerWarning ? "warn" : "ready"}`}>
-              {isExpired ? "Expired" : `Time ${formatCountdown(msRemaining)}`}
+          {/* Grouped status & state box */}
+          <div className="status-box">
+            <span className={`status-pill ${submitted ? "ready" : isExpired ? "error" : statusClass(attempt.status)}`}>
+              {submitted ? "submitted" : isExpired ? "expired" : attempt.status}
             </span>
-          ) : null}
-          {isTimed && submitted && isExpired ? (
-            <span className="status-pill error">Expired</span>
-          ) : null}
-          {!isTimed ? <span className="status-pill ready">Recommended {attempt.duration_minutes}m</span> : null}
-          {timerWarning && !isExpired ? <span className="operation-status">{timerWarning}</span> : null}
-          {submissionResult ? (
-            <span className="submission-status">
-              {submissionResult.hidden_test_status === "passed"
-                ? "All hidden tests passed."
-                : "Some hidden tests failed."}
-            </span>
-          ) : null}
-          {publicRunMessage ? <span className="operation-status">{publicRunMessage}</span> : null}
-          {submissionMessage ? <span className="operation-status">{submissionMessage}</span> : null}
+            {isTimed && !submitted && msRemaining !== null ? (
+              <span className={`status-pill ${isExpired ? "error" : timerWarning ? "warn" : "ready"}`}>
+                {isExpired ? "Expired" : `Time ${formatCountdown(msRemaining)}`}
+              </span>
+            ) : null}
+            {isTimed && submitted && isExpired ? <span className="status-pill error">Expired</span> : null}
+            {!isTimed ? <span className="status-pill ready">Recommended {attempt.duration_minutes}m</span> : null}
+            {timerWarning && !isExpired ? <span className="status-pill warn">{timerWarning}</span> : null}
+            {submissionResult ? (
+              <span className={`status-pill ${submissionResult.hidden_test_status === "passed" ? "ready" : "warn"}`}>
+                {submissionResult.hidden_test_status === "passed" ? "All hidden tests passed" : "Some hidden tests failed"}
+              </span>
+            ) : null}
+            {publicRunMessage ? <span className="operation-status">{publicRunMessage}</span> : null}
+            {submissionMessage ? <span className="operation-status">{submissionMessage}</span> : null}
+          </div>
           <button className="command-button primary" disabled={running || submitted} onClick={runPublicTests}>
             <Play size={17} aria-hidden="true" />
             {running ? "Running" : "Run Tests"}
           </button>
-          <button className="command-button primary" disabled={submitted} onClick={openSubmission}>
+          <button className="command-button primary" disabled={submitted} onClick={() => setConfirmingSubmit(true)}>
             <Send size={17} aria-hidden="true" />
             Submit
           </button>
@@ -840,6 +813,9 @@ export default function CandidateWorkspace() {
               <FolderTree size={16} aria-hidden="true" />
               <span>{activePath || "No file selected"}</span>
             </div>
+            <span className="editor-autosave">
+              {saveStatus || "Files auto-saved every 60s"}
+            </span>
           </div>
           <div className="editor-wrapper">
             <Editor
@@ -975,10 +951,18 @@ export default function CandidateWorkspace() {
           <div className="section-title">
             <h2>Public Test Output</h2>
             <div className="drawer-title-end">
-              {testResult ? (
-                <span className={`status-pill ${statusClass(testResult.status)}`}>{testResult.status}</span>
-              ) : running ? (
-                <span className="status-pill warn">running</span>
+              {testResult ? (() => {
+                const total = progressPassed + progressFailed;
+                const label = total > 0
+                  ? progressFailed > 0
+                    ? `${progressFailed}/${total} failed`
+                    : `${total}/${total} passed`
+                  : testResult.status;
+                return (
+                  <span className={`status-pill ${progressFailed > 0 ? "error" : "ready"}`}>{label}</span>
+                );
+              })() : running ? (
+                <span className="status-pill warn">running…</span>
               ) : null}
               <button
                 className="icon-button"
@@ -1044,93 +1028,112 @@ export default function CandidateWorkspace() {
           )}
         </div>
 
-        {/* Submission Drawer */}
-        <div className="submission-panel">
-          <div className="section-title">
-            <h2>Final Submission</h2>
-            <div className="drawer-title-end">
-              {submitted ? (
-                <span className="status-pill ready">
-                  <ClipboardCheck size={13} aria-hidden="true" /> Recorded
-                </span>
-              ) : null}
-              <button
-                className="icon-button"
-                onClick={() => setSubmissionDrawerOpen((o) => !o)}
-                title={submissionDrawerOpen ? "Collapse" : "Expand"}
-              >
-                {submissionDrawerOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              </button>
-            </div>
-          </div>
-          {submissionDrawerOpen && (
-            <>
-              {!submitted ? (
-                <p className="submission-help">
-                  Both fields are optional. If time expires, your current files are submitted automatically.
-                </p>
-              ) : null}
-              {submissionResult ? (
-                <p className="submission-status">
-                  {submissionResult.hidden_test_status === "passed"
-                    ? "All hidden tests passed."
-                    : "Some hidden tests failed."}
-                </p>
-              ) : null}
-              {submissionMessage ? <p className="operation-status">{submissionMessage}</p> : null}
-              {submitError ? <p className="submission-error">{submitError}</p> : null}
-              <div className="submission-grid">
-                <label htmlFor="review-changed">What did you change? Any decisions or tradeoffs? (optional)</label>
-                <textarea
-                  id="review-changed"
-                  ref={submissionReviewRef}
-                  placeholder="Summarize the changes you made, any authorization or status policies you chose, and how you verified them."
-                  value={submissionReview.changed}
-                  disabled={submitted}
-                  onChange={(event) => setSubmissionReview((current) => ({ ...current, changed: event.target.value }))}
-                />
-                <label htmlFor="review-notes">Feedback about this assessment, or any issues you faced? (optional)</label>
-                <textarea
-                  id="review-notes"
-                  placeholder="Optional: anything the evaluator should know, or feedback about the assignment itself."
-                  value={submissionReview.notes}
-                  disabled={submitted}
-                  onChange={(event) => setSubmissionReview((current) => ({ ...current, notes: event.target.value }))}
-                />
-              </div>
-              {!submitted && (
-                <div className="submission-actions">
-                  <button
-                    className="command-button primary"
-                    disabled={!canSubmit}
-                    onClick={() => setConfirmingSubmit(true)}
-                  >
-                    <Send size={17} aria-hidden="true" />
-                    {submitting ? "Submitting…" : "Submit final"}
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
       </section>
 
-      {/* ── CONFIRM MODAL ── */}
+      {/* ── SUBMIT MODAL ── */}
       {confirmingSubmit ? (
         <div className="modal-backdrop" role="presentation">
           <section className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="submit-confirm-title">
             <h2 id="submit-confirm-title">Submit final attempt?</h2>
-            <p>Submission is permanent. Hidden tests run only after this step.</p>
-            <ul className="submit-checklist">
-              <li><strong>Public tests run:</strong> {publicTestsRun ? "yes" : "no — you can still submit"}</li>
-              <li><strong>Candidate tests added or updated:</strong> {candidateTestsAdded ? "yes" : "no"}</li>
-              <li><strong>Submission notes:</strong> {reviewAnsweredCount > 0 ? "provided" : "not filled in (optional — you can still submit)"}</li>
-            </ul>
+            <p>Submission is permanent. Review your progress, add notes, then confirm.</p>
+
+            {/* Status summary */}
+            <div className="submit-status">
+              {(() => {
+                const total = progressPassed + progressFailed;
+                const allPass = progressAllPass;
+                const someRun = publicTestsRun;
+                return (
+                  <div className="submit-status-item">
+                    <span className={`submit-status-icon ${someRun ? (allPass ? "done" : "partial") : ""}`}>
+                      {someRun ? (allPass ? "✓" : "◑") : "○"}
+                    </span>
+                    <div>
+                      <strong>Public tests</strong>
+                      <span>{someRun ? (total > 0 ? `${progressPassed} passed${progressFailed ? `, ${progressFailed} failed` : ""}` : testResult?.status) : "Not run yet"}</span>
+                      <em>Shown during the assessment — all should pass before submitting</em>
+                    </div>
+                  </div>
+                );
+              })()}
+              {attempt.evaluator_feedback_mode === "guided" ? (() => {
+                const hf = testResult?.evaluator_feedback;
+                const ef = testResult?.enhancement_feedback;
+                const hasResult = hf != null;
+                const edgePassed = hasResult ? Math.max(0, hf!.passed - (ef?.passed ?? 0)) : 0;
+                const edgeFailed = hasResult ? Math.max(0, hf!.failed - (ef?.failed ?? 0)) : 0;
+                return (
+                  <div className="submit-status-item">
+                    <span className={`submit-status-icon ${hasResult ? (edgeFailed === 0 ? "done" : "partial") : ""}`}>
+                      {hasResult ? (edgeFailed === 0 ? "✓" : "◑") : "○"}
+                    </span>
+                    <div>
+                      <strong>Hidden checks</strong>
+                      <span>{hasResult ? `${edgePassed} passed${edgeFailed ? `, ${edgeFailed} failing` : ""}` : "Run tests to check"}</span>
+                      <em>Edge cases and policy correctness beyond the public tests</em>
+                    </div>
+                  </div>
+                );
+              })() : null}
+              {(() => {
+                const ef = testResult?.enhancement_feedback;
+                const hasResult = (ef?.collected ?? 0) > 0;
+                return (
+                  <div className="submit-status-item">
+                    <span className={`submit-status-icon ${hasResult ? (ef!.failed === 0 ? "done" : "partial") : ""}`}>
+                      {hasResult ? (ef!.failed === 0 ? "✓" : "◑") : "○"}
+                    </span>
+                    <div>
+                      <strong>Enhancements</strong>
+                      <span>{hasResult ? `${ef!.passed}/${ef!.collected} passing` : "Run tests to check"}</span>
+                      <em>New features described in README.md — edge cases evaluated</em>
+                    </div>
+                  </div>
+                );
+              })()}
+              <div className="submit-status-item">
+                <span className={`submit-status-icon ${candidateTestsAdded ? "done" : ""}`}>
+                  {candidateTestsAdded ? "✓" : "○"}
+                </span>
+                <div>
+                  <strong>Candidate tests</strong>
+                  <span>{candidateTestsAdded ? `${candidateTestCount} written` : "None added yet"}</span>
+                  <em>Tests you wrote for your fixes and enhancements — scored at submission</em>
+                </div>
+              </div>
+            </div>
+
+            {/* Notes input */}
+            <div className="submit-notes">
+              <div className="submission-grid">
+                <label htmlFor="modal-review-changed">What did you change? Any decisions or tradeoffs? <span className="submit-optional">(optional)</span></label>
+                <textarea
+                  id="modal-review-changed"
+                  autoFocus
+                  placeholder="Summarize the changes you made, any authorization or status policies you chose, and how you verified them."
+                  value={submissionReview.changed}
+                  disabled={submitting}
+                  onChange={(event) => setSubmissionReview((current) => ({ ...current, changed: event.target.value }))}
+                />
+                <label htmlFor="modal-review-notes">Feedback about this assessment, or any issues you faced? <span className="submit-optional">(optional)</span></label>
+                <textarea
+                  id="modal-review-notes"
+                  placeholder="Optional: anything the evaluator should know, or feedback about the assignment itself."
+                  value={submissionReview.notes}
+                  disabled={submitting}
+                  onChange={(event) => setSubmissionReview((current) => ({ ...current, notes: event.target.value }))}
+                />
+              </div>
+            </div>
+
+            {submitError ? <p className="submission-error">{submitError}</p> : null}
+            {submissionMessage ? <p className="operation-status">{submissionMessage}</p> : null}
+
             <div className="modal-actions">
-              <button className="command-button secondary" onClick={() => setConfirmingSubmit(false)}>Cancel</button>
-              <button className="command-button primary" disabled={submitting} onClick={() => submitFinal()}>
+              <button className="command-button secondary" onClick={() => setConfirmingSubmit(false)} disabled={submitting}>Cancel</button>
+              <button className="command-button primary" disabled={!canSubmit} onClick={() => submitFinal()}>
                 <Send size={17} aria-hidden="true" />
-                Submit final
+                {submitting ? "Submitting…" : "Submit final"}
               </button>
             </div>
           </section>
