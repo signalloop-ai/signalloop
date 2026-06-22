@@ -743,6 +743,44 @@ export default function CandidateWorkspace() {
         <div className="topbar-actions">
           {/* Grouped status & state box */}
           <div className="status-box">
+            {/* Progress counts */}
+            <span className={`progress-chip ${publicTestsRun ? (progressAllPass ? "done" : "partial") : ""}`}>
+              {publicTestsRun ? (progressAllPass ? "✓" : "◑") : "○"}{" "}
+              Public{publicTestsRun
+                ? (progressPassed + progressFailed > 0
+                    ? ` ${progressPassed}p${progressFailed ? ` ${progressFailed}f` : ""}`
+                    : ` ${testResult?.status}`)
+                : ""}
+            </span>
+            {attempt.evaluator_feedback_mode === "guided" ? (() => {
+              const hf = testResult?.evaluator_feedback;
+              const ef = testResult?.enhancement_feedback;
+              const hasResult = hf != null;
+              const edgeFailed = hasResult ? Math.max(0, hf!.failed - (ef?.failed ?? 0)) : 0;
+              const edgePassed = hasResult ? Math.max(0, hf!.passed - (ef?.passed ?? 0)) : 0;
+              return (
+                <span className={`progress-chip ${hasResult ? (edgeFailed === 0 ? "done" : "partial") : ""}`}>
+                  {hasResult ? (edgeFailed === 0 ? "✓" : "◑") : "○"}{" "}
+                  Hidden{hasResult ? ` ${edgePassed}p${edgeFailed ? ` ${edgeFailed}f` : ""}` : ""}
+                </span>
+              );
+            })() : null}
+            {(() => {
+              const ef = testResult?.enhancement_feedback;
+              const hasResult = (ef?.collected ?? 0) > 0;
+              return (
+                <span className={`progress-chip ${hasResult ? (ef!.failed === 0 ? "done" : "partial") : ""}`}>
+                  {hasResult ? (ef!.failed === 0 ? "✓" : "◑") : "○"}{" "}
+                  Enhanced{hasResult ? ` ${ef!.passed}/${ef!.collected}` : ""}
+                </span>
+              );
+            })()}
+            <span className={`progress-chip ${candidateTestsAdded ? "done" : ""}`}>
+              {candidateTestsAdded ? "✓" : "○"}{" "}
+              Tests{candidateTestsAdded ? ` +${candidateTestCount}` : ""}
+            </span>
+            <span className="status-box-divider" />
+            {/* Attempt state & timer */}
             <span className={`status-pill ${submitted ? "ready" : isExpired ? "error" : statusClass(attempt.status)}`}>
               {submitted ? "submitted" : isExpired ? "expired" : attempt.status}
             </span>
@@ -756,7 +794,7 @@ export default function CandidateWorkspace() {
             {timerWarning && !isExpired ? <span className="status-pill warn">{timerWarning}</span> : null}
             {submissionResult ? (
               <span className={`status-pill ${submissionResult.hidden_test_status === "passed" ? "ready" : "warn"}`}>
-                {submissionResult.hidden_test_status === "passed" ? "All hidden tests passed" : "Some hidden tests failed"}
+                {submissionResult.hidden_test_status === "passed" ? "Hidden: passed" : "Hidden: failed"}
               </span>
             ) : null}
             {publicRunMessage ? <span className="operation-status">{publicRunMessage}</span> : null}
