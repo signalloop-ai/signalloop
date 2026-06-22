@@ -955,6 +955,12 @@ button:disabled {
   padding-left: 20px;
 }
 
+.webcam-consent-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .status-pill {
   border-radius: 999px;
   font-size: 12px;

@@ -276,6 +276,9 @@ export default function CandidateWorkspace() {
   const [editorMounted, setEditorMounted] = useState(false);
   const [whatToDoHeight, setWhatToDoHeight] = useState(210);
   const [testDrawerOpen, setTestDrawerOpen] = useState(false);
+  // null = not asked yet, true = granted, false = declined
+  const [webcamConsent, setWebcamConsent] = useState<boolean | null>(null);
+  const [showWebcamPrompt, setShowWebcamPrompt] = useState(false);
 
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
   const autoSnapshotTimeoutRef = useRef<number | null>(null);
@@ -286,6 +289,8 @@ export default function CandidateWorkspace() {
   type ProctoringQueueItem = { event_type: string; occurred_at: string; metadata?: Record<string, unknown> };
   const proctoringQueueRef = useRef<ProctoringQueueItem[]>([]);
   const blurredAtRef = useRef<number | null>(null);
+  const webcamStreamRef = useRef<MediaStream | null>(null);
+  const snapshotIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     async function loadInvite() {
@@ -601,12 +606,122 @@ export default function CandidateWorkspace() {
     });
   }
 
+  async function captureAndUploadSnapshot(trigger: "periodic" | "focus_return" | "submission") {
+    const stream = webcamStreamRef.current;
+    if (!stream || !inviteToken) return;
+    try {
+      const track = stream.getVideoTracks()[0];
+      if (!track || track.readyState !== "live") return;
+
+      // Try ImageCapture API first; fall back to canvas.
+      let blob: Blob | null = null;
+      // ImageCapture is not in all TypeScript lib targets; use dynamic access.
+      const IC = (globalThis as Record<string, unknown>)["ImageCapture"] as (new (t: MediaStreamTrack) => { takePhoto: (o?: object) => Promise<Blob> }) | undefined;
+      if (IC) {
+        try {
+          blob = await new IC(track).takePhoto({ imageWidth: 640 });
+        } catch {
+          blob = null;
+        }
+      }
+      if (!blob) {
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        await video.play();
+        const canvas = document.createElement("canvas");
+        canvas.width = 640;
+        canvas.height = Math.round(640 * (video.videoHeight / Math.max(video.videoWidth, 1)));
+        canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+        blob = await new Promise<Blob>((resolve, reject) =>
+          canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/jpeg", 0.7)
+        );
+        video.pause();
+        video.srcObject = null;
+      }
+      if (!blob) return;
+
+      const filename = `${Date.now()}.jpg`;
+      const urlResp = await fetch(
+        `${apiBaseUrl}/candidate/invites/${inviteToken}/snapshot-upload-url`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename }),
+        }
+      );
+      if (!urlResp.ok) return;
+      const { upload_url, s3_key } = (await urlResp.json()) as { upload_url: string; s3_key: string };
+
+      await fetch(upload_url, {
+        method: "PUT",
+        body: blob,
+        headers: { "Content-Type": "image/jpeg" },
+      });
+
+      queueProctoringEvent("snapshot", { s3_key, trigger });
+    } catch {
+      // Snapshot failures are silent — never block the assessment flow.
+    }
+  }
+
+  // Show webcam consent prompt when the candidate accepts the assessment.
+  useEffect(() => {
+    if (accepted && !submitted && webcamConsent === null) {
+      setShowWebcamPrompt(true);
+    }
+  }, [accepted, submitted, webcamConsent]);
+
+  async function handleWebcamConsent(consented: boolean) {
+    setShowWebcamPrompt(false);
+    setWebcamConsent(consented);
+    // Persist the choice to the backend.
+    await fetch(`${apiBaseUrl}/candidate/invites/${inviteToken}/webcam-consent`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ consented }),
+    }).catch(() => { /* non-critical */ });
+
+    if (!consented) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      webcamStreamRef.current = stream;
+    } catch {
+      // Camera permission denied at OS level — treat as declined.
+      setWebcamConsent(false);
+      await fetch(`${apiBaseUrl}/candidate/invites/${inviteToken}/webcam-consent`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consented: false }),
+      }).catch(() => { /* non-critical */ });
+    }
+  }
+
+  // Start periodic snapshots once webcam stream is available.
+  useEffect(() => {
+    if (webcamConsent !== true || !webcamStreamRef.current || submitted) return;
+    // Capture immediately on consent + at every interval thereafter.
+    void captureAndUploadSnapshot("periodic");
+    const intervalMs = 5 * 60 * 1000; // 5 minutes
+    snapshotIntervalRef.current = window.setInterval(
+      () => void captureAndUploadSnapshot("periodic"),
+      intervalMs
+    );
+    return () => {
+      if (snapshotIntervalRef.current) window.clearInterval(snapshotIntervalRef.current);
+      // Stop tracks so the browser camera indicator goes away on unmount.
+      webcamStreamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [webcamConsent, submitted]);
+
   const submitFinal = useCallback(async (submissionMode: "manual" | "auto_expired" = "manual") => {
     if (submissionMode === "manual" && !canSubmit) return;
     setSubmitting(true);
     setConfirmingSubmit(false);
     setSubmitError(null);
-    // Flush any buffered proctoring events before the submission lands.
+    // Capture a webcam snapshot and flush proctoring events before submission lands.
+    await captureAndUploadSnapshot("submission");
     await flushProctoringEvents();
     const finalExplanation = [
       submissionReview.changed.trim() ? `What changed: ${submissionReview.changed.trim()}` : "",
@@ -701,6 +816,10 @@ export default function CandidateWorkspace() {
         // Only log if away more than 5 seconds to avoid noise from quick OS interactions.
         if (duration_seconds >= 5) {
           queueProctoringEvent("focus_returned", { duration_seconds });
+          // Capture a snapshot if away for > 30s and webcam is active.
+          if (duration_seconds >= 30) {
+            void captureAndUploadSnapshot("focus_return");
+          }
         }
       }
     }
@@ -825,6 +944,41 @@ export default function CandidateWorkspace() {
             <CheckCircle2 size={18} aria-hidden="true" />
             Accept rules
           </button>
+        </section>
+      </main>
+    );
+  }
+
+  if (showWebcamPrompt) {
+    return (
+      <main className="onboarding">
+        <section className="onboarding-panel webcam-consent-panel">
+          <h1>Optional webcam</h1>
+          <p>
+            This assessment optionally captures periodic still images from your camera
+            during the session. Images are stored securely and shared only with the
+            employer who created this assessment.
+          </p>
+          <ul>
+            <li>One image every 5 minutes and at submission.</li>
+            <li>No audio is recorded.</li>
+            <li>No face recognition or AI analysis is applied.</li>
+            <li>You can decline — this does not affect your assessment.</li>
+          </ul>
+          <div className="webcam-consent-actions">
+            <button
+              className="command-button primary"
+              onClick={() => void handleWebcamConsent(true)}
+            >
+              Allow camera
+            </button>
+            <button
+              className="command-button secondary"
+              onClick={() => void handleWebcamConsent(false)}
+            >
+              Skip
+            </button>
+          </div>
         </section>
       </main>
     );

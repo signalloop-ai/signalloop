@@ -130,3 +130,16 @@ class ProctoringEventItem(BaseModel):
 
 class ProctoringEventBatchRequest(BaseModel):
     events: list[ProctoringEventItem] = Field(min_length=1, max_length=50)
+
+
+class WebcamConsentRequest(BaseModel):
+    consented: bool
+
+
+class SnapshotUploadUrlRequest(BaseModel):
+    filename: str = Field(min_length=1, max_length=200)
+
+
+class SnapshotUploadUrlResponse(BaseModel):
+    upload_url: str
+    s3_key: str

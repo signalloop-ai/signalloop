@@ -66,6 +66,7 @@ class AssessmentAttempt(TimestampMixin, Base):
     test_runs: Mapped[list["TestRun"]] = relationship(back_populates="attempt")
     ai_interactions: Mapped[list["AIInteraction"]] = relationship(back_populates="attempt")
     final_submission: Mapped[Optional["FinalSubmission"]] = relationship(back_populates="attempt")
+    webcam_consent: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     evidence_report: Mapped[Optional["EvidenceReport"]] = relationship(back_populates="attempt")
     proctoring_events: Mapped[list["ProctoringEvent"]] = relationship(back_populates="attempt")
 
@@ -159,6 +160,7 @@ VALID_PROCTORING_EVENT_TYPES = frozenset({
     "fullscreen_enter",
     "focus_lost",
     "focus_returned",
+    "snapshot",
 })
 
 

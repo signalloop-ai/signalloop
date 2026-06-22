@@ -89,6 +89,8 @@ class Settings:
         self.aws_ecs_waiter_delay_seconds = parse_int(getenv("AWS_ECS_WAITER_DELAY_SECONDS"), default=6)
         self.aws_ecs_waiter_max_attempts = parse_int(getenv("AWS_ECS_WAITER_MAX_ATTEMPTS"), default=20)
         self.signalloop_run_bucket = getenv("SIGNALLOOP_RUN_BUCKET")
+        self.s3_bucket = getenv("S3_BUCKET") or self.signalloop_run_bucket
+        self.snapshot_interval_seconds = parse_int(getenv("SNAPSHOT_INTERVAL_SECONDS"), default=300)
         self.openai_api_key = getenv("OPENAI_API_KEY")
         self.openai_model = getenv("OPENAI_MODEL", "gpt-5")
         self.clerk_secret_key = getenv("CLERK_SECRET_KEY")
