@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
+from pathlib import Path, PurePosixPath
+from tempfile import TemporaryDirectory
 from time import monotonic
 from typing import Protocol
 from uuid import uuid4
@@ -8,6 +11,67 @@ from uuid import uuid4
 import httpx
 
 from signalloop_api.config import settings
+
+
+_DISALLOWED_PATH_PARTS = {"..", "", "evaluator", "hidden_tests", "__pycache__", ".pytest_cache", ".git", ".venv"}
+_DISALLOWED_FILENAMES = {".gitkeep"}
+
+
+def _validate_relative_path(path_value: str) -> PurePosixPath:
+    path = PurePosixPath(path_value)
+    if path.is_absolute() or any(part in _DISALLOWED_PATH_PARTS for part in path.parts):
+        raise ValueError(f"Disallowed workspace path: {path_value}")
+    if path.name in _DISALLOWED_FILENAMES:
+        raise ValueError(f"Disallowed workspace file: {path_value}")
+    return path
+
+
+def _write_files(root: Path, files: dict[str, str]) -> None:
+    for path_value, content in files.items():
+        relative_path = _validate_relative_path(path_value)
+        target = root / Path(*relative_path.parts)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+
+
+def _write_hidden_tests(root: Path, hidden_tests: dict[str, str]) -> None:
+    tests_dir = root / "tests"
+    tests_dir.mkdir(parents=True, exist_ok=True)
+    for path_value, content in hidden_tests.items():
+        path = PurePosixPath(path_value)
+        if path.is_absolute() or path.name in _DISALLOWED_FILENAMES or not path.name.endswith(".py"):
+            raise ValueError(f"Disallowed hidden test file: {path_value}")
+        if any(part in {"..", "", "__pycache__", ".pytest_cache", ".git", ".venv"} for part in path.parts):
+            raise ValueError(f"Disallowed hidden test path: {path_value}")
+        (tests_dir / path.name).write_text(content, encoding="utf-8")
+
+
+def _run_subprocess(command: list[str], workspace: Path, timeout_seconds: int) -> dict:
+    started = monotonic()
+    try:
+        process = subprocess.run(
+            command,
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "status": "timeout",
+            "exit_code": None,
+            "stdout": exc.stdout or "",
+            "stderr": exc.stderr or "Test run timed out",
+            "duration_ms": int((monotonic() - started) * 1000),
+        }
+    return {
+        "status": "passed" if process.returncode == 0 else "failed",
+        "exit_code": process.returncode,
+        "stdout": process.stdout,
+        "stderr": process.stderr,
+        "duration_ms": int((monotonic() - started) * 1000),
+    }
 
 
 class TestExecutionProvider(Protocol):
@@ -85,6 +149,34 @@ class HTTPWorkerExecutionProvider:
         timings = dict(result.get("timings") or {})
         timings["api_worker_request_ms"] = int((monotonic() - started) * 1000)
         result["timings"] = timings
+        return result
+
+
+class DirectExecutionProvider:
+    """Runs pytest in-process via subprocess — no Docker, no ECS, no network.
+
+    Safe for pilot use with trusted candidates. Candidate code runs in the
+    same OS process as the API (subprocess isolation only).
+    """
+
+    def run_public(self, files: dict[str, str]) -> dict:
+        return self._run(files, {}, ["python", "-m", "pytest", "tests"])
+
+    def run_hidden(self, files: dict[str, str], hidden_tests: dict[str, str]) -> dict:
+        return self._run(files, hidden_tests, ["python", "-m", "pytest", "tests/test_hidden_api.py"])
+
+    def run_candidate_verification(self, original_files: dict[str, str], candidate_tests: dict[str, str]) -> dict:
+        return self._run(original_files, candidate_tests, ["python", "-m", "pytest", "tests/", "-v"])
+
+    def _run(self, files: dict[str, str], hidden_tests: dict[str, str], command: list[str]) -> dict:
+        t0 = monotonic()
+        with TemporaryDirectory(prefix="signalloop-direct-run-") as workspace_name:
+            workspace = Path(workspace_name)
+            _write_files(workspace, files)
+            if hidden_tests:
+                _write_hidden_tests(workspace, hidden_tests)
+            result = _run_subprocess(command, workspace, timeout_seconds=60)
+        result.setdefault("timings", {})["direct_total_ms"] = int((monotonic() - t0) * 1000)
         return result
 
 
@@ -234,6 +326,8 @@ def require_ecs_settings() -> None:
 def get_execution_provider() -> TestExecutionProvider:
     if settings.execution_backend == "ecs_fargate":
         return ECSFargateExecutionProvider()
+    if settings.execution_backend == "direct":
+        return DirectExecutionProvider()
     return HTTPWorkerExecutionProvider()
 
 
