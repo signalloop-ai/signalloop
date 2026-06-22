@@ -14,7 +14,8 @@ from signalloop_api.auth import get_current_employer
 from signalloop_api.audit import record_audit_event
 from signalloop_api.config import settings
 from signalloop_api.database import get_session
-from signalloop_api.models import AIInteraction, AssessmentAttempt, CodeSnapshot, Employer, EvidenceReport, TestRun
+from signalloop_api.integrity_config import INTEGRITY_THRESHOLDS
+from signalloop_api.models import AIInteraction, AssessmentAttempt, CodeSnapshot, Employer, EvidenceReport, ProctoringEvent, TestRun
 from signalloop_api.schemas import EvidenceReportResponse
 
 logger = logging.getLogger(__name__)
@@ -595,6 +596,119 @@ def ai_integrity_risk(ai_interactions: list[AIInteraction], pasted_code: dict, p
     }
 
 
+def _weight_points(value: int, low_max: int, medium_max: int) -> int:
+    if value <= 0:
+        return 0
+    if value <= low_max:
+        return 1
+    if value <= medium_max:
+        return 2
+    return 3
+
+
+def _weight_label(pts: int) -> str:
+    if pts == 0:
+        return "none"
+    if pts == 1:
+        return "low"
+    if pts == 2:
+        return "medium"
+    return "high"
+
+
+def compute_integrity_score(
+    ai_interactions: list[AIInteraction],
+    pasted_code: dict,
+    paste_events: dict,
+    submission_review: dict,
+    proctoring_events: list[ProctoringEvent],
+    thresholds: dict | None = None,
+) -> dict:
+    t = thresholds or INTEGRITY_THRESHOLDS
+
+    # ── Proctoring signals ───────────────────────────────────────────────────
+    focus_events = [e for e in proctoring_events if e.event_type == "focus_returned"]
+    focus_loss_count = len(focus_events)
+    focus_loss_duration_secs = sum(
+        int((e.event_metadata or {}).get("duration_seconds", 0)) for e in focus_events
+    )
+    fullscreen_exit_count = sum(1 for e in proctoring_events if e.event_type == "fullscreen_exit")
+
+    # ── AI signals ────────────────────────────────────────────────────────────
+    assistant_tags = [
+        tag
+        for i in ai_interactions
+        if i.role == "assistant" and i.policy_tags
+        for tag in i.policy_tags
+    ]
+    severe_redirect_count = sum(
+        1 for tag in assistant_tags
+        if tag in {"full_solution", "final_explanation", "anti_decomposition", "prompt_injection"}
+    )
+    prompt_injection_count = sum(1 for tag in assistant_tags if tag == "prompt_injection")
+    large_paste_count = paste_events.get("large_paste_count", 0)
+
+    # ── Weight points per signal ──────────────────────────────────────────────
+    focus_count_pts = _weight_points(
+        focus_loss_count, t["focus_loss_low_max"], t["focus_loss_medium_max"]
+    )
+    focus_dur_pts = (
+        0 if focus_loss_duration_secs <= 0
+        else 1 if focus_loss_duration_secs <= t["focus_loss_duration_medium_secs"]
+        else 2 if focus_loss_duration_secs <= t["focus_loss_duration_high_secs"]
+        else 3
+    )
+    fullscreen_pts = _weight_points(
+        fullscreen_exit_count, t["fullscreen_exit_low_max"], t["fullscreen_exit_medium_max"]
+    )
+    paste_pts = _weight_points(
+        large_paste_count, t["large_paste_low_max"], t["large_paste_medium_max"]
+    )
+    ai_violation_pts = (
+        0 if severe_redirect_count < t["ai_violation_medium_min"]
+        else 1 if severe_redirect_count < t["ai_violation_high_min"]
+        else 3
+    )
+
+    total_pts = focus_count_pts + focus_dur_pts + fullscreen_pts + paste_pts + ai_violation_pts
+
+    # ── Label from total points ───────────────────────────────────────────────
+    if total_pts >= t["label_critical_min"]:
+        label = "critical"
+    elif total_pts >= t["label_high_min"]:
+        label = "high"
+    elif total_pts >= t["label_medium_min"]:
+        label = "medium"
+    else:
+        label = "low"
+
+    # ── Promotion rules (override point total) ────────────────────────────────
+    if prompt_injection_count >= t["prompt_injection_high_min"]:
+        if label not in {"critical"}:
+            label = "high"
+    if severe_redirect_count >= 5:
+        if label not in {"critical"}:
+            label = "high"
+    if fullscreen_exit_count >= 2 and focus_loss_count >= t["focus_loss_medium_max"]:
+        if label not in {"critical"}:
+            label = "high"
+
+    contributing_factors = [
+        {"signal": "focus_loss_count", "value": focus_loss_count, "weight": _weight_label(focus_count_pts)},
+        {"signal": "focus_loss_duration_seconds", "value": focus_loss_duration_secs, "weight": _weight_label(focus_dur_pts)},
+        {"signal": "fullscreen_exits", "value": fullscreen_exit_count, "weight": _weight_label(fullscreen_pts)},
+        {"signal": "large_paste_count", "value": large_paste_count, "weight": _weight_label(paste_pts)},
+        {"signal": "ai_violation_count", "value": severe_redirect_count, "weight": _weight_label(ai_violation_pts)},
+        {"signal": "prompt_injection_count", "value": prompt_injection_count, "weight": "high" if prompt_injection_count >= t["prompt_injection_high_min"] else "none"},
+    ]
+
+    return {
+        "label": label,
+        "contributing_factors": contributing_factors,
+        "total_weight_points": total_pts,
+    }
+
+
 def build_favo(
     scores: dict,
     candidate_tests: dict,
@@ -674,6 +788,7 @@ def build_report(
     snapshots: list[CodeSnapshot],
     test_runs: list[TestRun],
     ai_interactions: list[AIInteraction],
+    proctoring_events: list[ProctoringEvent] | None = None,
 ) -> dict:
     final_submission = attempt.final_submission
     if final_submission is None:
@@ -728,6 +843,11 @@ def build_report(
         )
     )
     integrity_risk = ai_integrity_risk(ai_interactions, pasted_code, paste_events, submission_review)
+    integrity_score = compute_integrity_score(
+        ai_interactions, pasted_code, paste_events, submission_review, proctoring_events or []
+    )
+    # Keep ai_integrity_risk label in sync with the unified score for backwards compat.
+    integrity_risk["label"] = integrity_score["label"]
     favo = build_favo(
         scores=scores,
         candidate_tests=candidate_tests,
@@ -814,6 +934,7 @@ def build_report(
             ],
         },
         "ai_integrity_risk": integrity_risk,
+        "integrity_score": integrity_score,
         "favo": favo,
         "llm_assisted_review": llm_assisted_review_status(),
         "process_evidence": {
@@ -868,7 +989,9 @@ def evidence_response(evidence_report: EvidenceReport) -> EvidenceReportResponse
     )
 
 
-def load_report_inputs(session: Session, attempt_id: int) -> tuple[AssessmentAttempt, list[CodeSnapshot], list[TestRun], list[AIInteraction]]:
+def load_report_inputs(  # noqa: E501
+    session: Session, attempt_id: int
+) -> tuple[AssessmentAttempt, list[CodeSnapshot], list[TestRun], list[AIInteraction], list[ProctoringEvent]]:
     attempt = session.get(AssessmentAttempt, attempt_id)
     if attempt is None:
         raise HTTPException(status_code=404, detail="Attempt not found")
@@ -881,7 +1004,10 @@ def load_report_inputs(session: Session, attempt_id: int) -> tuple[AssessmentAtt
     ai_interactions = session.scalars(
         select(AIInteraction).where(AIInteraction.attempt_id == attempt.id).order_by(AIInteraction.id)
     ).all()
-    return attempt, snapshots, test_runs, ai_interactions
+    proctoring_events = session.scalars(
+        select(ProctoringEvent).where(ProctoringEvent.attempt_id == attempt.id).order_by(ProctoringEvent.occurred_at)
+    ).all()
+    return attempt, list(snapshots), list(test_runs), list(ai_interactions), list(proctoring_events)
 
 
 def ensure_employer_owns_attempt(attempt: AssessmentAttempt, employer: Employer) -> None:
@@ -951,9 +1077,8 @@ def generate_evidence_report(
     current_employer: Employer = Depends(get_current_employer),
     verification_runner: CandidateVerificationRunner = Depends(get_candidate_verification_runner),
 ) -> EvidenceReportResponse:
-    attempt, snapshots, test_runs, ai_interactions = load_report_inputs(session, attempt_id)
+    attempt, snapshots, test_runs, ai_interactions, proctoring_events = load_report_inputs(session, attempt_id)
     ensure_employer_owns_attempt(attempt, current_employer)
-    test_runs = list(test_runs)
     if not any(r.run_type == "candidate_verification" for r in test_runs):
         verification_run = run_candidate_verification_if_possible(
             session, attempt, snapshots, verification_runner
@@ -961,7 +1086,7 @@ def generate_evidence_report(
         if verification_run is not None:
             test_runs.append(verification_run)
     try:
-        report = build_report(attempt, snapshots, test_runs, ai_interactions)
+        report = build_report(attempt, snapshots, test_runs, ai_interactions, proctoring_events)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
