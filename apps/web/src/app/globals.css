@@ -1125,9 +1125,18 @@ button:disabled {
   border-radius: 6px;
   display: flex;
   gap: 8px;
-  margin-top: 12px;
   min-width: 0;
   padding: 6px 6px 6px 10px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+  vertical-align: -3px;
 }
 
 .invite-result span {

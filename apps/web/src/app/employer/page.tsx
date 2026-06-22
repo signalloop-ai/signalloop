@@ -1,7 +1,7 @@
 "use client";
 
 import { SignInButton, UserButton, useAuth, useUser } from "@clerk/nextjs";
-import { ClipboardCopy, FileText, Info, LogIn, Plus, ShieldCheck, X } from "lucide-react";
+import { ClipboardCopy, FileText, Info, Loader2, LogIn, Plus, ShieldCheck, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -354,13 +354,32 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
             aria-describedby={candidateEmail && !emailValid ? "email-error" : undefined}
           />
           <button className="command-button primary" disabled={creating || !emailValid} type="submit">
-            <Plus size={17} aria-hidden="true" />
-            {creating ? "Creating…" : "Create invite"}
+            {creating
+              ? <><Loader2 size={15} className="spin" aria-hidden="true" /> Creating…</>
+              : <><Plus size={17} aria-hidden="true" /> Create invite</>
+            }
           </button>
           {candidateEmail && !emailValid ? (
             <span id="email-error" className="submission-error" style={{ gridColumn: "1 / -1", marginTop: 0 }}>
               Enter a valid email address
             </span>
+          ) : null}
+
+          {/* Invite URL appears immediately after the email row */}
+          {createdInviteUrl ? (
+            <div className="invite-result" style={{ gridColumn: "1 / -1" }}>
+              <input
+                className="invite-url-input"
+                readOnly
+                value={createdInviteUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                aria-label="Invite URL"
+              />
+              <button type="button" className="command-button secondary" onClick={copyInviteUrl}>
+                <ClipboardCopy size={16} aria-hidden="true" />
+                {copied ? "Copied!" : "Copy"}
+              </button>
+            </div>
           ) : null}
 
           {/* Row 2: assessment select + Details button side by side */}
@@ -426,21 +445,6 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
           </select>
         </form>
 
-        {createdInviteUrl ? (
-          <div className="invite-result">
-            <input
-              className="invite-url-input"
-              readOnly
-              value={createdInviteUrl}
-              onFocus={(e) => e.currentTarget.select()}
-              aria-label="Invite URL"
-            />
-            <button className="command-button secondary" onClick={copyInviteUrl}>
-              <ClipboardCopy size={16} aria-hidden="true" />
-              {copied ? "Copied!" : "Copy"}
-            </button>
-          </div>
-        ) : null}
         {error ? <p className="submission-error">{error}</p> : null}
       </section>
 
@@ -465,7 +469,11 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
               </div>
               <span>
                 <span className={`status-pill ${attempt.status === "submitted" ? "ready" : attempt.status === "expired" ? "error" : "warn"}`}>
-                  {attempt.status === "started" ? "In progress" : attempt.status}
+                  {attempt.status === "created" ? "Invited"
+                    : attempt.status === "opened" || attempt.status === "in_progress" || attempt.status === "started" ? "In progress"
+                    : attempt.status === "submitted" ? "Submitted"
+                    : attempt.status === "expired" ? "Expired"
+                    : attempt.status}
                 </span>
                 <span className="attempt-level-tag">{attempt.assessment_level}</span>
               </span>
