@@ -7,14 +7,15 @@ from signalloop_api.ai_policy import (
     AIDecision,
     ClassifierDecision,
     CLASSIFIER_PROMPT,
-    DESIGN_CHOICE_REDIRECT_MESSAGE,
     DISALLOWED_TAGS,
     GENERATOR_PROMPT,
     REDIRECT_MESSAGE,
     SOCRATIC_REDIRECT_MESSAGE,
     TEST_PASTE_REDIRECT_MESSAGE,
     fallback_classify,
+    is_pasted_test_code,
     parse_classifier_response,
+    redirect_message_for_tag,
 )
 from signalloop_api.config import settings
 
@@ -67,21 +68,33 @@ class OpenAIProvider:
         return str(resp.json()["choices"][0]["message"]["content"]).strip()
 
     def evaluate(self, message: str, context: dict | None, recent_messages: list[str]) -> AIDecision:
-        # Build classifier user content — include recent messages for anti_decomposition detection
+        # recent_messages is expected in chronological order (oldest -> newest), NOT
+        # including the current message.
+
+        # Deterministic gate: pasting actual test function code lets the candidate reverse the
+        # fix out of the test, which skips the reasoning being assessed. This is structural,
+        # not phrase-matching, so it is reliable and does not need the LLM.
+        if is_pasted_test_code(message):
+            return AIDecision(
+                allowed=False,
+                policy_tags=["test_paste_derivation"],
+                message=TEST_PASTE_REDIRECT_MESSAGE,
+            )
+
+        # Step 1 — Classify (the single source of truth for blocking).
         history_lines = "\n".join(f"[candidate] {m}" for m in recent_messages[-4:]) if recent_messages else ""
         if history_lines:
             classifier_user = "Recent messages:\n" + history_lines + "\n\nCurrent message: " + message
         else:
             classifier_user = "Current message: " + message
 
-        # Step 1: Classify
         try:
             raw_classification = self._call_openai(
                 CLASSIFIER_PROMPT, classifier_user, self.classifier_model, max_tokens=80, json_mode=True
             )
             clf = parse_classifier_response(raw_classification, message, recent_messages)
         except Exception:
-            # Network/API failure → fall back to pattern classifier
+            # Network/API failure -> degraded, lenient pattern fallback.
             decision = fallback_classify(message, recent_messages)
             clf = ClassifierDecision(
                 allowed=decision.allowed,
@@ -89,19 +102,15 @@ class OpenAIProvider:
             )
 
         if not clf.allowed:
-            tag = clf.tag or ""
-            if tag == "no_issue_identified":
-                redirect = SOCRATIC_REDIRECT_MESSAGE
-            elif tag == "choose_design":
-                redirect = DESIGN_CHOICE_REDIRECT_MESSAGE
-            elif tag == "test_paste_derivation":
-                redirect = TEST_PASTE_REDIRECT_MESSAGE
-            else:
-                redirect = REDIRECT_MESSAGE
-            return AIDecision(allowed=False, policy_tags=[tag] if tag else [], message=redirect)
+            return AIDecision(
+                allowed=False,
+                policy_tags=[clf.tag] if clf.tag else [],
+                message=redirect_message_for_tag(clf.tag),
+            )
 
-        # Step 2: Generate — include recent candidate messages so the generator
-        # can maintain topic coherence across follow-up messages.
+        # Step 2 — Generate. The generator owns the give-code-vs-coach decision (and only it
+        # does). Whatever it returns is returned to the candidate verbatim — there is no
+        # second keyword pass re-judging its output.
         if recent_messages:
             history = "\n".join(f"Candidate: {m}" for m in recent_messages[-3:])
             user_content = f"Recent conversation:\n{history}\n\nCurrent message: {message}"
@@ -120,156 +129,7 @@ class OpenAIProvider:
         except Exception:
             response_text = "I could not generate a response right now."
 
-        return AIDecision(allowed=True, policy_tags=[], message=_guard_generator_output(response_text, message))
-
-
-_SOLUTION_PATTERNS = [
-    "raise HTTPException",
-    "raise ValueError",
-    "if actor_user_id",
-    "if task.owner",
-    "email.strip().lower()",
-    "email_norm",
-    "status_code=403",
-    "status_code=409",
-    "status_code=422",
-    "@field_validator",
-    "@validator",
-    "You need to add",
-    "You need to implement",
-    "You need to enforce",
-    "You need to check",
-    "- Before:",
-    "- After:",
-]
-
-# Signals that the candidate is reporting a failing test rather than showing their own work.
-# Covers raw pytest output AND natural-language references to a failing test.
-_TEST_FAILURE_SIGNALS = [
-    # Raw pytest output
-    "FAILED tests/",
-    "FAILED test_",
-    "AssertionError: assert ",
-    "E       assert ",
-    "assert 200 == ",
-    "assert 201 == ",
-    "assert 400 == ",
-    "assert 404 == ",
-    "assert 422 == ",
-    "assert 403 == ",
-    "assert 409 == ",
-    # Natural-language test references
-    "test is failing",
-    "test case is failing",
-    "test is still failing",
-    "test case fails",
-    "this test fails",
-    "test failing",
-    "failing test",
-]
-
-_SOCRATIC_FALLBACK = (
-    "What does your current handler do in that scenario? "
-    "Walk me through what happens in your code when this request comes in."
-)
-
-
-def _contains_code(message: str) -> bool:
-    """True if the message contains actual code the candidate has written.
-
-    Requires either an explicit code fence or multiple Python-syntax markers —
-    just claiming 'I added X' without showing code does not qualify.
-    """
-    if "```" in message:
-        return True
-    # Inline backtick with real syntax: `if ...:` or `def ...` etc.
-    import re
-    if re.search(r"`[^`]{5,}`", message):
-        return True
-    # At least two distinct Python-syntax markers in the same message
-    code_markers = ["def ", "class ", "return ", "raise ", "    if ", "    return ", "    raise "]
-    found = sum(1 for m in code_markers if m in message)
-    return found >= 2
-
-
-# Signals that the candidate has identified the root cause of the issue in plain English.
-# Articulating a specific diagnosis (without code) is also genuine insight and should not
-# be blocked — it requires understanding the problem, not just reading the test name.
-_VERBAL_ISSUE_IDENTIFICATION = [
-    "i think the issue is",
-    "i think the problem is",
-    "i think the bug is",
-    "i think it's because",
-    "i think it is because",
-    "the issue is that",
-    "the problem is that",
-    "the bug is that",
-    "i believe the issue",
-    "i believe the problem",
-    "i suspect",
-    "i noticed that",
-    "i realized that",
-    "i figured out",
-    "i identified",
-    "the root cause",
-    "i think my handler",
-    "i think my code is",
-    "i think my code doesn",
-]
-
-
-def _identifies_issue_verbally(message: str) -> bool:
-    """True if the candidate articulates a specific diagnosis in plain English.
-
-    Distinguishes genuine reasoning ("I think the issue is that my handler doesn't check
-    ownership") from gameable claims ("I added X") or mere test restatement ("the test
-    expects 403, how do I return that?").
-    """
-    lower = message.lower()
-    return any(sig in lower for sig in _VERBAL_ISSUE_IDENTIFICATION)
-
-
-def _is_test_failure_paste(message: str) -> bool:
-    """True when the message references a failing test AND the candidate has shown no real work.
-
-    Real work = actual code in the message OR a verbal diagnosis of the root cause.
-    Mere claims like "I added X" are not sufficient — they are trivially derived from
-    reading the test name and do not demonstrate understanding.
-    """
-    lower = message.lower()
-    has_failure_signal = any(sig.lower() in lower for sig in _TEST_FAILURE_SIGNALS)
-    if not has_failure_signal:
-        return False
-    if _contains_code(message):
-        return False
-    if _identifies_issue_verbally(message):
-        return False
-    return True
-
-
-def _guard_generator_output(response: str, original_message: str) -> str:
-    """Post-generation check: only enforce Socratic constraint when candidate pasted raw test output."""
-    if not _is_test_failure_paste(original_message):
-        # Candidate identified the problem themselves — allow code responses freely.
-        return response
-
-    lower = response.lower()
-
-    # Count indented code lines (solution code is usually indented)
-    indented_lines = sum(1 for line in response.splitlines() if line.startswith("    ") or line.startswith("\t"))
-    if indented_lines >= 3:
-        return _SOCRATIC_FALLBACK
-
-    # Detect solution-shaped phrases
-    if any(pat.lower() in lower for pat in _SOLUTION_PATTERNS):
-        return _SOCRATIC_FALLBACK
-
-    # Detect multi-step instructions (numbered lists 1. 2. 3.)
-    numbered_steps = sum(1 for line in response.splitlines() if line.strip()[:2] in {"1.", "2.", "3.", "4."})
-    if numbered_steps >= 2:
-        return _SOCRATIC_FALLBACK
-
-    return response
+        return AIDecision(allowed=True, policy_tags=[], message=response_text)
 
 
 def extract_response_text(payload: dict) -> str:
@@ -285,7 +145,7 @@ def extract_response_text(payload: dict) -> str:
 
 
 def parse_ai_decision(raw: str, original_message: str, recent_messages: list[str]) -> AIDecision:
-    """Parse the LLM JSON response. Falls back to pattern classification on parse failure."""
+    """Parse a single-call LLM JSON response. Falls back to pattern classification on failure."""
     try:
         data = json.loads(raw)
         allowed = bool(data.get("allowed", True))

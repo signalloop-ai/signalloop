@@ -5,6 +5,85 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-06-23 — AI Collaborator: permanent two-component redesign
+
+### Why
+
+The AI collaborator had accumulated a long series of recurring false-positive bugs (over-
+blocking legitimate candidate questions, losing follow-up context). Root cause was
+structural: **three** independent classifiers each made the same decision with different
+logic and overrode one another — the LLM classifier, the Python keyword `fallback_classify`
+(which also ran during normal operation to "validate" `anti_decomposition`), and a keyword
+`_guard_generator_output` output guard that could blank a good answer. Each bug fix added
+more keywords/examples, creating new false positives elsewhere.
+
+### Decision (approved by product owner)
+
+- Trust the LLM as the single source of truth; keyword logic runs only when the LLM is
+  unavailable, and leans allow.
+- Lean allow when ambiguous (the report's AI-collaboration scoring still captures patterns).
+- Keep blocking pasted test code, as one narrow deterministic rule.
+
+### Changed
+
+- **`ai_policy.py`**
+  - `CLASSIFIER_PROMPT` rewritten short and principle-based (was ~135 lines of bug-reaction
+    examples). It decides only block-vs-allow, never code-vs-Socratic. Leans allow.
+  - `GENERATOR_PROMPT` rewritten into explicit Mode A (give changed lines — for a candidate-
+    identified public/hidden/enhancement issue OR a concept question) and Mode B (one
+    Socratic question when the candidate is fishing). The generator is the ONLY owner of the
+    code-vs-coach decision.
+  - `parse_classifier_response` simplified: trust the LLM; removed the `anti_decomposition`
+    fallback cross-check that let keywords override a working LLM. Fallback runs only on parse
+    failure.
+  - `fallback_classify` is now lenient/availability-only: high-precision explicit abuse
+    phrases only, no fuzzy single-word matching, `no_issue_identified` removed. Default allow.
+  - New `is_pasted_test_code()` (shared structural detector) and `redirect_message_for_tag()`.
+  - `no_issue_identified` removed from `DISALLOWED_TAGS` — vague fishing is coached, not
+    blocked, and was never a scored violation.
+- **`ai_provider.py`**
+  - Deleted the entire output-guard layer (`_guard_generator_output`, `_is_test_failure_paste`,
+    `_identifies_issue_verbally`, `_contains_code`, `_SOLUTION_PATTERNS`, `_TEST_FAILURE_SIGNALS`,
+    `_VERBAL_ISSUE_IDENTIFICATION`, `_SOCRATIC_FALLBACK`). Generator output is returned verbatim.
+  - `evaluate()`: deterministic test-paste pre-gate → LLM classify → generate. One responsibility
+    per step.
+- **`ai.py`**: fixed a message-ordering bug — recent candidate messages were fetched newest-first
+  but consumed as chronological, so the generator/classifier saw the oldest 3 of the last 6 in
+  reverse. Now reversed to chronological (oldest→newest). This undercut the earlier
+  "follow-up context" fix.
+
+### Tests
+
+- Deleted `tests/test_ai_output_guard.py` (the guard is gone).
+- Rewrote `tests/test_ai_policy.py` to test the lenient fallback contract (leans allow; blocks
+  only high-precision abuse + pasted test code) instead of pinning brittle keyword internals.
+- Rewrote `tests/test_two_step_pipeline.py`: pre-gate behavior, verbatim generator output, vague
+  fishing now allowed+coached, call-count isolation.
+- Rewrote `tests/test_live_ai_policy.py` into a real regression net (42 cases) grounded in the
+  actual seeded issues of both shipped packs (standard v2: duplicate email, unused
+  `actor_user_id` in `get_task`/`delete_task`, `update_task_status` transitions, priority/
+  due-date enhancements; advanced v1: `patch_task` partial-update, `is_team_lead` not
+  team-scoped, `add_comment` access check, archived-task filtering). Categories: candidate-
+  identified issue, verbal diagnosis + failure, concept, post-impl review, multi-turn
+  follow-ups, vague-fishing-is-coached, and the block categories.
+- Ran the live net against real models (`gpt-4o` generator / `gpt-4o-mini` classifier). It
+  caught one real regression: the follow-up "ok, make that change for me" (after the
+  candidate asked how to fix one issue) was tagged `anti_decomposition`. Fixed by tightening
+  the classifier prompt — anti_decomposition now requires a broad MULTI-issue sweep, and a
+  single named follow-up is explicitly allowed with a counter-example. Added a live test that
+  a genuine multi-issue sweep still blocks, so the rule isn't disabled.
+- Full offline API suite: **254 passed**. Live suite: **42 passed** against real models.
+
+### Files
+
+- `apps/api/signalloop_api/ai_policy.py`
+- `apps/api/signalloop_api/ai_provider.py`
+- `apps/api/signalloop_api/ai.py`
+- `apps/api/tests/test_ai_policy.py`, `test_two_step_pipeline.py`, `test_live_ai_policy.py`
+- `docs/prompts/ai-collaborator-policy.md`
+
+---
+
 ## 2026-06-22 — Phase 2 Close-out: Direct Execution + Full UI Polish
 
 ### DirectExecutionProvider — inline pytest, no ECS cold start
@@ -1878,3 +1957,99 @@ browser countdown.
 - `cd apps/web && npm run build` -> passed.
 - `cd apps/web && npm run test:e2e` was attempted but blocked by sandbox `EPERM`
   while binding `127.0.0.1:3000`; run it locally before deployment.
+
+---
+
+## 2026-06-23 — Phase 4: Super Admin Portal
+
+### Super admin portal — operator visibility across all employers
+
+**Why:** The operator had no single place to see who the employers are, how
+much they use the platform, and whether anything is stuck. The super admin
+portal gives view-only visibility without needing to log in as each employer.
+
+**Changed:**
+- New nullable `role` column on `employers` table (migration
+  `0008_add_employer_role`). `NULL` = regular employer, `'super_admin'` = admin.
+  Safe, additive migration — no backfill, no table rewrite.
+- New `SUPER_ADMIN_EMAILS` env var (comma-separated, case-insensitive) in
+  `config.py`. Role assignment happens in `get_or_create_employer` at every
+  login: email matches env var → `role='super_admin'`, otherwise `NULL`.
+  Removing an email from the env var downgrades the role on next login.
+- New `get_current_super_admin` dependency in `auth.py`: returns 401 if
+  unauthenticated, 403 if authenticated but not admin. Existing
+  `get_current_employer` is unchanged — no behavior change for regular
+  employers.
+- New `/employer/me` endpoint returns `{ id, email, role }` so the frontend
+  can route by role.
+- New `apps/api/signalloop_api/admin.py` router with 4 GET endpoints, all
+  protected by `get_current_super_admin`:
+  - `GET /admin/me` — admin identity
+  - `GET /admin/employers` — roster with invite/submitted/report counts and
+    avg score (single query per aggregate, no N+1)
+  - `GET /admin/employers/{id}` — Tier 2 per-employer summary: status
+    breakdown, score distribution, AI usage, pack breakdown, stuck signals,
+    full attempt list
+  - `GET /admin/attempts/{id}/report` — any employer's evidence report,
+    skips the ownership check that the employer endpoint enforces
+- Frontend admin portal at `/admin`:
+  - `apps/web/src/app/admin/layout.tsx` — Clerk auth wrapper + role check
+    (redirects non-admins to `/employer`)
+  - `apps/web/src/app/admin/page.tsx` — roster table (auto-refresh 60s)
+  - `apps/web/src/app/admin/employers/[id]/page.tsx` — per-employer
+    drill-down with metric cards, status/pack breakdowns, attempt table
+  - `apps/web/src/app/admin/reports/[attemptId]/page.tsx` — full evidence
+    report view (reuses report rendering; no Regenerate button — admin is
+    view-only)
+  - `apps/web/src/app/admin/api.ts` + `types.ts` — admin API client + types
+- `apps/web/src/app/employer/page.tsx` now checks role on login and
+  redirects `super_admin` users to `/admin`.
+- `SUPER_ADMIN_EMAILS` added to `.env.example` and
+  `.env.render-supabase.example` with a placeholder.
+
+**Files created:**
+- `apps/api/alembic/versions/0008_add_employer_role.py`
+- `apps/api/signalloop_api/admin.py`
+- `apps/api/tests/test_admin_endpoints.py`
+- `apps/web/src/app/admin/layout.tsx`
+- `apps/web/src/app/admin/page.tsx`
+- `apps/web/src/app/admin/api.ts`
+- `apps/web/src/app/admin/types.ts`
+- `apps/web/src/app/admin/employers/[id]/page.tsx`
+- `apps/web/src/app/admin/reports/[attemptId]/page.tsx`
+- `docs/enhancements/phase-4-super-admin-portal/README.md`
+- `docs/enhancements/phase-4-super-admin-portal/01-backend-auth-and-schema.md`
+- `docs/enhancements/phase-4-super-admin-portal/02-backend-admin-api.md`
+- `docs/enhancements/phase-4-super-admin-portal/03-frontend-admin-portal.md`
+
+**Files modified:**
+- `apps/api/signalloop_api/models.py` — added `role` column to `Employer`
+- `apps/api/signalloop_api/auth.py` — `_assign_role`, `get_current_super_admin`
+- `apps/api/signalloop_api/config.py` — `super_admin_emails` setting
+- `apps/api/signalloop_api/schemas.py` — `EmployerInfoResponse`
+- `apps/api/signalloop_api/attempts.py` — `GET /employer/me`
+- `apps/api/signalloop_api/main.py` — registered admin router
+- `apps/web/src/app/employer/page.tsx` — role check + redirect to `/admin`
+- `.env.example`, `.env.render-supabase.example` — `SUPER_ADMIN_EMAILS`
+- `CURRENT_STATE.md` — Phase 4 status
+
+**Migration collision note:** Migration `0008` is on the `employers` table.
+Phase 3 migrations `0006`/`0007` are on `proctoring_events` /
+`assessment_attempts`. No table-level conflict. If another agent creates an
+`0008` concurrently, renumber to `0009` (trivial fix).
+
+**Validation:**
+- `cd apps/api && .venv/bin/python -m alembic upgrade head` → 0008 applied.
+- `cd apps/api && .venv/bin/python -m pytest tests/test_admin_endpoints.py -x -q` → 12 passed.
+- `cd apps/api && .venv/bin/python -m pytest tests/ -q --tb=no` → 336 passed, 11 skipped, 1 pre-existing unrelated failure (AI policy paste heuristic in `test_two_step_pipeline.py`).
+- `cd apps/web && npm run typecheck` → passed.
+- `cd apps/web && npm run build` → passed. Admin routes registered: `/admin` (static), `/admin/employers/[id]` (dynamic), `/admin/reports/[attemptId]` (dynamic).
+- `cd apps/web && npm run lint` → 3 errors, 4 warnings (same count as before changes; all pre-existing `react-hooks/set-state-in-effect` pattern used across the existing employer/invite pages).
+
+**Follow-up items:**
+- Set `SUPER_ADMIN_EMAILS=redacted-personal-email@example.com` in the Render environment
+  (and in local `.env`) before testing admin login.
+- Deploy to Render to validate hosted admin flow end-to-end.
+- Consider extracting the shared evidence-report rendering into a single
+  component to avoid duplication between the employer and admin report pages
+  (post-Phase 4 cleanup).

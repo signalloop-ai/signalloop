@@ -4,15 +4,22 @@
 
 Phase 12 Documentation and Handoff is complete. Local and hosted MVP validation are complete enough for pilot use. Render web/API, Supabase persistence, Clerk-gated employer portal, and AWS ECS/Fargate public/hidden execution have been validated end-to-end, including a hosted browser-level candidate submission and employer report flow.
 
-The active post-MVP workstream is Phase 2: Assessment System Enhancement.
+The active post-MVP workstream is Phase 4: Super Admin Portal.
 
 ## Current phase
 
-**Phase 2 is complete.** All 11 planned Phase 2 tasks are implemented, locally validated,
+**Phase 4 is implemented.** The super admin portal is built and locally validated:
+recruitment list, per-employer operational summary, and drill-through to any
+employer's evidence report. Admin uses the same Clerk login; role is assigned
+from `SUPER_ADMIN_EMAILS` env var. Admin is view-only — cannot create invites.
+
+Phase 2 is complete. All 11 planned Phase 2 tasks are implemented, locally validated,
 and deployed to Render. The current state reflects the June 2026 UI polish session which
 also switched hosted execution to `DirectExecutionProvider` (`EXECUTION_BACKEND=direct`).
 
 ## Last completed phase
+
+Phase 4: Super Admin Portal (roster, employer detail, report drill-through).
 
 Phase 2: Assessment System Enhancement (all tasks, including hosted deployment and
 UX polish close-out).
@@ -249,6 +256,75 @@ UX polish close-out).
 - **E2E test coverage**: 30 tests across candidate-workspace, employer-portal, and
   phase-3-proctoring specs all pass with `--workers=1`.
 - **API test suite**: all passing.
+
+## Settled state after June 2026 Phase 4 super admin portal session
+
+- **Super admin portal** at `/admin` gives the operator full visibility into
+  all employers, their attempts, and evidence reports — without logging in as
+  that employer. Admin is **view-only**: cannot create invites, regenerate
+  reports, or modify anything.
+- **Auth model**: same Clerk app as employers. `SUPER_ADMIN_EMAILS` env var
+  (comma-separated, case-insensitive) drives role assignment at login. A new
+  nullable `role` column on `employers` (migration `0008_add_employer_role`)
+  stores `'super_admin'` or `NULL`. Role is re-evaluated on every login, so
+  removing an email from the env var downgrades on next session.
+- **`get_current_super_admin`** FastAPI dependency protects all `/admin/*`
+  endpoints: 401 if unauthenticated, 403 if authenticated but not admin.
+  Regular `get_current_employer` is unchanged — no behavior change for
+  non-admin employers.
+- **`GET /employer/me`** returns `{ id, email, role }` so the frontend can
+  route admins to `/admin` and bounce non-admins from `/admin` to `/employer`.
+- **Admin API** (`apps/api/signalloop_api/admin.py`): `GET /admin/me`,
+  `GET /admin/employers` (roster with invite/submitted/report counts + avg
+  score), `GET /admin/employers/{id}` (Tier 2: status breakdown, score
+  distribution, AI usage, pack breakdown, stuck signals, full attempt list),
+  `GET /admin/attempts/{id}/report` (any employer's report, no ownership
+  check).
+- **Frontend**: `/admin` (roster, auto-refresh 60s), `/admin/employers/[id]`
+  (per-employer drill-down with metric cards + attempt table),
+  `/admin/reports/[attemptId]` (full evidence report view, admin can see any
+  employer's report). Layout reuses employer-portal styling, no invite
+  creation controls visible.
+- **Admin email**: `redacted-personal-email@example.com` (set in `SUPER_ADMIN_EMAILS`).
+- **API test suite**: 12 admin endpoint tests added
+  (`tests/test_admin_endpoints.py`); all pass. Full suite 336 passed, 11
+  skipped, 1 pre-existing unrelated failure (AI policy paste heuristic).
+- **Web typecheck/build**: passing. Admin routes registered:
+  `/admin` (static), `/admin/employers/[id]` (dynamic),
+  `/admin/reports/[attemptId]` (dynamic).
+
+## Settled state after June 2026 AI collaborator permanent redesign
+
+- **Root cause of recurring AI-collaborator bugs was structural**: three independent
+  classifiers (LLM classifier, Python keyword `fallback_classify`, and a keyword output
+  guard) each re-decided the same thing and overrode one another, so every keyword fix
+  created a new false positive.
+- **New architecture is two components, one responsibility each.** The **classifier**
+  (`CLASSIFIER_PROMPT`) is the single source of truth for block-vs-allow and leans allow;
+  it never decides code-vs-Socratic. The **generator** (`GENERATOR_PROMPT`, Mode A/Mode B)
+  is the only owner of the give-code-vs-coach decision and its output is returned verbatim.
+- **Three behavior rules** (generator): (1) candidate identified the problem — public,
+  hidden, or enhancement — and knows the fix → give the changed lines; (2) candidate asks
+  the assistant to find the problem → coach Socratically (not a block, not a scored
+  violation); (3) general/concept question → answer directly.
+- **One deterministic block**: `is_pasted_test_code()` pre-gate (structural, runs before the
+  LLM). `fallback_classify` is now lenient/availability-only and never overrides a working
+  LLM. `no_issue_identified` is no longer emitted/blocked.
+- **Message-ordering bug fixed** in `ai.py`: recent candidate messages are now passed
+  chronologically (oldest→newest).
+- Deleted `tests/test_ai_output_guard.py`; rewrote `test_ai_policy.py` and
+  `test_two_step_pipeline.py` to assert the contract instead of keyword internals.
+- **API test suite: 254 passed.** Decision rationale and the do-not-add-a-third-layer rule
+  are documented in `docs/prompts/ai-collaborator-policy.md` and `docs/development/changes.md`
+  (2026-06-23 entry).
+- **Live regression net** (`tests/test_live_ai_policy.py`, 42 cases) grounds scenarios in the
+  real seeded issues of both shipped packs and was run against real models (`gpt-4o` /
+  `gpt-4o-mini`): **42 passed**. Run with
+  `cd apps/api && RUN_LIVE_AI_TESTS=1 uv run pytest tests/test_live_ai_policy.py`.
+- The live net caught one real false positive on first run (a single "make that change for
+  me" follow-up tagged `anti_decomposition`); fixed by tightening the classifier prompt
+  (anti_decomposition now requires a broad multi-issue sweep) with a counter-example and a
+  live test that a genuine sweep still blocks.
 
 ## What does not exist yet
 

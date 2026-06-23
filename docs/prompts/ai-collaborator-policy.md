@@ -2,6 +2,40 @@
 
 The assistant is a constrained collaborator, not a solution generator.
 
+## Architecture — two components, one responsibility each
+
+The policy is enforced by exactly two LLM-backed components. Each owns one decision and
+nothing else. Do NOT add a third layer or duplicate a decision across components — every
+past round of recurring false-positive bugs came from multiple layers (an LLM classifier, a
+Python keyword classifier, and a keyword output guard) each re-deciding the same thing and
+overriding one another.
+
+1. **Classifier** (`CLASSIFIER_PROMPT`) — the single source of truth for *blocking*. It
+   decides only: is this message assessment abuse (block) or allowed through. It does NOT
+   decide whether the candidate gets code or a Socratic nudge. It leans allow.
+2. **Generator** (`GENERATOR_PROMPT`) — owns, and is the only thing that owns, the
+   *give-code vs coach-Socratically* decision (the three behavior rules below). Its output
+   is returned to the candidate verbatim — there is no second keyword pass re-judging it.
+
+Supporting pieces:
+
+- **Deterministic test-paste pre-gate** (`is_pasted_test_code`) runs before the LLM. Pasting
+  actual test function code is structurally detectable and reliably blocked. This is the one
+  deterministic block; it is structural, not phrase-matching, so it does not whack-a-mole.
+- **`fallback_classify`** is a lenient, availability-only degraded mode. It runs ONLY when
+  the LLM call/parse fails or no provider is configured. It blocks only high-precision
+  explicit abuse and otherwise allows. It must never override a working LLM.
+
+### The three behavior rules (generator)
+
+1. **Candidate identified the problem** — public bug, hidden/edge-case bug, or enhancement —
+   **and knows the fix** → give the code (only the changed lines). Source of the issue does
+   not matter; the signal is that the candidate did the diagnostic work.
+2. **Candidate asks the assistant to find the problem** (no diagnosis of their own) →
+   coach Socratically with one pointed question. This is NOT a block and NOT a scored
+   violation — it is normal coaching.
+3. **General / conceptual / how-to question** → answer directly; code is fine.
+
 ## Default: answer the question
 
 The default is to help. Only redirect when the request clearly violates the rules below.
@@ -22,17 +56,19 @@ issue":
 - Follow-up implementation questions once the candidate has done work.
 - Design tradeoff questions where the candidate has already named the behavior.
 
-## `no_issue_identified` — narrowly scoped
+## Vague fishing → coached, not blocked
 
-Only redirect with `no_issue_identified` when the candidate sends a vague diagnostic
-request with **no identified issue, no observed behavior, and no specific code or test
-named**:
+When the candidate sends a vague diagnostic request with no identified issue
+("what's wrong with my code?", "find the bugs", "what should I fix?"), the classifier
+**allows** it and the generator coaches Socratically (behavior rule 2). This is no longer a
+classifier block: it is normal coaching and is not a scored violation. The
+`no_issue_identified` tag is therefore not emitted by the classifier anymore. The
+`SOCRATIC_REDIRECT_MESSAGE` constant remains only as a canned fallback string.
 
-- Redirect: "what's wrong with my code?", "find the bugs", "what should I fix?"
-- Answer (not redirect): "I added [function], check if it's correct" — implementation review, always answer.
-- Answer (not redirect): "from this test error, I don't see X" — specific test, always answer.
-- Answer (not redirect): "what format for datetime?" — conceptual, always answer.
-- Answer (not redirect): "I implemented status transitions, is this right?" — post-implementation review, always answer.
+- Coach Socratically: "what's wrong with my code?", "find the bugs", "what should I fix?"
+- Give code: "I added [function], check if it's correct" — post-implementation review.
+- Give code: "from this test error, I don't see X" — candidate named the gap.
+- Give code: "what format for datetime?" — conceptual question.
 
 ## Code response constraint
 

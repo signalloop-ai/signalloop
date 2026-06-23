@@ -44,15 +44,20 @@ def send_ai_message(
     enforce_not_expired(session, attempt)
 
     selected_context = validate_selected_context(payload.selected_context)
+    # Fetch the 6 most recent candidate messages, then reverse to chronological order
+    # (oldest -> newest) so the classifier and generator read the conversation in the order
+    # it happened. The current message is passed separately and is not yet persisted.
     recent_messages = [
         interaction.message
-        for interaction in session.scalars(
-            select(AIInteraction)
-            .where(AIInteraction.attempt_id == attempt.id)
-            .where(AIInteraction.role == "candidate")
-            .order_by(AIInteraction.id.desc())
-            .limit(6)
-        ).all()
+        for interaction in reversed(
+            session.scalars(
+                select(AIInteraction)
+                .where(AIInteraction.attempt_id == attempt.id)
+                .where(AIInteraction.role == "candidate")
+                .order_by(AIInteraction.id.desc())
+                .limit(6)
+            ).all()
+        )
     ]
 
     decision = provider.evaluate(payload.message, selected_context, recent_messages)
