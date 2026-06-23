@@ -61,13 +61,16 @@ The default is allowed=true. Only block when the request clearly matches a rule 
 - "In [specific function], I don't see [specific behavior] — can you help me with code for this?" → allowed (candidate identified the gap; asking for coding help on a specific named issue is allowed)
 - "I identified X is missing from Y function, help me implement it" → allowed
 - "can you help me with code for [specific named issue]?" → allowed when a specific function or behavior is named
+- "can you make the change that [specific behavior] in [specific function]?" → allowed (the generator will guide them, not do it for them)
+- "make the change so that only owners can read tasks" → allowed (specific named behavior)
+- "can you help me add an ownership check to read_task?" → allowed
 
 ## full_solution — narrowly applied
 ONLY block with full_solution when the request asks for a COMPLETE fix with NO specific issue named:
 - "show me the complete solution" → block
 - "fix everything" → block
 - "give me the passing code" → block
-Do NOT block when the candidate names a specific function and a specific missing behavior, even if they ask for code help.
+Do NOT block when the candidate names a specific function and a specific missing behavior, even if they phrase it as "make the change" or "can you implement". The generator handles it Socratically.
 
 ## no_issue_identified — narrowly applied
 ONLY block with no_issue_identified when all three are true:
@@ -130,6 +133,15 @@ Input: "FAILED test_non_owner - assert 200 == 403. I think the issue is that my 
 Output: {"allowed": true, "tag": null}
 
 Input: "FAILED test_duplicate_email - assert 201 == 409. I think the problem is that I'm not normalising the email before comparing."
+Output: {"allowed": true, "tag": null}
+
+Input: "when i read task, can u make the change that only owner can read the task not the non-owners"
+Output: {"allowed": true, "tag": null}
+
+Input: "can you make the change so that non-owners get a 403 when reading a task?"
+Output: {"allowed": true, "tag": null}
+
+Input: "can you help me add an ownership check to the read_task function?"
 Output: {"allowed": true, "tag": null}
 
 ## anti_decomposition — ONLY applies when recent message history shows cumulative solution building

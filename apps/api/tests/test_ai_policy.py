@@ -70,6 +70,12 @@ def test_allowed_candidate_identified_issue() -> None:
     # Design guidance where candidate named the behavior
     "in the current code whatever task status we give is taken we should block invalid transitions can u suggest which ones to block",
     "we want to check that due date is greater than today, how to do that?",
+    # "make the change" / "can u make the change" for a specific named behavior — ALLOW
+    # Classifier false-positived on this with anti_decomposition (found in live testing 2026-06-23)
+    "when i read task, can u make the change that only owner can read the task not the non-owners",
+    "can you make the change so that non-owners get a 403 when reading a task?",
+    "can you help me add an ownership check to the read_task function?",
+    "make the change so that only owners can access this endpoint",
     # Candidate names a specific function + specific gap + asks for code help
     # These should NEVER be blocked — the candidate has done the diagnostic work
     "in create_user, i dont see that duplicate mail handling is done, can you help me with code for this",
