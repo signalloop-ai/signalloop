@@ -86,11 +86,18 @@ button:disabled {
   border-color: #b0bcc9;
 }
 
+.workspace-outer {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
 .workspace-shell {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) 6px var(--bottom-panel-height, 50px);
-  height: 100vh;
-  min-height: 100vh;
+  flex: 1 1 0;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -1190,6 +1197,125 @@ button:disabled {
   min-width: 0;
   padding: 18px;
 }
+
+/* ── How it works guide ─────────────────────────────────────────────────────── */
+
+.how-it-works {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.04);
+  overflow: hidden;
+}
+
+.how-it-works-toggle {
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 14px 18px;
+  text-align: left;
+  width: 100%;
+}
+
+.how-it-works-toggle:hover {
+  background: #f8fafc;
+}
+
+.how-it-works-label {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.how-it-works-label span {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.how-it-works-label svg {
+  color: #0f766e;
+}
+
+.how-it-works-chevron {
+  color: var(--muted);
+  transition: transform 160ms ease;
+}
+
+.how-it-works-chevron.open {
+  transform: rotate(180deg);
+}
+
+.how-it-works-body {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 0;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms ease;
+}
+
+.how-it-works-body.open {
+  grid-template-rows: 1fr;
+}
+
+.how-it-works-inner {
+  overflow: hidden;
+  padding: 18px;
+}
+
+.how-it-works-steps {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.hiw-step {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.hiw-step-num {
+  align-items: center;
+  background: #f0fdfa;
+  border-radius: 50%;
+  color: #0f766e;
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.hiw-step h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.hiw-step p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.hiw-step ul {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0;
+  padding-left: 16px;
+}
+
+/* ── Invite form ─────────────────────────────────────────────────────────────── */
 
 .invite-form {
   align-items: end;

@@ -1,6 +1,6 @@
 import pytest
 
-from signalloop_api.ai_policy import DESIGN_CHOICE_REDIRECT_MESSAGE, REDIRECT_MESSAGE, SOCRATIC_REDIRECT_MESSAGE, fallback_classify
+from signalloop_api.ai_policy import DESIGN_CHOICE_REDIRECT_MESSAGE, REDIRECT_MESSAGE, SOCRATIC_REDIRECT_MESSAGE, TEST_PASTE_REDIRECT_MESSAGE, fallback_classify
 
 
 # ---------------------------------------------------------------------------
@@ -173,5 +173,46 @@ def test_anti_decomposition_blocked_in_multi_turn() -> None:
 def test_redirect_message_constants_are_distinct() -> None:
     assert SOCRATIC_REDIRECT_MESSAGE != REDIRECT_MESSAGE
     assert DESIGN_CHOICE_REDIRECT_MESSAGE != REDIRECT_MESSAGE
+    assert TEST_PASTE_REDIRECT_MESSAGE != REDIRECT_MESSAGE
     assert "what behavior did you observe" in SOCRATIC_REDIRECT_MESSAGE.lower()
     assert "tradeoffs" in DESIGN_CHOICE_REDIRECT_MESSAGE.lower()
+    assert "reasoning step" in TEST_PASTE_REDIRECT_MESSAGE.lower()
+
+
+# ---------------------------------------------------------------------------
+# Test paste derivation — pasting actual test code should be blocked
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("message", [
+    # Full test function pasted
+    "def test_duplicate_email():\n    resp = client.post('/users', json={'email': 'test@example.com'})\n    assert resp.status_code == 409",
+    # Test with fixture
+    "def test_non_owner_access(client):\n    resp = client.get('/tasks/1')\n    assert resp.status_code == 403",
+    # Test with assert and client call in same message
+    "here is the test:\ndef test_blank_title():\n    r = client.post('/tasks', json={'title': '  '})\n    assert r.status_code == 422",
+    # pytest.fixture decorator
+    "@pytest.fixture\ndef test_client():\n    return TestClient(app)\ndef test_owner_only(): assert True",
+])
+def test_pasted_test_code_is_blocked(message: str) -> None:
+    decision = fallback_classify(message)
+    assert decision.allowed is False, f"Expected blocked: {message[:60]!r}"
+    assert "test_paste_derivation" in decision.tags, (
+        f"Expected test_paste_derivation tag, got {decision.tags}"
+    )
+    assert decision.redirect_message == TEST_PASTE_REDIRECT_MESSAGE
+
+
+@pytest.mark.parametrize("message", [
+    # Only traceback / failure output — NOT the test function itself
+    "FAILED tests/test_api.py::test_duplicate_email - AssertionError: assert 200 == 409",
+    "I ran the tests and got: AssertionError: assert response.status_code == 409",
+    "The test output says: FAILED test_blank_title — assert 200 == 422, what does that mean?",
+    # Describes a test conceptually without pasting code
+    "The duplicate email test is failing — what should I check?",
+    "I'm seeing a 200 when I expect 409 for the duplicate email case.",
+])
+def test_failure_output_not_code_is_allowed(message: str) -> None:
+    decision = fallback_classify(message)
+    assert "test_paste_derivation" not in decision.tags, (
+        f"Should not flag failure output as test_paste_derivation: {message[:60]!r}"
+    )

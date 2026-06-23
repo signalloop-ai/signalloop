@@ -1,11 +1,13 @@
 "use client";
 
 import { SignInButton, UserButton, useAuth, useUser } from "@clerk/nextjs";
-import { ClipboardCopy, FileText, Info, Loader2, LogIn, Plus, ShieldCheck, X } from "lucide-react";
+import { ChevronDown, ClipboardCopy, FileText, HelpCircle, Info, Loader2, LogIn, Plus, ShieldCheck, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { createInvite, fetchAttempts, type AuthTokenProvider, type InviteConfiguration } from "./api";
+import { fetchEmployerMe } from "../admin/api";
 import type { EmployerAttemptSummary } from "./types";
 
 // ── Static assessment pack details sourced from evaluator rubrics ──────────────
@@ -233,6 +235,71 @@ function AssessmentDetailModal({
   );
 }
 
+// ── How it works ──────────────────────────────────────────────────────────────
+
+function HowItWorks() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="how-it-works">
+      <button
+        className="how-it-works-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="how-it-works-label">
+          <HelpCircle size={16} aria-hidden="true" />
+          <span>How does this work?</span>
+        </span>
+        <ChevronDown size={16} className={`how-it-works-chevron${open ? " open" : ""}`} aria-hidden="true" />
+      </button>
+
+      <div className={`how-it-works-body${open ? " open" : ""}`} aria-hidden={!open}>
+        <div className="how-it-works-inner">
+          <div className="how-it-works-steps">
+            <div className="hiw-step">
+              <span className="hiw-step-num">1</span>
+              <h3>Create an invite</h3>
+              <p>Enter the candidate&apos;s email and pick the assessment settings:</p>
+              <ul>
+                <li><strong>Assessment</strong> — Standard (90 min) or Advanced (120 min)</li>
+                <li><strong>Timing</strong> — Untimed (recommended) or hard cutoff with auto-submit</li>
+                <li><strong>Evaluator feedback</strong> — Strict (results visible to you only) or Guided (candidate sees aggregate pass/fail counts)</li>
+              </ul>
+              <p>Copy the generated invite link and share it directly with the candidate.</p>
+            </div>
+
+            <div className="hiw-step">
+              <span className="hiw-step-num">2</span>
+              <h3>Candidate completes the assessment</h3>
+              <p>The candidate opens the link in their browser and works in a proctored workspace:</p>
+              <ul>
+                <li>Reads the task brief and debugs a real API codebase</li>
+                <li>Runs public tests and implements enhancements</li>
+                <li>Collaborates with an AI assistant — their usage is logged</li>
+                <li>Submits when done (or is auto-submitted if timed)</li>
+              </ul>
+              <p>Their status updates live in the table below: Invited → In progress → Submitted.</p>
+            </div>
+
+            <div className="hiw-step">
+              <span className="hiw-step-num">3</span>
+              <h3>Review the evidence report</h3>
+              <p>Once submitted, click <strong>Generate</strong> next to their attempt. The report includes:</p>
+              <ul>
+                <li>Overall score and a hire / no-hire recommendation</li>
+                <li>Hidden test results they couldn&apos;t see during the attempt</li>
+                <li>AI collaboration log — what they asked and how they used responses</li>
+                <li>Proctoring signals — fullscreen exits, focus loss, webcam snapshots</li>
+                <li>Code diff and candidate-written test quality</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: AuthTokenProvider; isClerkLoaded: boolean }) {
@@ -336,6 +403,8 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
           <strong>{reportCount}</strong>
         </div>
       </section>
+
+      <HowItWorks />
 
       <section className="employer-section">
         <div className="section-title">
@@ -520,6 +589,26 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
 export default function EmployerPortal() {
   const { isLoaded, isSignedIn } = useUser();
   const { getToken } = useAuth();
+  const router = useRouter();
+  const [roleChecked, setRoleChecked] = useState(false);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const me = await fetchEmployerMe(getToken);
+        if (!cancelled && me.role === "super_admin") {
+          router.replace("/admin");
+          return;
+        }
+      } catch {
+        // If /employer/me fails, proceed to employer dashboard (auth error handled by API)
+      }
+      if (!cancelled) setRoleChecked(true);
+    })();
+    return () => { cancelled = true; };
+  }, [isLoaded, isSignedIn, getToken, router]);
 
   if (!isLoaded) {
     return (
@@ -531,6 +620,14 @@ export default function EmployerPortal() {
 
   if (!isSignedIn) {
     return <AuthPanel />;
+  }
+
+  if (!roleChecked) {
+    return (
+      <main className="employer-page">
+        <p className="empty-state">Loading employer session.</p>
+      </main>
+    );
   }
 
   return <EmployerDashboard getAuthToken={getToken} isClerkLoaded={isLoaded} />;

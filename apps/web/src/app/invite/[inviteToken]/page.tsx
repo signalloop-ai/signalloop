@@ -281,6 +281,7 @@ export default function CandidateWorkspace() {
   const [showWebcamPrompt, setShowWebcamPrompt] = useState(false);
   const [webcamStreamReady, setWebcamStreamReady] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showWebcamPreview, setShowWebcamPreview] = useState(false);
 
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
   const autoSnapshotTimeoutRef = useRef<number | null>(null);
@@ -565,6 +566,10 @@ export default function CandidateWorkspace() {
   }
 
   async function acceptRules() {
+    // Request fullscreen synchronously within the user gesture before any await.
+    void document.documentElement.requestFullscreen().then(() => {
+      setIsFullscreen(true);
+    }).catch(() => {});
     try {
       const response = await fetch(`${apiBaseUrl}/candidate/invites/${inviteToken}/accept`, {
         method: "POST",
@@ -584,18 +589,33 @@ export default function CandidateWorkspace() {
     }
   }
 
-  const flushProctoringEvents = useCallback(async () => {
-    if (!inviteToken || proctoringQueueRef.current.length === 0) return;
-    const batch = proctoringQueueRef.current.splice(0);
+  const flushProctoringEvents = useCallback(async (opts?: { keepalive?: boolean; stripLargePayloads?: boolean }) => {
+    if (!inviteToken || proctoringQueueRef.current.length === 0) {
+      console.debug("[proctoring] flush called, queue empty or no token");
+      return;
+    }
+    let batch = proctoringQueueRef.current.splice(0);
+    if (opts?.stripLargePayloads) {
+      // For keepalive flushes the browser enforces a 64KB body limit; strip snapshot data URLs.
+      batch = batch.map((e) => {
+        if (e.event_type === "snapshot" && e.metadata?.data_url) {
+          const { data_url: _dropped, ...rest } = e.metadata as Record<string, unknown>;
+          return { ...e, metadata: { ...rest, data_url_stripped: true } };
+        }
+        return e;
+      });
+    }
+    console.debug("[proctoring] flushing", batch.length, "events:", batch.map(e => e.event_type));
     try {
-      await fetch(`${apiBaseUrl}/candidate/invites/${inviteToken}/proctoring-events/batch`, {
+      const resp = await fetch(`${apiBaseUrl}/candidate/invites/${inviteToken}/proctoring-events/batch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ events: batch }),
-        keepalive: true,
+        ...(opts?.keepalive ? { keepalive: true } : {}),
       });
-    } catch {
-      // Re-queue on network failure so events aren't lost between flushes.
+      console.debug("[proctoring] batch response:", resp.status);
+    } catch (err) {
+      console.warn("[proctoring] batch failed, re-queuing:", err);
       proctoringQueueRef.current.unshift(...batch);
     }
   }, [inviteToken]);
@@ -610,10 +630,10 @@ export default function CandidateWorkspace() {
 
   async function captureAndUploadSnapshot(trigger: "periodic" | "focus_return" | "submission") {
     const stream = webcamStreamRef.current;
-    if (!stream || !inviteToken) return;
+    if (!stream || !inviteToken) { console.debug("[snapshot] skipped — no stream or token"); return; }
     try {
       const track = stream.getVideoTracks()[0];
-      if (!track || track.readyState !== "live") return;
+      if (!track || track.readyState !== "live") { console.debug("[snapshot] skipped — track not live:", track?.readyState); return; }
 
       // Try ImageCapture API first; fall back to canvas.
       let blob: Blob | null = null;
@@ -629,10 +649,18 @@ export default function CandidateWorkspace() {
       if (!blob) {
         const video = document.createElement("video");
         video.srcObject = stream;
-        await video.play();
+        // Wait for metadata so videoWidth/videoHeight are populated before we size the canvas.
+        await new Promise<void>((resolve) => {
+          if (video.readyState >= 1) { resolve(); return; }
+          video.addEventListener("loadedmetadata", () => resolve(), { once: true });
+          void video.play();
+        });
+        if (video.readyState < 1) await video.play();
+        const w = video.videoWidth || 640;
+        const h = video.videoHeight || 480;
         const canvas = document.createElement("canvas");
         canvas.width = 640;
-        canvas.height = Math.round(640 * (video.videoHeight / Math.max(video.videoWidth, 1)));
+        canvas.height = Math.round(640 * (h / w));
         canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
         blob = await new Promise<Blob>((resolve, reject) =>
           canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/jpeg", 0.7)
@@ -651,18 +679,29 @@ export default function CandidateWorkspace() {
           body: JSON.stringify({ filename }),
         }
       );
-      if (!urlResp.ok) return;
-      const { upload_url, s3_key } = (await urlResp.json()) as { upload_url: string; s3_key: string };
-
-      await fetch(upload_url, {
-        method: "PUT",
-        body: blob,
-        headers: { "Content-Type": "image/jpeg" },
-      });
-
-      queueProctoringEvent("snapshot", { s3_key, trigger });
-    } catch {
-      // Snapshot failures are silent — never block the assessment flow.
+      if (urlResp.ok) {
+        // S3 path: use presigned PUT
+        const { upload_url, s3_key } = (await urlResp.json()) as { upload_url: string; s3_key: string };
+        await fetch(upload_url, {
+          method: "PUT",
+          body: blob,
+          headers: { "Content-Type": "image/jpeg" },
+        });
+        console.debug("[snapshot] uploaded to S3, key:", s3_key);
+        queueProctoringEvent("snapshot", { s3_key, trigger });
+      } else {
+        // Local dev fallback: encode image inline so reports can display it without S3
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        console.debug("[snapshot] stored as data URL, trigger:", trigger);
+        queueProctoringEvent("snapshot", { data_url: dataUrl, trigger });
+      }
+    } catch (err) {
+      console.warn("[snapshot] capture failed:", err);
     }
   }
 
@@ -677,26 +716,57 @@ export default function CandidateWorkspace() {
     setShowWebcamPrompt(false);
 
     if (consented) {
-      // Acquire the stream BEFORE setting consent so webcamStreamRef is populated
-      // when the snapshot useEffect fires on the webcamConsent state change.
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         webcamStreamRef.current = stream;
-        setWebcamStreamReady(true);
+        // Show live preview so the candidate can align before capture begins.
+        setShowWebcamPreview(true);
+        return;
       } catch {
-        // Camera permission denied at OS level — treat as declined.
-        consented = false;
+        // Camera denied at OS level — treat as declined.
       }
     }
 
-    setWebcamConsent(consented);
-    // Persist the choice to the backend.
+    setWebcamConsent(false);
     await fetch(`${apiBaseUrl}/candidate/invites/${inviteToken}/webcam-consent`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ consented }),
-    }).catch(() => { /* non-critical */ });
+      body: JSON.stringify({ consented: false }),
+    }).catch(() => {});
   }
+
+  async function handleWebcamPreviewConfirm() {
+    setShowWebcamPreview(false);
+    setWebcamStreamReady(true);
+    setWebcamConsent(true);
+    await fetch(`${apiBaseUrl}/candidate/invites/${inviteToken}/webcam-consent`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ consented: true }),
+    }).catch(() => {});
+  }
+
+  async function handleWebcamPreviewDecline() {
+    setShowWebcamPreview(false);
+    webcamStreamRef.current?.getTracks().forEach((t) => t.stop());
+    webcamStreamRef.current = null;
+    setWebcamConsent(false);
+    await fetch(`${apiBaseUrl}/candidate/invites/${inviteToken}/webcam-consent`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ consented: false }),
+    }).catch(() => {});
+  }
+
+  // Stop the webcam stream on unmount only. This is a separate, stable effect so that
+  // React Strict Mode's double-invocation of the snapshot effect (below) does not
+  // stop the stream on its first cleanup run and leave it null on the second run.
+  useEffect(() => {
+    return () => {
+      webcamStreamRef.current?.getTracks().forEach((t) => t.stop());
+      webcamStreamRef.current = null;
+    };
+  }, []);
 
   // Start periodic snapshots once webcam stream is available.
   // webcamStreamReady is set AFTER getUserMedia completes so the ref is populated.
@@ -710,8 +780,6 @@ export default function CandidateWorkspace() {
     );
     return () => {
       if (snapshotIntervalRef.current) window.clearInterval(snapshotIntervalRef.current);
-      webcamStreamRef.current?.getTracks().forEach((t) => t.stop());
-      webcamStreamRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [webcamConsent, webcamStreamReady, submitted]);
@@ -781,15 +849,9 @@ export default function CandidateWorkspace() {
     void submitFinal("auto_expired");
   }, [isExpired, submitted, submitting, submitFinal]);
 
-  // Request fullscreen when candidate accepts the assessment, log exits/returns.
+  // Log fullscreen exits/returns and flush proctoring events periodically.
   useEffect(() => {
     if (!accepted || submitted) return;
-
-    void document.documentElement.requestFullscreen().then(() => {
-      setIsFullscreen(true);
-    }).catch(() => {
-      // Browser or user declined — not an error, proceed without fullscreen.
-    });
 
     function onFullscreenChange() {
       const inFullscreen = !!document.fullscreenElement;
@@ -839,11 +901,12 @@ export default function CandidateWorkspace() {
     window.addEventListener("blur", onWindowBlur);
     window.addEventListener("focus", onWindowFocus);
 
-    // Flush every 30 seconds.
+    // Flush every 30 seconds (no keepalive — avoids the 64KB body limit that would block large snapshots).
     const flushInterval = window.setInterval(() => { void flushProctoringEvents(); }, 30_000);
 
-    // Best-effort flush on unload (keepalive: true allows it to complete after page close).
-    function onBeforeUnload() { void flushProctoringEvents(); }
+    // Best-effort flush on unload. keepalive allows the request to outlive the page, but
+    // the browser enforces a 64KB limit, so strip snapshot data URLs from this batch.
+    function onBeforeUnload() { void flushProctoringEvents({ keepalive: true, stripLargePayloads: true }); }
     window.addEventListener("beforeunload", onBeforeUnload);
 
     return () => {
@@ -994,18 +1057,46 @@ export default function CandidateWorkspace() {
     );
   }
 
+  if (showWebcamPreview && !submitted) {
+    return (
+      <main className="onboarding">
+        <section className="onboarding-panel webcam-consent-panel">
+          <h1>Align your camera</h1>
+          <p>
+            Center your face in the frame. Periodic still images will be captured during the session
+            and shared only with the employer.
+          </p>
+          <video
+            autoPlay
+            muted
+            playsInline
+            style={{ width: "100%", maxWidth: "320px", borderRadius: "8px", background: "#000", marginTop: "8px" }}
+            ref={(el) => {
+              if (el && webcamStreamRef.current) el.srcObject = webcamStreamRef.current;
+            }}
+          />
+          <div className="webcam-consent-actions">
+            <button
+              className="command-button primary"
+              onClick={() => void handleWebcamPreviewConfirm()}
+            >
+              Camera looks good — start
+            </button>
+            <button
+              className="command-button secondary"
+              onClick={() => void handleWebcamPreviewDecline()}
+            >
+              Skip camera
+            </button>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
-    <main
-      className="workspace-shell"
-      style={
-        {
-          "--file-panel-width": `${filePanelWidth}px`,
-          "--assistant-panel-width": `${assistantPanelWidth}px`,
-          "--bottom-panel-height": `${effectiveBottomHeight}px`,
-        } as CSSProperties
-      }
-    >
-      {/* ── FULLSCREEN BANNER ── */}
+    <div className="workspace-outer">
+      {/* ── FULLSCREEN BANNER — lives outside the grid so it doesn't disrupt row sizing ── */}
       {!isFullscreen && accepted && !submitted ? (
         <div className="fullscreen-banner">
           <span>You left fullscreen — this has been recorded.</span>
@@ -1017,6 +1108,16 @@ export default function CandidateWorkspace() {
           </button>
         </div>
       ) : null}
+    <main
+      className="workspace-shell"
+      style={
+        {
+          "--file-panel-width": `${filePanelWidth}px`,
+          "--assistant-panel-width": `${assistantPanelWidth}px`,
+          "--bottom-panel-height": `${effectiveBottomHeight}px`,
+        } as CSSProperties
+      }
+    >
 
       {/* ── TOPBAR ── */}
       <header className="topbar">
@@ -1476,5 +1577,6 @@ export default function CandidateWorkspace() {
         </div>
       ) : null}
     </main>
+    </div>
   );
 }

@@ -93,6 +93,7 @@ class Settings:
         self.snapshot_interval_seconds = parse_int(getenv("SNAPSHOT_INTERVAL_SECONDS"), default=300)
         self.openai_api_key = getenv("OPENAI_API_KEY")
         self.openai_model = getenv("OPENAI_MODEL", "gpt-5")
+        self.openai_classifier_model = getenv("OPENAI_CLASSIFIER_MODEL", "gpt-4o-mini")
         self.clerk_secret_key = getenv("CLERK_SECRET_KEY")
         self.environment = getenv("SIGNALLOOP_ENV", "local")
         self.clerk_publishable_key = getenv("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY")
@@ -104,6 +105,11 @@ class Settings:
             if self.clerk_jwt_issuer
             else None
         )
+        self.super_admin_emails = [
+            e.strip().lower()
+            for e in getenv("SUPER_ADMIN_EMAILS", "").split(",")
+            if e.strip()
+        ]
         self.rate_limit_enabled = parse_bool(getenv("RATE_LIMIT_ENABLED"), default=True)
         self.rate_limit_per_minute = parse_int(getenv("RATE_LIMIT_PER_MINUTE"), default=120)
         self.cors_origins = [
