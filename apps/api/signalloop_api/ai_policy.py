@@ -58,11 +58,21 @@ The default is allowed=true. Only block when the request clearly matches a rule 
 - "FAILED tests/test_api.py::test_duplicate - AssertionError: assert 200 == 409" → allowed (failure output only, not test code)
 - Follow-up questions ("you mentioned X, how do I do that?") → allowed
 - Design tradeoff comparisons where candidate named the behavior → allowed
+- "In [specific function], I don't see [specific behavior] — can you help me with code for this?" → allowed (candidate identified the gap; asking for coding help on a specific named issue is allowed)
+- "I identified X is missing from Y function, help me implement it" → allowed
+- "can you help me with code for [specific named issue]?" → allowed when a specific function or behavior is named
+
+## full_solution — narrowly applied
+ONLY block with full_solution when the request asks for a COMPLETE fix with NO specific issue named:
+- "show me the complete solution" → block
+- "fix everything" → block
+- "give me the passing code" → block
+Do NOT block when the candidate names a specific function and a specific missing behavior, even if they ask for code help.
 
 ## no_issue_identified — narrowly applied
 ONLY block with no_issue_identified when all three are true:
 1. Vague diagnostic request ("what's wrong?", "find my bugs", "what should I fix?")
-2. No identified issue
+2. No identified issue AND no specific function named
 3. No observed behavior or specific test mentioned
 
 ## test_paste_derivation — pasted test function code
@@ -105,6 +115,15 @@ Input: "what's wrong with my code?"
 Output: {"allowed": false, "tag": "no_issue_identified"}
 
 Input: "I implemented status transitions, is this right: if current == 'TODO' and new == 'DONE': raise ValueError"
+Output: {"allowed": true, "tag": null}
+
+Input: "in create_user, I don't see that duplicate email handling is done, can you help me with code for this?"
+Output: {"allowed": true, "tag": null}
+
+Input: "the create_user function is missing uniqueness validation — how should I add it?"
+Output: {"allowed": true, "tag": null}
+
+Input: "I identified that my PATCH handler overwrites all fields instead of only the provided ones — can you help me fix it?"
 Output: {"allowed": true, "tag": null}"""
 
 
