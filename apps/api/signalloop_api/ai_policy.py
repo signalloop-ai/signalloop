@@ -56,7 +56,9 @@ The default is allowed=true. Only block when the request clearly matches a rule 
 - "I got this error, what does it mean?" → allowed
 - "From this test failure, I don't see X — am I missing something?" → allowed
 - "FAILED tests/test_api.py::test_duplicate - AssertionError: assert 200 == 409" → allowed (failure output only, not test code)
-- Follow-up answers to the AI's Socratic question ("this is not handled at all, i want to block this") → allowed (candidate is providing the requested information)
+- Follow-up answers to the AI's Socratic question → ALWAYS allowed, even if the message is short and references "it" or "this" without restating the topic. The recent message history gives the context.
+- "currently, its allowing. its not blocking" (after prior message about duplicate email) → allowed
+- "this is not handled at all, i want to block this" → allowed
 - Follow-up questions ("you mentioned X, how do I do that?") → allowed
 - Design tradeoff comparisons where candidate named the behavior → allowed
 - "In [specific function], I don't see [specific behavior] — can you help me with code for this?" → allowed (candidate identified the gap; asking for coding help on a specific named issue is allowed)
@@ -396,7 +398,13 @@ def fallback_classify(message: str, recent_messages: list[str] | None = None) ->
         if any(pattern in combined for pattern in patterns):
             tags.append(tag)
 
-    candidate_identified = any(signal in normalized for signal in ISSUE_IDENTIFIED_SIGNALS)
+    # Check current message AND the full conversation context.
+    # A short follow-up ("currently, its allowing") should not be penalised as
+    # no_issue_identified if the prior messages already named the specific issue.
+    candidate_identified = (
+        any(signal in normalized for signal in ISSUE_IDENTIFIED_SIGNALS)
+        or any(signal in combined for signal in ISSUE_IDENTIFIED_SIGNALS)
+    )
     if not candidate_identified and any(pattern in normalized for pattern in NO_ISSUE_IDENTIFIED_PATTERNS):
         tags.append("no_issue_identified")
 

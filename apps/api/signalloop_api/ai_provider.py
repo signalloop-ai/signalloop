@@ -100,12 +100,18 @@ class OpenAIProvider:
                 redirect = REDIRECT_MESSAGE
             return AIDecision(allowed=False, policy_tags=[tag] if tag else [], message=redirect)
 
-        # Step 2: Generate
-        user_content = message
+        # Step 2: Generate — include recent candidate messages so the generator
+        # can maintain topic coherence across follow-up messages.
+        if recent_messages:
+            history = "\n".join(f"Candidate: {m}" for m in recent_messages[-3:])
+            user_content = f"Recent conversation:\n{history}\n\nCurrent message: {message}"
+        else:
+            user_content = message
+
         if context:
             path = context.get("path", "")
             content = context.get("content", "")
-            user_content = f"Selected file: {path}\n```\n{content}\n```\n\nQuestion: {message}"
+            user_content = f"Selected file: {path}\n```\n{content}\n```\n\n{user_content}"
 
         try:
             response_text = self._call_openai(
