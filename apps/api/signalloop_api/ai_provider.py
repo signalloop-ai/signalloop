@@ -115,7 +115,7 @@ class OpenAIProvider:
 
         try:
             response_text = self._call_openai(
-                GENERATOR_PROMPT, user_content, self.generator_model, max_tokens=200
+                GENERATOR_PROMPT, user_content, self.generator_model, max_tokens=350
             )
         except Exception:
             response_text = "I could not generate a response right now."
