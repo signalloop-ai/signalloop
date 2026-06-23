@@ -14,7 +14,7 @@ from signalloop_api.models import AIInteraction, Employer
 
 
 class FakeProvider:
-    def evaluate(self, message: str, context: dict | None, recent_messages: list[str]) -> AIDecision:
+    def evaluate(self, message: str, context: dict | None, recent_messages: list[str], recent_turns: list[tuple[str, str]] | None = None) -> AIDecision:
         from signalloop_api.ai_policy import fallback_classify, REDIRECT_MESSAGE
         decision = fallback_classify(message, recent_messages)
         if not decision.allowed:
@@ -126,7 +126,7 @@ def test_ai_endpoint_returns_socratic_message_for_direct_diagnosis(
     from signalloop_api.ai_policy import SOCRATIC_REDIRECT_MESSAGE
 
     class DiagnosisFakeProvider:
-        def evaluate(self, message: str, context: dict | None, recent_messages: list[str]) -> AIDecision:
+        def evaluate(self, message: str, context: dict | None, recent_messages: list[str], recent_turns: list[tuple[str, str]] | None = None) -> AIDecision:
             return AIDecision(allowed=False, policy_tags=["direct_diagnosis"], message=SOCRATIC_REDIRECT_MESSAGE)
 
     def override_get_session() -> Generator[Session, None, None]:

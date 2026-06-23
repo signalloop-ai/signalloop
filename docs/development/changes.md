@@ -5,6 +5,49 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-06-23 — AI Collaborator: conversation context flow fix
+
+### Why
+
+A real exchange exposed the generator re-answering OLD requests: after helping with a
+non-owner block and a title-whitespace fix, a plain "what does delete_task do?" produced a
+response that re-dumped both prior fixes plus a delete explanation. Two flow bugs:
+
+1. The generator's "Recent conversation" contained only the candidate's PAST requests — none
+   of the assistant's replies. Prior asks therefore looked unanswered, so the model
+   re-implemented them. It also could not resolve references to its OWN prior answers
+   ("ok, make that change for me").
+2. Nothing told the generator to answer only the current message.
+
+### Changed
+
+- `ai.py` now fetches the recent transcript of BOTH roles (last 8 interactions, chronological)
+  and passes it to the generator as `recent_turns`. The candidate-only `recent_messages` list
+  is kept separately for the degraded keyword fallback (assistant redirect text would
+  false-trigger its abuse patterns, e.g. "issue-by-issue").
+- `ai_provider.evaluate` gained an optional `recent_turns` param (Protocol +
+  LocalGuidanceProvider + OpenAIProvider). New `_format_history` builds the generator context
+  from the real transcript (labels each turn, truncates long lines), falling back to
+  candidate-only when no transcript is supplied.
+- `GENERATOR_PROMPT` gained a "Focus on the current message" rule: answer only the current
+  message; earlier turns are reference-only (already handled); never re-answer them or
+  volunteer unrequested changes.
+- The generator's history framing now states the turns are already handled and for reference
+  only.
+
+### Tests
+
+- Added live tests (section H): `test_focus_does_not_reanswer_prior_requests` (the reported
+  delete_task scenario) and `test_focus_resolves_reference_to_prior_answer` ("make that change
+  for me" resolves to the assistant's prior suggestion). Both pass against real models.
+- Updated the fake providers in `test_ai_endpoint.py` / `test_evidence_report.py` for the new
+  signature.
+- Verified end-to-end through the live endpoint: the multi-turn replay now answers only the
+  current question.
+- Offline: **254 passed**. Live: **44 passed**.
+
+---
+
 ## 2026-06-23 — AI Collaborator: permanent two-component redesign
 
 ### Why

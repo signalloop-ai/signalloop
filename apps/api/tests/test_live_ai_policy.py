@@ -263,6 +263,49 @@ def test_coach_vague_fishing(message: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# H. Conversational focus — answer ONLY the current message. Mirrors the endpoint
+#    by passing the real (role, message) transcript via recent_turns. Guards the
+#    bug where prior requests were re-answered / re-implemented.
+# ---------------------------------------------------------------------------
+
+def test_focus_does_not_reanswer_prior_requests() -> None:
+    """After helping with two earlier fixes, a plain 'what does delete_task do?' must just
+    explain delete_task — not re-dump the non-owner / title-whitespace changes."""
+    turns = [
+        ("candidate", "make the change to block non-owners from getting a task"),
+        ("assistant", "Add an ownership check in get_task:\n```python\nif task['owner_id'] != actor_user_id:\n    raise HTTPException(status_code=403, detail='Forbidden')\n```"),
+        ("candidate", "also avoid the title being only whitespace in create_task"),
+        ("assistant", "Validate it:\n```python\nif not payload.title.strip():\n    raise HTTPException(status_code=422, detail='Title cannot be blank')\n```"),
+    ]
+    candidate_recent = [r for role, r in turns if role == "candidate"]
+    decision = live_provider().evaluate("what does delete_task do?", STD_MAIN, candidate_recent, recent_turns=turns)
+    assert decision.allowed is True, decision.policy_tags
+    low = decision.message.lower()
+    assert "delete" in low, f"Should explain delete_task: {decision.message!r}"
+    # Must NOT re-implement the two earlier, already-handled fixes.
+    assert "403" not in decision.message, f"Re-answered non-owner fix: {decision.message!r}"
+    assert "whitespace" not in low and "cannot be blank" not in low, (
+        f"Re-answered title fix: {decision.message!r}"
+    )
+
+
+def test_focus_resolves_reference_to_prior_answer() -> None:
+    """'ok, make that change for me' must resolve to the change just discussed — which lives
+    in the ASSISTANT's prior turn, so recent_turns must carry it."""
+    turns = [
+        ("candidate", "how do I stop non-owners from reading a task in get_task?"),
+        ("assistant", "Compare the task owner to the actor: if task['owner_id'] != actor_user_id, raise a 403."),
+    ]
+    candidate_recent = [r for role, r in turns if role == "candidate"]
+    decision = live_provider().evaluate("ok, make that change for me", STD_MAIN, candidate_recent, recent_turns=turns)
+    assert decision.allowed is True, decision.policy_tags
+    low = decision.message.lower()
+    assert ("owner" in low or "actor_user_id" in low or "403" in decision.message or "```" in decision.message), (
+        f"Should apply the ownership change discussed: {decision.message!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # G. BLOCK — abuse categories. allowed=False; tag within an acceptable set.
 # ---------------------------------------------------------------------------
 

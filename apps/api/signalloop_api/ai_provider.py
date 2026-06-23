@@ -21,12 +21,24 @@ from signalloop_api.config import settings
 
 
 class AIProvider(Protocol):
-    def evaluate(self, message: str, context: dict | None, recent_messages: list[str]) -> AIDecision:
+    def evaluate(
+        self,
+        message: str,
+        context: dict | None,
+        recent_messages: list[str],
+        recent_turns: list[tuple[str, str]] | None = None,
+    ) -> AIDecision:
         ...
 
 
 class LocalGuidanceProvider:
-    def evaluate(self, message: str, context: dict | None, recent_messages: list[str]) -> AIDecision:
+    def evaluate(
+        self,
+        message: str,
+        context: dict | None,
+        recent_messages: list[str],
+        recent_turns: list[tuple[str, str]] | None = None,
+    ) -> AIDecision:
         decision = fallback_classify(message, recent_messages)
         if not decision.allowed:
             return AIDecision(allowed=False, policy_tags=decision.tags, message=decision.redirect_message or REDIRECT_MESSAGE)
@@ -41,6 +53,25 @@ class LocalGuidanceProvider:
                 f"{context_note} Describe the observed behavior, expected behavior, and the smallest public test or code path that demonstrates the gap."
             ),
         )
+
+
+def _format_history(recent_turns: list[tuple[str, str]] | None, recent_messages: list[str]) -> str:
+    """Build the generator's conversation context.
+
+    Prefers the real (role, message) transcript so the generator sees its OWN prior answers
+    (needed to resolve "make that change for me") and can tell that earlier candidate asks
+    were already handled. Falls back to the candidate-only list when no transcript is supplied.
+    Each line is truncated so a long pasted message can't blow up the prompt.
+    """
+    if recent_turns:
+        lines = []
+        for role, text in recent_turns[-6:]:
+            label = "Candidate" if role == "candidate" else "You (assistant)"
+            lines.append(f"{label}: {text[:400]}")
+        return "\n".join(lines)
+    if recent_messages:
+        return "\n".join(f"Candidate: {m[:400]}" for m in recent_messages[-3:])
+    return ""
 
 
 class OpenAIProvider:
@@ -67,9 +98,17 @@ class OpenAIProvider:
         resp.raise_for_status()
         return str(resp.json()["choices"][0]["message"]["content"]).strip()
 
-    def evaluate(self, message: str, context: dict | None, recent_messages: list[str]) -> AIDecision:
-        # recent_messages is expected in chronological order (oldest -> newest), NOT
-        # including the current message.
+    def evaluate(
+        self,
+        message: str,
+        context: dict | None,
+        recent_messages: list[str],
+        recent_turns: list[tuple[str, str]] | None = None,
+    ) -> AIDecision:
+        # recent_messages: candidate-only, chronological (oldest -> newest), NOT including the
+        # current message. Used only by the degraded keyword fallback.
+        # recent_turns: the real (role, message) transcript of recent turns, chronological,
+        # for the generator so it can resolve references and not re-answer handled requests.
 
         # Deterministic gate: pasting actual test function code lets the candidate reverse the
         # fix out of the test, which skips the reasoning being assessed. This is structural,
@@ -112,9 +151,16 @@ class OpenAIProvider:
         # Step 2 — Generate. The generator owns the give-code-vs-coach decision (and only it
         # does). Whatever it returns is returned to the candidate verbatim — there is no
         # second keyword pass re-judging its output.
-        if recent_messages:
-            history = "\n".join(f"Candidate: {m}" for m in recent_messages[-3:])
-            user_content = f"Recent conversation:\n{history}\n\nCurrent message: {message}"
+        history = _format_history(recent_turns, recent_messages)
+        if history:
+            user_content = (
+                "Conversation so far, for REFERENCE ONLY — these turns are already handled. "
+                "Use them only to resolve references like 'that' or 'it'. Do NOT re-answer them "
+                "or volunteer changes the candidate did not just ask for:\n"
+                f"{history}\n\n"
+                "Now answer ONLY the candidate's current message:\n"
+                f"{message}"
+            )
         else:
             user_content = message
 

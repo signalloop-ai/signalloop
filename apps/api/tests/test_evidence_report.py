@@ -16,7 +16,7 @@ from signalloop_api.submissions import get_hidden_test_runner
 
 
 class FakeProvider:
-    def evaluate(self, message: str, context: dict | None, recent_messages: list[str]) -> AIDecision:
+    def evaluate(self, message: str, context: dict | None, recent_messages: list[str], recent_turns: list[tuple[str, str]] | None = None) -> AIDecision:
         return AIDecision(
             allowed=True,
             policy_tags=[],

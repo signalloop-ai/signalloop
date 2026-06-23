@@ -44,23 +44,25 @@ def send_ai_message(
     enforce_not_expired(session, attempt)
 
     selected_context = validate_selected_context(payload.selected_context)
-    # Fetch the 6 most recent candidate messages, then reverse to chronological order
-    # (oldest -> newest) so the classifier and generator read the conversation in the order
-    # it happened. The current message is passed separately and is not yet persisted.
-    recent_messages = [
-        interaction.message
-        for interaction in reversed(
+    # Fetch the most recent interactions, newest-first, then reverse to chronological order
+    # (oldest -> newest). The current message is passed separately and is not yet persisted.
+    recent_interactions = list(
+        reversed(
             session.scalars(
                 select(AIInteraction)
                 .where(AIInteraction.attempt_id == attempt.id)
-                .where(AIInteraction.role == "candidate")
                 .order_by(AIInteraction.id.desc())
-                .limit(6)
+                .limit(8)
             ).all()
         )
-    ]
+    )
+    # Candidate-only list for the degraded keyword fallback (assistant redirect text would
+    # false-trigger its abuse patterns). The full transcript goes to the generator so it can
+    # resolve references and avoid re-answering already-handled requests.
+    recent_messages = [i.message for i in recent_interactions if i.role == "candidate"][-6:]
+    recent_turns = [(i.role, i.message) for i in recent_interactions]
 
-    decision = provider.evaluate(payload.message, selected_context, recent_messages)
+    decision = provider.evaluate(payload.message, selected_context, recent_messages, recent_turns=recent_turns)
 
     session.add(
         AIInteraction(
