@@ -5,6 +5,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
 from signalloop_api.ai import router as ai_router
+from signalloop_api.admin import router as admin_router
 from signalloop_api.attempts import router as attempts_router
 from signalloop_api.config import settings
 from signalloop_api.proctoring import router as proctoring_router
@@ -66,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(submissions_router)
     app.include_router(reports_router)
     app.include_router(proctoring_router)
+    app.include_router(admin_router)
 
     return app
 

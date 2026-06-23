@@ -23,6 +23,7 @@ from signalloop_api.schemas import (
     CreateAttemptRequest,
     CreateAttemptResponse,
     EmployerAttemptSummary,
+    EmployerInfoResponse,
     SaveSnapshotRequest,
     SnapshotResponse,
 )
@@ -306,6 +307,17 @@ def create_assessment_attempt(
         invite_token=attempt.invite_token,
         invite_url=build_invite_url(attempt.invite_token),
         status=attempt.status,
+    )
+
+
+@router.get("/employer/me", response_model=EmployerInfoResponse)
+def get_current_employer_info(
+    current_employer: Employer = Depends(get_current_employer),
+) -> EmployerInfoResponse:
+    return EmployerInfoResponse(
+        id=current_employer.id,
+        email=current_employer.email,
+        role=current_employer.role,
     )
 
 

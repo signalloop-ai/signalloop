@@ -74,6 +74,7 @@ def get_or_create_employer(session: Session, identity: EmployerIdentity) -> Empl
             email_in_use = session.scalar(select(Employer.id).where(Employer.email == identity.email))
             if email_in_use in {None, employer.id}:
                 employer.email = identity.email
+        _assign_role(employer, identity.email)
         return employer
 
     email = identity.email
@@ -86,6 +87,7 @@ def get_or_create_employer(session: Session, identity: EmployerIdentity) -> Empl
         email=email,
         company_name=None,
     )
+    _assign_role(employer, identity.email)
     session.add(employer)
     try:
         session.flush()
@@ -93,15 +95,24 @@ def get_or_create_employer(session: Session, identity: EmployerIdentity) -> Empl
         session.rollback()
         employer = session.scalar(select(Employer).where(Employer.clerk_user_id == identity.clerk_user_id))
         if employer is not None:
+            _assign_role(employer, identity.email)
             return employer
         employer = Employer(
             clerk_user_id=identity.clerk_user_id,
             email=f"{identity.clerk_user_id}@clerk.local",
             company_name=None,
         )
+        _assign_role(employer, identity.email)
         session.add(employer)
         session.flush()
     return employer
+
+
+def _assign_role(employer: Employer, email: str) -> None:
+    is_admin = email.lower() in settings.super_admin_emails
+    desired_role = "super_admin" if is_admin else None
+    if employer.role != desired_role:
+        employer.role = desired_role
 
 
 def get_current_employer(
@@ -113,3 +124,17 @@ def get_current_employer(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Employer authentication required")
     identity = verify_clerk_token(token)
     return get_or_create_employer(session, identity)
+
+
+def get_current_super_admin(
+    authorization: str | None = Header(default=None),
+    session: Session = Depends(get_session),
+) -> Employer:
+    token = extract_bearer_token(authorization)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Super admin authentication required")
+    identity = verify_clerk_token(token)
+    employer = get_or_create_employer(session, identity)
+    if employer.role != "super_admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin access required")
+    return employer

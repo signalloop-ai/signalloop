@@ -143,3 +143,9 @@ class SnapshotUploadUrlRequest(BaseModel):
 class SnapshotUploadUrlResponse(BaseModel):
     upload_url: str
     s3_key: str
+
+
+class EmployerInfoResponse(BaseModel):
+    id: int
+    email: str
+    role: Optional[str]

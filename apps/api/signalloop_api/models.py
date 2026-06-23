@@ -24,6 +24,7 @@ class Employer(TimestampMixin, Base):
     clerk_user_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True)
     email: Mapped[str] = mapped_column(String(320), unique=True)
     company_name: Mapped[Optional[str]] = mapped_column(String(255))
+    role: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     attempts: Mapped[list["AssessmentAttempt"]] = relationship(back_populates="employer")
 
