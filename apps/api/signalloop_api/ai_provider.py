@@ -82,11 +82,12 @@ class OpenAIProvider:
             )
 
         # Step 1 — Classify (the single source of truth for blocking).
-        history_lines = "\n".join(f"[candidate] {m}" for m in recent_messages[-4:]) if recent_messages else ""
-        if history_lines:
-            classifier_user = "Recent messages:\n" + history_lines + "\n\nCurrent message: " + message
-        else:
-            classifier_user = "Current message: " + message
+        # The classifier judges the CURRENT message on its own merits. Feeding it prior turns
+        # caused context-bleed false positives (e.g. a concept question followed by "help me
+        # with code for this" was mis-read as full_solution). Conversation context belongs to
+        # the generator — an allowed-only path that cannot cause a false block — and it still
+        # receives recent_messages below.
+        classifier_user = "Current message: " + message
 
         try:
             raw_classification = self._call_openai(

@@ -74,6 +74,22 @@ more keywords/examples, creating new false positives elsewhere.
   a genuine multi-issue sweep still blocks, so the rule isn't disabled.
 - Full offline API suite: **254 passed**. Live suite: **42 passed** against real models.
 
+### Follow-up: context-bleed false positive (found via live endpoint smoke test)
+
+After restarting the API and smoke-testing the real endpoint, a candidate-identified request
+("in create_user I don't see duplicate email handling, can you help me with code for this?")
+was blocked as `full_solution` — but only when a prior turn ("how do I raise a 409?") was in
+the history. Reproduced 15/15. Root cause: the classifier was being fed recent messages and
+mis-read the *combination* as building a full solution.
+
+Fix: the classifier now judges the CURRENT message alone (`ai_provider.evaluate` no longer
+passes history to the classifier call). Conversation context belongs to the generator — an
+allowed-only path that cannot cause a false block — which still receives `recent_messages`.
+Tightened the `full_solution` definition (naming one issue is never full_solution), reworded
+`anti_decomposition` to a single-message sweep, and pinned the reproduced phrasing as an ALLOW
+example. After the fix: 0/15 blocked; abuse still blocks; 254 offline + 42 live still pass;
+endpoint replay of the original sequence allows all turns.
+
 ### Files
 
 - `apps/api/signalloop_api/ai_policy.py`

@@ -231,7 +231,9 @@ class TestTwoStepPipeline:
         user_message = next((m["content"] for m in generator_messages if m["role"] == "user"), "")
         assert "src/main.py" in user_message
 
-    def test_recent_messages_passed_to_classifier(self) -> None:
+    def test_recent_messages_go_to_generator_not_classifier(self) -> None:
+        """Conversation context belongs to the generator (allowed path). The classifier judges
+        the current message alone — feeding it history caused context-bleed false blocks."""
         provider = _provider()
         captured_calls: list = []
 
@@ -249,9 +251,10 @@ class TestTwoStepPipeline:
         with patch("httpx.post", capturing_post):
             provider.evaluate("how do I fix that?", None, recent)
 
-        classifier_messages = captured_calls[0].get("messages", [])
-        user_message = next((m["content"] for m in classifier_messages if m["role"] == "user"), "")
-        assert "doesn't normalise the email" in user_message
+        classifier_user = next((m["content"] for m in captured_calls[0]["messages"] if m["role"] == "user"), "")
+        generator_user = next((m["content"] for m in captured_calls[1]["messages"] if m["role"] == "user"), "")
+        assert "doesn't normalise the email" not in classifier_user
+        assert "doesn't normalise the email" in generator_user
 
     def test_classifier_json_parse_failure_falls_back(self) -> None:
         provider = _provider()
