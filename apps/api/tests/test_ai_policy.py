@@ -60,6 +60,15 @@ def test_allowed_candidate_identified_issue() -> None:
     # Design guidance where candidate named the behavior
     "in the current code whatever task status we give is taken we should block invalid transitions can u suggest which ones to block",
     "we want to check that due date is greater than today, how to do that?",
+    # Candidate names a specific function + specific gap + asks for code help
+    # These should NEVER be blocked — the candidate has done the diagnostic work
+    "in create_user, i dont see that duplicate mail handling is done, can you help me with code for this",
+    "in create_user, I don't see duplicate email handling — can you help me with code for this?",
+    "the create_user function is missing uniqueness validation, how should I add it?",
+    "I identified that my PATCH handler overwrites all fields, can you help me fix it?",
+    "in my delete handler, I don't see an ownership check — help me add it",
+    "the list_tasks endpoint is missing filtering for archived tasks, can you help me code that?",
+    "I don't see rate limiting in the login function, can you help me implement it?",
 ])
 def test_allowed_legitimate_candidate_questions(message: str) -> None:
     decision = fallback_classify(message)
