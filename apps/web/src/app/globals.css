@@ -1330,7 +1330,8 @@ button:disabled {
   grid-column: 1 / -1;
 }
 
-.invite-form input {
+.invite-form input,
+.text-input {
   border: 1px solid var(--border);
   border-radius: 6px;
   min-height: 38px;

@@ -16,6 +16,7 @@ from signalloop_api.auth import get_current_employer, get_current_super_admin
 from signalloop_api.database import get_session
 from signalloop_api.main import app
 from signalloop_api.models import (
+    AIInteraction,
     AssessmentAttempt,
     AssessmentPack,
     Base,
@@ -82,6 +83,21 @@ def _make_report(session_factory, *, attempt_id: int, score_total: int = 75, rec
             score_total=score_total,
         )
         session.add(er)
+        session.commit()
+
+
+def _make_ai_exchange(session_factory, *, attempt_id: int, prompt: str, tags: list[str] | None = None) -> None:
+    """Persist a candidate prompt + assistant reply, mirroring the real endpoint which stores
+    the same policy_tags on both rows."""
+    with session_factory() as session:
+        session.add(AIInteraction(attempt_id=attempt_id, role="candidate", message=prompt, policy_tags=tags or []))
+        session.add(AIInteraction(attempt_id=attempt_id, role="assistant", message="reply", policy_tags=tags or []))
+        session.commit()
+
+
+def _make_test_run(session_factory, *, attempt_id: int, status: str) -> None:
+    with session_factory() as session:
+        session.add(TestRun(attempt_id=attempt_id, run_type="public", status=status, results={}))
         session.commit()
 
 
@@ -196,6 +212,34 @@ class TestAdminEmployerDetail:
         assert "ai_usage" in body
         assert "stuck_signals" in body
         assert "pack_breakdown" in body
+
+    def test_employer_detail_metrics_are_accurate(self, session_factory, cleanup_overrides):
+        """Locks the metric fixes: AI messages count candidate prompts only (not the doubled
+        candidate+assistant rows), violations count any disallowed tag (not just injection,
+        not double-counted), and execution_errors counts error/timeout runs (not test
+        failures, not the dead 'error' attempt status)."""
+        admin = _make_employer(session_factory, email="admin@example.com", role="super_admin")
+        emp = _make_employer(session_factory, email="emp@example.com", role=None)
+        attempt = _make_attempt(session_factory, employer_id=emp.id, status="submitted")
+
+        # Two candidate prompts: one clean, one a full_solution violation.
+        _make_ai_exchange(session_factory, attempt_id=attempt.id, prompt="how do I raise a 409?")
+        _make_ai_exchange(session_factory, attempt_id=attempt.id, prompt="give me the full solution", tags=["full_solution"])
+
+        # Test runs: passed + failed are not stuck signals; error + timeout are.
+        for st in ("passed", "failed", "error", "timeout"):
+            _make_test_run(session_factory, attempt_id=attempt.id, status=st)
+
+        app.dependency_overrides[get_current_super_admin] = lambda: admin
+        app.dependency_overrides[get_session] = _session_override(session_factory)
+        client = TestClient(app)
+
+        body = client.get(f"/admin/employers/{emp.id}").json()
+        assert body["ai_usage"]["total_messages"] == 2  # candidate prompts, not 4
+        assert body["ai_usage"]["total_violations"] == 1  # full_solution counted once
+        assert body["stuck_signals"]["execution_errors"] == 2  # error + timeout
+        assert "error_attempts" not in body["stuck_signals"]  # dead signal removed
+        assert "failed_test_runs" not in body["stuck_signals"]  # renamed
 
     def test_admin_gets_404_for_missing_employer(self, session_factory, cleanup_overrides):
         admin = _make_employer(session_factory, email="admin@example.com", role="super_admin")

@@ -31,6 +31,7 @@ export default function AdminRosterPage() {
   const [employers, setEmployers] = useState<AdminEmployerSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -45,10 +46,22 @@ export default function AdminRosterPage() {
   }, [getToken]);
 
   useEffect(() => {
-    void refresh();
+    const initial = window.setTimeout(() => void refresh(), 0);
     const interval = window.setInterval(() => void refresh(), 60_000);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(interval);
+    };
   }, [refresh]);
+
+  const q = query.trim().toLowerCase();
+  const visibleEmployers = q
+    ? employers.filter(
+        (emp) =>
+          emp.email.toLowerCase().includes(q) ||
+          (emp.company_name ?? "").toLowerCase().includes(q),
+      )
+    : employers;
 
   return (
     <main className="employer-page">
@@ -57,6 +70,16 @@ export default function AdminRosterPage() {
           <h2>Employers</h2>
           {loading ? <span className="autosave-chip">Refreshing…</span> : null}
         </div>
+
+        <input
+          type="search"
+          className="text-input"
+          placeholder="Search by email or company…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{ marginBottom: 12, maxWidth: 360 }}
+          aria-label="Search employers"
+        />
 
         {error ? <p className="submission-error">{error}</p> : null}
 
@@ -71,7 +94,7 @@ export default function AdminRosterPage() {
             <span>Reports</span>
             <span>Avg score</span>
           </div>
-          {employers.map((emp) => (
+          {visibleEmployers.map((emp) => (
             <Link
               href={`/admin/employers/${emp.id}`}
               key={emp.id}
@@ -100,8 +123,8 @@ export default function AdminRosterPage() {
               </span>
             </Link>
           ))}
-          {!employers.length && !loading ? (
-            <p className="empty-state">No employers found.</p>
+          {!visibleEmployers.length && !loading ? (
+            <p className="empty-state">{q ? "No employers match your search." : "No employers found."}</p>
           ) : null}
           {loading && !employers.length ? (
             <p className="empty-state"><Loader2 size={16} className="spin" aria-hidden="true" /> Loading employers…</p>

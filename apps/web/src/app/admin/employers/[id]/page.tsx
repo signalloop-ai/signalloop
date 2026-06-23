@@ -56,7 +56,10 @@ export default function AdminEmployerDetailPage() {
     }
   }, [employerId, getToken]);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    const t = window.setTimeout(() => void refresh(), 0);
+    return () => window.clearTimeout(t);
+  }, [refresh]);
 
   return (
     <main className="employer-page">
@@ -101,7 +104,7 @@ export default function AdminEmployerDetailPage() {
           <section className="metric-row">
             <MetricCard label="AI messages" value={detail.ai_usage.total_messages} />
             <MetricCard label="AI violations" value={detail.ai_usage.total_violations} />
-            <MetricCard label="Failed test runs" value={detail.stuck_signals.failed_test_runs} />
+            <MetricCard label="Execution errors" value={detail.stuck_signals.execution_errors} />
             <MetricCard label="Missing reports" value={detail.stuck_signals.missing_reports} />
           </section>
 

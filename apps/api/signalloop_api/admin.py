@@ -5,13 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from signalloop_api.ai_policy import DISALLOWED_TAGS
 from signalloop_api.auth import get_current_super_admin
 from signalloop_api.database import get_session
 from signalloop_api.models import (
     AIInteraction,
     AssessmentAttempt,
     AssessmentPack,
-    CodeSnapshot,
     Employer,
     EvidenceReport,
     TestRun,
@@ -89,10 +89,18 @@ def list_employers(
             .group_by(AssessmentAttempt.employer_id)
         ).all()
     )
+    # Last activity = the most recent meaningful timestamp per employer (submission, then
+    # attempt start, then invite creation) rather than just when the invite was created.
     last_activity_rows = session.execute(
         select(
             AssessmentAttempt.employer_id,
-            func.max(AssessmentAttempt.created_at).label("last_attempt"),
+            func.max(
+                func.coalesce(
+                    AssessmentAttempt.submitted_at,
+                    AssessmentAttempt.started_at,
+                    AssessmentAttempt.created_at,
+                )
+            ).label("last_attempt"),
         ).group_by(AssessmentAttempt.employer_id)
     ).all()
     last_activity = {row.employer_id: row.last_attempt for row in last_activity_rows}
@@ -142,26 +150,56 @@ def get_employer_detail(
         .where(AssessmentAttempt.employer_id == employer_id)
         .order_by(AssessmentAttempt.id.desc())
     ).all()
+    attempt_ids = [a.id for a in attempts]
+
+    # Resolve everything attempts reference in a few grouped queries (no per-attempt N+1).
+    pack_slug_by_id: dict[int, str] = {}
+    pack_ids = {a.assessment_pack_id for a in attempts}
+    if pack_ids:
+        pack_slug_by_id = {
+            p.id: p.slug
+            for p in session.scalars(select(AssessmentPack).where(AssessmentPack.id.in_(pack_ids))).all()
+        }
+
+    report_by_attempt: dict[int, EvidenceReport] = {}
+    if attempt_ids:
+        report_by_attempt = {
+            er.attempt_id: er
+            for er in session.scalars(select(EvidenceReport).where(EvidenceReport.attempt_id.in_(attempt_ids))).all()
+        }
+
+    # AI usage: count the candidate's prompts (not the assistant echoes) and the assistant
+    # replies that carried a real policy violation. Each candidate turn stores two rows
+    # (candidate + assistant) with the same tags, so counting one role per metric avoids
+    # double-counting.
+    ai_message_count = 0
+    ai_violation_count = 0
+    if attempt_ids:
+        for ai in session.scalars(select(AIInteraction).where(AIInteraction.attempt_id.in_(attempt_ids))).all():
+            if ai.role == "candidate":
+                ai_message_count += 1
+            elif ai.role == "assistant" and ai.policy_tags and any(t in DISALLOWED_TAGS for t in ai.policy_tags):
+                ai_violation_count += 1
+
+    # Stuck signal: runs that failed to execute (infra error or timeout), not ordinary test
+    # failures, which are a normal part of the work.
+    execution_errors = 0
+    if attempt_ids:
+        execution_errors = sum(
+            1
+            for tr in session.scalars(select(TestRun).where(TestRun.attempt_id.in_(attempt_ids))).all()
+            if tr.status in ("error", "timeout")
+        )
 
     status_counts: dict[str, int] = {}
-    for a in attempts:
-        s = a.status if a.status in ("in_progress", "submitted", "expired", "created", "opened") else "other"
-        status_counts[s] = status_counts.get(s, 0) + 1
-
     pack_counts: dict[str, int] = {}
     for a in attempts:
-        pack = session.get(AssessmentPack, a.assessment_pack_id)
-        if pack:
-            pack_counts[pack.slug] = pack_counts.get(pack.slug, 0) + 1
+        status_counts[a.status] = status_counts.get(a.status, 0) + 1
+        slug = pack_slug_by_id.get(a.assessment_pack_id)
+        if slug:
+            pack_counts[slug] = pack_counts.get(slug, 0) + 1
 
-    submitted_ids = [a.id for a in attempts if a.status == "submitted"]
-    scores: list[int] = []
-    if submitted_ids:
-        report_rows = session.scalars(
-            select(EvidenceReport).where(EvidenceReport.attempt_id.in_(submitted_ids))
-        ).all()
-        scores = [r.score_total for r in report_rows if r.score_total is not None]
-
+    scores = [er.score_total for er in report_by_attempt.values() if er.score_total is not None]
     score_distribution: dict[str, Optional[float]] = {
         "average": round(sum(scores) / len(scores), 1) if scores else None,
         "median": sorted(scores)[len(scores) // 2] if scores else None,
@@ -169,37 +207,17 @@ def get_employer_detail(
         "max": max(scores) if scores else None,
     }
 
-    ai_msg_count = 0
-    ai_violation_count = 0
-    failed_test_runs = 0
-    missing_reports = 0
-    for a in attempts:
-        ai_rows = session.scalars(
-            select(AIInteraction).where(AIInteraction.attempt_id == a.id)
-        ).all()
-        ai_msg_count += len(ai_rows)
-        for ai in ai_rows:
-            if ai.policy_tags and any("violation" in (t or "") or "injection" in (t or "") for t in ai.policy_tags):
-                ai_violation_count += 1
-
-        tr_rows = session.scalars(
-            select(TestRun).where(TestRun.attempt_id == a.id)
-        ).all()
-        failed_test_runs += sum(1 for tr in tr_rows if tr.status == "error")
-
-        if a.status == "submitted":
-            er = session.scalar(select(EvidenceReport).where(EvidenceReport.attempt_id == a.id))
-            if er is None:
-                missing_reports += 1
+    missing_reports = sum(
+        1 for a in attempts if a.status == "submitted" and a.id not in report_by_attempt
+    )
 
     attempt_list = []
     for a in attempts:
-        er = session.scalar(select(EvidenceReport).where(EvidenceReport.attempt_id == a.id))
-        pack = session.get(AssessmentPack, a.assessment_pack_id)
+        er = report_by_attempt.get(a.id)
         attempt_list.append({
             "id": a.id,
             "candidate_email": a.candidate_email,
-            "assessment_pack_slug": pack.slug if pack else None,
+            "assessment_pack_slug": pack_slug_by_id.get(a.assessment_pack_id),
             "status": a.status,
             "created_at": _utc_iso(a.created_at),
             "submitted_at": _utc_iso(a.submitted_at),
@@ -217,17 +235,16 @@ def get_employer_detail(
         "invite_count": len(attempts),
         "attempt_count": len(attempts),
         "submitted_count": status_counts.get("submitted", 0),
-        "report_count": sum(1 for a in attempts if session.scalar(select(EvidenceReport).where(EvidenceReport.attempt_id == a.id))),
+        "report_count": len(report_by_attempt),
         "status_breakdown": status_counts,
         "score_distribution": score_distribution,
         "ai_usage": {
-            "total_messages": ai_msg_count,
+            "total_messages": ai_message_count,
             "total_violations": ai_violation_count,
         },
         "pack_breakdown": pack_counts,
         "stuck_signals": {
-            "failed_test_runs": failed_test_runs,
-            "error_attempts": sum(1 for a in attempts if a.status == "error"),
+            "execution_errors": execution_errors,
             "missing_reports": missing_reports,
         },
         "attempts": attempt_list,

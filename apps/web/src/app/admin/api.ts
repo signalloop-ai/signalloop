@@ -1,7 +1,9 @@
 import type { AdminEmployerDetail, AdminEmployerSummary, AdminEvidenceReport, EmployerInfo } from "./types";
-import { ApiError } from "../employer/api";
+import { ApiError, apiBaseUrl } from "../employer/api";
 
-export const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+// Single source of truth for the API base URL — re-exported from the employer client so the
+// two portals can never drift to different defaults.
+export { apiBaseUrl };
 export type AuthTokenProvider = () => Promise<string | null>;
 
 async function adminHeaders(getAuthToken?: AuthTokenProvider): Promise<HeadersInit> {

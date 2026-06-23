@@ -5,6 +5,49 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-06-23 — Super Admin Portal: review fixes (correctness + missing sections)
+
+Code review of the phase-4 super admin portal surfaced metric bugs and a duplicated report
+renderer. Fixed:
+
+### Backend (`admin.py`)
+- **AI message count was doubled** — counted every `AIInteraction` row, but each candidate
+  turn stores two (candidate + assistant). Now counts candidate-role prompts only.
+- **AI violation count was wrong** — the `"violation"/"injection"` substring heuristic only
+  caught `prompt_injection`. Now uses `ai_policy.DISALLOWED_TAGS` (all real violations),
+  counted on assistant rows only (no double-count).
+- **"Failed test runs" counted the wrong status** — counted only `error`. Renamed to
+  `execution_errors` and counts `error` + `timeout` (real test *failures* are normal work,
+  not a stuck signal).
+- **Removed dead `error_attempts`** signal (`status == "error"` is not a real attempt status).
+- **N+1 queries** in `get_employer_detail` replaced with a few grouped queries (packs,
+  reports, AI, test runs fetched once each); `report_count`/scores derived from those maps.
+- **`last_activity`** now uses `max(coalesce(submitted_at, started_at, created_at))` instead
+  of just `created_at`.
+- Removed unused `CodeSnapshot` import.
+
+### Frontend
+- **Admin report view was a stale fork** missing the FAVO and follow-up-questions sections
+  (and rendering fewer details). Extracted the employer report renderer into a shared
+  `app/_components/EvidenceReportView.tsx` used by BOTH the employer and admin report pages,
+  so admins now see the full report and the two can't drift. Admin view is read-only (no
+  Regenerate button).
+- **Roster search** added (filter by email/company).
+- **Single-sourced the API base URL** — admin `api.ts` re-exports it from the employer client.
+- Updated admin `types.ts` (`stuck_signals.execution_errors`; `AdminEvidenceReport` aliases
+  `EvidenceReportResponse`).
+- Aligned the three admin `useEffect` data-loads to the deferred `setTimeout(…,0)` pattern the
+  employer report page already uses, clearing the `set-state-in-effect` lint errors in the
+  admin portal. (Pre-existing lint issues in `employer/page.tsx` and the invite page are
+  outside this scope.)
+
+### Tests
+- Added `test_employer_detail_metrics_are_accurate` locking the AI message/violation counts
+  and `execution_errors` (and that `error_attempts`/`failed_test_runs` are gone).
+- API suite: **257 passed**. Web typecheck + build pass.
+
+---
+
 ## 2026-06-23 — AI Collaborator: workspace context (act like a coding agent)
 
 ### Why

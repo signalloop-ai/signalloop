@@ -53,17 +53,12 @@ export type AdminEmployerDetail = {
   };
   pack_breakdown: Record<string, number>;
   stuck_signals: {
-    failed_test_runs: number;
-    error_attempts: number;
+    execution_errors: number;
     missing_reports: number;
   };
   attempts: AdminAttemptSummary[];
 };
 
-export type AdminEvidenceReport = {
-  attempt_id: number;
-  report_id: number;
-  recommendation: string | null;
-  score_total: number | null;
-  report: Record<string, unknown>;
-};
+// The admin report endpoint returns the same shape as the employer one, so reuse the typed
+// response — the shared EvidenceReportView renders both.
+export type { EvidenceReportResponse as AdminEvidenceReport } from "../employer/types";
