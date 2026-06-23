@@ -49,6 +49,7 @@ def send_ai_message(
         for interaction in session.scalars(
             select(AIInteraction)
             .where(AIInteraction.attempt_id == attempt.id)
+            .where(AIInteraction.role == "candidate")
             .order_by(AIInteraction.id.desc())
             .limit(6)
         ).all()

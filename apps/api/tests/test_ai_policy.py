@@ -70,6 +70,13 @@ def test_allowed_candidate_identified_issue() -> None:
     # Design guidance where candidate named the behavior
     "in the current code whatever task status we give is taken we should block invalid transitions can u suggest which ones to block",
     "we want to check that due date is greater than today, how to do that?",
+    # Follow-up answers to the AI's Socratic question — ALLOW
+    # Candidate is providing the information the AI asked for
+    "this is not handled at all and its allowing it. i want to block this",
+    "it's not implemented at all, how do i add it?",
+    "its not handled at all, i want to prevent duplicates",
+    "i want to add a check that blocks duplicate emails",
+    "i want to validate the email before saving",
     # "make the change" / "can u make the change" for a specific named behavior — ALLOW
     # Classifier false-positived on this with anti_decomposition (found in live testing 2026-06-23)
     "when i read task, can u make the change that only owner can read the task not the non-owners",

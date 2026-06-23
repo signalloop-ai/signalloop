@@ -56,6 +56,7 @@ The default is allowed=true. Only block when the request clearly matches a rule 
 - "I got this error, what does it mean?" → allowed
 - "From this test failure, I don't see X — am I missing something?" → allowed
 - "FAILED tests/test_api.py::test_duplicate - AssertionError: assert 200 == 409" → allowed (failure output only, not test code)
+- Follow-up answers to the AI's Socratic question ("this is not handled at all, i want to block this") → allowed (candidate is providing the requested information)
 - Follow-up questions ("you mentioned X, how do I do that?") → allowed
 - Design tradeoff comparisons where candidate named the behavior → allowed
 - "In [specific function], I don't see [specific behavior] — can you help me with code for this?" → allowed (candidate identified the gap; asking for coding help on a specific named issue is allowed)
@@ -144,6 +145,12 @@ Output: {"allowed": true, "tag": null}
 Input: "can you help me add an ownership check to the read_task function?"
 Output: {"allowed": true, "tag": null}
 
+Input: "this is not handled at all and its allowing it. i want to block this"
+Output: {"allowed": true, "tag": null}
+
+Input: "it's not implemented at all, how do i add it?"
+Output: {"allowed": true, "tag": null}
+
 ## anti_decomposition — ONLY applies when recent message history shows cumulative solution building
 NEVER apply anti_decomposition to a single message that contains "I think the issue is", "I think the problem is", "I noticed", "I identified", or any other candidate diagnosis phrase. Those are candidate-identified issues and must be allowed.
 A message containing test failure output PLUS a verbal diagnosis ("I think the issue is X") is ALWAYS allowed — the diagnosis is evidence of real reasoning."""
@@ -228,6 +235,10 @@ def parse_classifier_response(raw: str, original_message: str, recent_messages: 
 
     If the tag is in DISALLOWED_TAGS but allowed=True, trust the tag and flip to blocked.
     On parse failure, falls back to fallback_classify().
+
+    Special case: anti_decomposition is validated against the Python fallback before trusting.
+    The LLM is prone to false positives on this tag (e.g., tagging follow-up answers as
+    anti_decomposition). Only block if the pattern-based fallback also confirms it.
     """
     try:
         data = json.loads(raw)
@@ -235,6 +246,15 @@ def parse_classifier_response(raw: str, original_message: str, recent_messages: 
         tag = data.get("tag", None)
         if tag is not None and not isinstance(tag, str):
             tag = None
+
+        # anti_decomposition: validate with Python fallback before trusting the LLM.
+        # The LLM over-triggers on this tag for legitimate follow-up messages.
+        if tag == "anti_decomposition" or (not allowed and tag == "anti_decomposition"):
+            py = fallback_classify(original_message, recent_messages)
+            if "anti_decomposition" not in py.tags:
+                # LLM false positive — override to allowed
+                allowed = True
+                tag = None
 
         # If LLM said allowed but set a disallowed tag, trust the tag and flip to blocked.
         if tag is not None and tag in DISALLOWED_TAGS and allowed:
@@ -327,6 +347,12 @@ def fallback_classify(message: str, recent_messages: list[str] | None = None) ->
         "i added", "i implemented", "i modified", "i updated", "i created",
         "i fixed", "i changed", "i wrote", "from this error", "from the error",
         "what format", "how do i", "how to", "how does",
+        # Follow-up phrases — candidate responding to the AI's Socratic question
+        "it is not handled", "its not handled", "this is not handled",
+        "not handled at all", "not implemented", "it's not implemented",
+        "i want to block", "i want to prevent", "i want to add",
+        "i want to check", "i want to validate",
+        "its allowing it", "it's allowing it", "it allows it",
     ]
 
     # Only truly vague "find my bugs" requests with no specific issue, test, or code named.
