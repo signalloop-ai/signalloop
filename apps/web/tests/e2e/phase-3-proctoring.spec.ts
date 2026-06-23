@@ -556,7 +556,7 @@ test("declining webcam consent posts to API and shows workspace", async ({ page 
 
   // Consent endpoint was called with consented: false
   expect(consentPayload).not.toBeNull();
-  expect((consentPayload as Record<string, unknown>).consented).toBe(false);
+  expect((consentPayload as unknown as Record<string, unknown>).consented).toBe(false);
 });
 
 test("proctoring events batch endpoint is called when focus is lost and submission happens", async ({ page }) => {

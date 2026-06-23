@@ -279,6 +279,8 @@ export default function CandidateWorkspace() {
   // null = not asked yet, true = granted, false = declined
   const [webcamConsent, setWebcamConsent] = useState<boolean | null>(null);
   const [showWebcamPrompt, setShowWebcamPrompt] = useState(false);
+  const [webcamStreamReady, setWebcamStreamReady] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
   const autoSnapshotTimeoutRef = useRef<number | null>(null);
@@ -673,6 +675,20 @@ export default function CandidateWorkspace() {
 
   async function handleWebcamConsent(consented: boolean) {
     setShowWebcamPrompt(false);
+
+    if (consented) {
+      // Acquire the stream BEFORE setting consent so webcamStreamRef is populated
+      // when the snapshot useEffect fires on the webcamConsent state change.
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        webcamStreamRef.current = stream;
+        setWebcamStreamReady(true);
+      } catch {
+        // Camera permission denied at OS level — treat as declined.
+        consented = false;
+      }
+    }
+
     setWebcamConsent(consented);
     // Persist the choice to the backend.
     await fetch(`${apiBaseUrl}/candidate/invites/${inviteToken}/webcam-consent`, {
@@ -680,27 +696,12 @@ export default function CandidateWorkspace() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ consented }),
     }).catch(() => { /* non-critical */ });
-
-    if (!consented) return;
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      webcamStreamRef.current = stream;
-    } catch {
-      // Camera permission denied at OS level — treat as declined.
-      setWebcamConsent(false);
-      await fetch(`${apiBaseUrl}/candidate/invites/${inviteToken}/webcam-consent`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ consented: false }),
-      }).catch(() => { /* non-critical */ });
-    }
   }
 
   // Start periodic snapshots once webcam stream is available.
+  // webcamStreamReady is set AFTER getUserMedia completes so the ref is populated.
   useEffect(() => {
-    if (webcamConsent !== true || !webcamStreamRef.current || submitted) return;
-    // Capture immediately on consent + at every interval thereafter.
+    if (!webcamStreamReady || webcamConsent !== true || !webcamStreamRef.current || submitted) return;
     void captureAndUploadSnapshot("periodic");
     const intervalMs = 5 * 60 * 1000; // 5 minutes
     snapshotIntervalRef.current = window.setInterval(
@@ -709,11 +710,11 @@ export default function CandidateWorkspace() {
     );
     return () => {
       if (snapshotIntervalRef.current) window.clearInterval(snapshotIntervalRef.current);
-      // Stop tracks so the browser camera indicator goes away on unmount.
       webcamStreamRef.current?.getTracks().forEach((t) => t.stop());
+      webcamStreamRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webcamConsent, submitted]);
+  }, [webcamConsent, webcamStreamReady, submitted]);
 
   const submitFinal = useCallback(async (submissionMode: "manual" | "auto_expired" = "manual") => {
     if (submissionMode === "manual" && !canSubmit) return;
@@ -755,6 +756,11 @@ export default function CandidateWorkspace() {
       }
       const body = (await response.json()) as FinalSubmissionResponse;
       setSubmitted(true);
+      // Stop webcam immediately on submission — don't wait for useEffect cleanup.
+      if (webcamStreamRef.current) {
+        webcamStreamRef.current.getTracks().forEach((t) => t.stop());
+        webcamStreamRef.current = null;
+      }
       setSubmissionResult(body);
       setAttempt((current) => (current ? {
         ...current,
@@ -779,12 +785,16 @@ export default function CandidateWorkspace() {
   useEffect(() => {
     if (!accepted || submitted) return;
 
-    void document.documentElement.requestFullscreen().catch(() => {
+    void document.documentElement.requestFullscreen().then(() => {
+      setIsFullscreen(true);
+    }).catch(() => {
       // Browser or user declined — not an error, proceed without fullscreen.
     });
 
     function onFullscreenChange() {
-      if (!document.fullscreenElement) {
+      const inFullscreen = !!document.fullscreenElement;
+      setIsFullscreen(inFullscreen);
+      if (!inFullscreen) {
         queueProctoringEvent("fullscreen_exit");
       } else {
         queueProctoringEvent("fullscreen_enter");
@@ -995,6 +1005,19 @@ export default function CandidateWorkspace() {
         } as CSSProperties
       }
     >
+      {/* ── FULLSCREEN BANNER ── */}
+      {!isFullscreen && accepted && !submitted ? (
+        <div className="fullscreen-banner">
+          <span>You left fullscreen — this has been recorded.</span>
+          <button
+            className="command-button secondary"
+            onClick={() => void document.documentElement.requestFullscreen()}
+          >
+            Re-enter fullscreen
+          </button>
+        </div>
+      ) : null}
+
       {/* ── TOPBAR ── */}
       <header className="topbar">
         <div className="topbar-title">
