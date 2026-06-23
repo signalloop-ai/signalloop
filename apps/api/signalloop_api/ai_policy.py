@@ -124,7 +124,17 @@ Input: "the create_user function is missing uniqueness validation — how should
 Output: {"allowed": true, "tag": null}
 
 Input: "I identified that my PATCH handler overwrites all fields instead of only the provided ones — can you help me fix it?"
-Output: {"allowed": true, "tag": null}"""
+Output: {"allowed": true, "tag": null}
+
+Input: "FAILED test_non_owner - assert 200 == 403. I think the issue is that my handler returns the task without comparing task.owner_id to the actor_user_id."
+Output: {"allowed": true, "tag": null}
+
+Input: "FAILED test_duplicate_email - assert 201 == 409. I think the problem is that I'm not normalising the email before comparing."
+Output: {"allowed": true, "tag": null}
+
+## anti_decomposition — ONLY applies when recent message history shows cumulative solution building
+NEVER apply anti_decomposition to a single message that contains "I think the issue is", "I think the problem is", "I noticed", "I identified", or any other candidate diagnosis phrase. Those are candidate-identified issues and must be allowed.
+A message containing test failure output PLUS a verbal diagnosis ("I think the issue is X") is ALWAYS allowed — the diagnosis is evidence of real reasoning."""
 
 
 GENERATOR_PROMPT = """You are a Socratic coding tutor in a software assessment. Your ONLY job is to ask one question that makes the candidate think — never to show them what to implement.
