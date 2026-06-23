@@ -5,6 +5,41 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-06-23 — AI Collaborator: workspace context (act like a coding agent)
+
+### Why
+
+Candidates are used to coding assistants that read their actual code. The collaborator only
+saw a single manually-selected snippet (`selected_context`), so questions like "what does
+delete_task do?" got generic textbook answers when nothing was selected.
+
+### Changed
+
+- `ai.py` now assembles the candidate's current source from their latest snapshot
+  (`candidate_workspace_files`) and passes it to the generator as `workspace_files`. Filtered
+  defensively: only `.py` under `task_api/` and `tests/`, excludes evaluator/hidden paths and
+  config/readme noise, bounded to 16k chars. Snapshots are candidate-visible only to begin
+  with; the filter is belt-and-suspenders.
+- `ai_provider.evaluate` gained an optional `workspace_files` param. New
+  `_build_generator_user_content` assembles the generator message like a coding agent sees a
+  request: workspace files, the focused file (selected_context as a pointer), conversation,
+  then the question.
+- `GENERATOR_PROMPT` gained a "Use the candidate's workspace" rule: read their actual code and
+  ground answers in THEIR implementation; don't invent code that isn't there.
+- The classifier still sees only the current message (no workspace) — it judges abuse, not code.
+
+### Tests
+
+- Live: `test_workspace_grounded_explanation` ("what does delete_task do?" → describes the real
+  pop/404/`{deleted, task_id}` behavior); focus tests now pass the workspace to mirror the
+  endpoint. Verified end-to-end: with no selected_context the endpoint answer is grounded in
+  the snapshot code.
+- Offline guardrail: `test_candidate_workspace_files_filters_to_candidate_source` (evaluator/
+  hidden/config excluded) and empty-input handling.
+- Offline: **256 passed**. Live: **45 passed**.
+
+---
+
 ## 2026-06-23 — AI Collaborator: conversation context flow fix
 
 ### Why

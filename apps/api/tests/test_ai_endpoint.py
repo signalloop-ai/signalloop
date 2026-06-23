@@ -14,7 +14,7 @@ from signalloop_api.models import AIInteraction, Employer
 
 
 class FakeProvider:
-    def evaluate(self, message: str, context: dict | None, recent_messages: list[str], recent_turns: list[tuple[str, str]] | None = None) -> AIDecision:
+    def evaluate(self, message: str, context: dict | None, recent_messages: list[str], recent_turns: list[tuple[str, str]] | None = None, workspace_files: dict[str, str] | None = None) -> AIDecision:
         from signalloop_api.ai_policy import fallback_classify, REDIRECT_MESSAGE
         decision = fallback_classify(message, recent_messages)
         if not decision.allowed:
@@ -126,7 +126,7 @@ def test_ai_endpoint_returns_socratic_message_for_direct_diagnosis(
     from signalloop_api.ai_policy import SOCRATIC_REDIRECT_MESSAGE
 
     class DiagnosisFakeProvider:
-        def evaluate(self, message: str, context: dict | None, recent_messages: list[str], recent_turns: list[tuple[str, str]] | None = None) -> AIDecision:
+        def evaluate(self, message: str, context: dict | None, recent_messages: list[str], recent_turns: list[tuple[str, str]] | None = None, workspace_files: dict[str, str] | None = None) -> AIDecision:
             return AIDecision(allowed=False, policy_tags=["direct_diagnosis"], message=SOCRATIC_REDIRECT_MESSAGE)
 
     def override_get_session() -> Generator[Session, None, None]:
@@ -179,3 +179,29 @@ def test_ai_endpoint_rejects_evaluator_context(client: TestClient) -> None:
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Evaluator-only context is not allowed"
+
+
+def test_candidate_workspace_files_filters_to_candidate_source() -> None:
+    """Workspace handed to the collaborator is candidate source only — never evaluator/hidden,
+    config, or readme noise."""
+    from signalloop_api.ai import candidate_workspace_files
+
+    files = {
+        "task_api/main.py": "x" * 10,
+        "task_api/__init__.py": "y" * 5,
+        "tests/test_public_api.py": "z" * 10,
+        "README.md": "r" * 10,
+        "pyproject.toml": "p" * 10,
+        "requirements.txt": "q" * 10,
+        "evaluator/hidden_tests/test_hidden.py": "secret",
+    }
+    workspace = candidate_workspace_files(files)
+    assert set(workspace) == {"task_api/main.py", "task_api/__init__.py", "tests/test_public_api.py"}
+    assert "evaluator/hidden_tests/test_hidden.py" not in workspace
+
+
+def test_candidate_workspace_files_handles_empty() -> None:
+    from signalloop_api.ai import candidate_workspace_files
+
+    assert candidate_workspace_files(None) == {}
+    assert candidate_workspace_files({}) == {}

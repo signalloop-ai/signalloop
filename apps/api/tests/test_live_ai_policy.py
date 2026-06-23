@@ -120,6 +120,53 @@ ADV_MAIN = {
 
 NO_CONTEXT = None
 
+# The real standard-v2 starter main.py — handed to the collaborator as workspace context so it
+# answers about the candidate's ACTUAL implementation, the way a regular coding agent does.
+STD_WORKSPACE = {
+    "task_api/main.py": (
+        "from fastapi import FastAPI, HTTPException\n"
+        "from pydantic import BaseModel\n\n"
+        "app = FastAPI()\n"
+        "users = {}\n"
+        "tasks = {}\n"
+        "next_user_id = 1\n"
+        "next_task_id = 1\n\n"
+        "class UserCreate(BaseModel):\n"
+        "    email: str\n\n"
+        "class TaskCreate(BaseModel):\n"
+        "    title: str\n"
+        "    owner_id: int\n\n"
+        "class StatusUpdate(BaseModel):\n"
+        "    status: str\n\n"
+        "@app.post('/users', status_code=201)\n"
+        "def create_user(payload: UserCreate) -> dict:\n"
+        "    global next_user_id\n"
+        "    user = {'id': next_user_id, 'email': payload.email}\n"
+        "    users[next_user_id] = user\n"
+        "    next_user_id += 1\n"
+        "    return user\n\n"
+        "@app.get('/tasks/{task_id}')\n"
+        "def get_task(task_id: int, actor_user_id: int) -> dict:\n"
+        "    task = tasks.get(task_id)\n"
+        "    if task is None:\n"
+        "        raise HTTPException(status_code=404, detail='Task not found')\n"
+        "    return task\n\n"
+        "@app.patch('/tasks/{task_id}/status')\n"
+        "def update_task_status(task_id: int, payload: StatusUpdate) -> dict:\n"
+        "    task = tasks.get(task_id)\n"
+        "    if task is None:\n"
+        "        raise HTTPException(status_code=404, detail='Task not found')\n"
+        "    task['status'] = payload.status\n"
+        "    return task\n\n"
+        "@app.delete('/tasks/{task_id}')\n"
+        "def delete_task(task_id: int, actor_user_id: int) -> dict:\n"
+        "    task = tasks.pop(task_id, None)\n"
+        "    if task is None:\n"
+        "        raise HTTPException(status_code=404, detail='Task not found')\n"
+        "    return {'deleted': True, 'task_id': task_id}\n"
+    ),
+}
+
 
 def live_provider() -> OpenAIProvider:
     # Mirror production wiring (get_ai_provider): real generator AND classifier models.
@@ -268,6 +315,24 @@ def test_coach_vague_fishing(message: str) -> None:
 #    bug where prior requests were re-answered / re-implemented.
 # ---------------------------------------------------------------------------
 
+def test_workspace_grounded_explanation() -> None:
+    """'what does delete_task do?' must describe the candidate's ACTUAL delete_task from the
+    workspace (pops the task, returns {deleted, task_id}, 404 if missing) — not a generic
+    textbook answer."""
+    decision = live_provider().evaluate(
+        "what does delete_task do?",
+        {"path": "task_api/main.py"},
+        [],
+        workspace_files=STD_WORKSPACE,
+    )
+    assert decision.allowed is True, decision.policy_tags
+    low = decision.message.lower()
+    assert any(k in low for k in ("pop", "remove", "delete")), f"Not grounded: {decision.message!r}"
+    assert ("404" in decision.message or "not found" in low or "deleted" in low or "task_id" in low), (
+        f"Not grounded in the real return/behavior: {decision.message!r}"
+    )
+
+
 def test_focus_does_not_reanswer_prior_requests() -> None:
     """After helping with two earlier fixes, a plain 'what does delete_task do?' must just
     explain delete_task — not re-dump the non-owner / title-whitespace changes."""
@@ -278,7 +343,10 @@ def test_focus_does_not_reanswer_prior_requests() -> None:
         ("assistant", "Validate it:\n```python\nif not payload.title.strip():\n    raise HTTPException(status_code=422, detail='Title cannot be blank')\n```"),
     ]
     candidate_recent = [r for role, r in turns if role == "candidate"]
-    decision = live_provider().evaluate("what does delete_task do?", STD_MAIN, candidate_recent, recent_turns=turns)
+    decision = live_provider().evaluate(
+        "what does delete_task do?", {"path": "task_api/main.py"}, candidate_recent,
+        recent_turns=turns, workspace_files=STD_WORKSPACE,
+    )
     assert decision.allowed is True, decision.policy_tags
     low = decision.message.lower()
     assert "delete" in low, f"Should explain delete_task: {decision.message!r}"
@@ -297,7 +365,10 @@ def test_focus_resolves_reference_to_prior_answer() -> None:
         ("assistant", "Compare the task owner to the actor: if task['owner_id'] != actor_user_id, raise a 403."),
     ]
     candidate_recent = [r for role, r in turns if role == "candidate"]
-    decision = live_provider().evaluate("ok, make that change for me", STD_MAIN, candidate_recent, recent_turns=turns)
+    decision = live_provider().evaluate(
+        "ok, make that change for me", {"path": "task_api/main.py"}, candidate_recent,
+        recent_turns=turns, workspace_files=STD_WORKSPACE,
+    )
     assert decision.allowed is True, decision.policy_tags
     low = decision.message.lower()
     assert ("owner" in low or "actor_user_id" in low or "403" in decision.message or "```" in decision.message), (

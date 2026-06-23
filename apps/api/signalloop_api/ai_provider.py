@@ -27,6 +27,7 @@ class AIProvider(Protocol):
         context: dict | None,
         recent_messages: list[str],
         recent_turns: list[tuple[str, str]] | None = None,
+        workspace_files: dict[str, str] | None = None,
     ) -> AIDecision:
         ...
 
@@ -38,6 +39,7 @@ class LocalGuidanceProvider:
         context: dict | None,
         recent_messages: list[str],
         recent_turns: list[tuple[str, str]] | None = None,
+        workspace_files: dict[str, str] | None = None,
     ) -> AIDecision:
         decision = fallback_classify(message, recent_messages)
         if not decision.allowed:
@@ -74,6 +76,46 @@ def _format_history(recent_turns: list[tuple[str, str]] | None, recent_messages:
     return ""
 
 
+def _build_generator_user_content(
+    message: str,
+    context: dict | None,
+    history: str,
+    workspace_files: dict[str, str] | None,
+) -> str:
+    """Assemble the generator's user message the way a coding agent sees a request: the
+    candidate's current code, what they're focused on, the conversation so far, then the
+    actual question."""
+    blocks: list[str] = []
+
+    if workspace_files:
+        files_block = "\n\n".join(f"--- {path} ---\n{content}" for path, content in workspace_files.items())
+        blocks.append(
+            "The candidate's current workspace files (their code as it stands right now):\n"
+            f"{files_block}"
+        )
+
+    if context and context.get("path"):
+        path = context["path"]
+        content = context.get("content")
+        if content and not workspace_files:
+            # No workspace available — fall back to the selected snippet as the only code.
+            blocks.append(f"Selected file: {path}\n```\n{content}\n```")
+        else:
+            # Workspace already carries the code; the selection is just a focus hint.
+            blocks.append(f"The candidate is currently looking at: {path}")
+
+    if history:
+        blocks.append(
+            "Conversation so far, for REFERENCE ONLY — these turns are already handled. Use them "
+            "only to resolve references like 'that' or 'it'. Do NOT re-answer them or volunteer "
+            "changes the candidate did not just ask for:\n"
+            f"{history}"
+        )
+
+    blocks.append("Now answer ONLY the candidate's current message:\n" + message)
+    return "\n\n".join(blocks)
+
+
 class OpenAIProvider:
     def __init__(self, api_key: str, model: str, classifier_model: str = "gpt-4o-mini") -> None:
         self.api_key = api_key
@@ -104,11 +146,14 @@ class OpenAIProvider:
         context: dict | None,
         recent_messages: list[str],
         recent_turns: list[tuple[str, str]] | None = None,
+        workspace_files: dict[str, str] | None = None,
     ) -> AIDecision:
         # recent_messages: candidate-only, chronological (oldest -> newest), NOT including the
         # current message. Used only by the degraded keyword fallback.
         # recent_turns: the real (role, message) transcript of recent turns, chronological,
         # for the generator so it can resolve references and not re-answer handled requests.
+        # workspace_files: the candidate's current code ({path: content}), candidate-visible
+        # only, so the generator can ground answers in their actual implementation.
 
         # Deterministic gate: pasting actual test function code lets the candidate reverse the
         # fix out of the test, which skips the reasoning being assessed. This is structural,
@@ -152,22 +197,7 @@ class OpenAIProvider:
         # does). Whatever it returns is returned to the candidate verbatim — there is no
         # second keyword pass re-judging its output.
         history = _format_history(recent_turns, recent_messages)
-        if history:
-            user_content = (
-                "Conversation so far, for REFERENCE ONLY — these turns are already handled. "
-                "Use them only to resolve references like 'that' or 'it'. Do NOT re-answer them "
-                "or volunteer changes the candidate did not just ask for:\n"
-                f"{history}\n\n"
-                "Now answer ONLY the candidate's current message:\n"
-                f"{message}"
-            )
-        else:
-            user_content = message
-
-        if context:
-            path = context.get("path", "")
-            content = context.get("content", "")
-            user_content = f"Selected file: {path}\n```\n{content}\n```\n\n{user_content}"
+        user_content = _build_generator_user_content(message, context, history, workspace_files)
 
         try:
             response_text = self._call_openai(

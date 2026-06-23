@@ -7,12 +7,16 @@ from signalloop_api.audit import record_audit_event
 from signalloop_api.database import get_session
 from signalloop_api.models import AIInteraction, AssessmentAttempt
 from signalloop_api.schemas import AIMessageRequest, AIMessageResponse
-from signalloop_api.timebox import enforce_not_expired
+from signalloop_api.timebox import enforce_not_expired, latest_snapshot
 
 
 router = APIRouter()
 
 DISALLOWED_CONTEXT_PARTS = {"evaluator", "hidden_tests", "REFERENCE_SOLUTION_NOTES.md", "SCORING_RUBRIC.md"}
+
+# Candidate source the collaborator may read as workspace context (like a normal coding agent).
+WORKSPACE_INCLUDE_DIRS = ("task_api/", "tests/")
+WORKSPACE_MAX_CHARS = 16000
 
 
 def validate_selected_context(selected_context: dict | None) -> dict | None:
@@ -25,6 +29,31 @@ def validate_selected_context(selected_context: dict | None) -> dict | None:
     if isinstance(content, str) and len(content) > 6000:
         selected_context = {**selected_context, "content": content[:6000]}
     return selected_context
+
+
+def candidate_workspace_files(snapshot_files: dict | None) -> dict[str, str]:
+    """The candidate's current source files to hand the collaborator as workspace context.
+
+    Snapshots only ever contain candidate-visible files, but we still filter defensively:
+    evaluator/hidden paths are excluded, and only candidate source under task_api/ and tests/
+    is included (skip lockfiles/config/readme noise), bounded by a total size cap.
+    """
+    if not snapshot_files:
+        return {}
+    workspace: dict[str, str] = {}
+    total = 0
+    for path, content in snapshot_files.items():
+        if any(part in path for part in DISALLOWED_CONTEXT_PARTS):
+            continue
+        if not path.endswith(".py") or not path.startswith(WORKSPACE_INCLUDE_DIRS):
+            continue
+        if not isinstance(content, str):
+            continue
+        if total + len(content) > WORKSPACE_MAX_CHARS:
+            continue
+        workspace[path] = content
+        total += len(content)
+    return workspace
 
 
 @router.post("/candidate/invites/{invite_token}/ai/messages", response_model=AIMessageResponse)
@@ -62,7 +91,17 @@ def send_ai_message(
     recent_messages = [i.message for i in recent_interactions if i.role == "candidate"][-6:]
     recent_turns = [(i.role, i.message) for i in recent_interactions]
 
-    decision = provider.evaluate(payload.message, selected_context, recent_messages, recent_turns=recent_turns)
+    # Give the collaborator the candidate's current code so it answers about their actual
+    # implementation, the way a regular coding agent would.
+    workspace_files = candidate_workspace_files(getattr(latest_snapshot(session, attempt), "files", None))
+
+    decision = provider.evaluate(
+        payload.message,
+        selected_context,
+        recent_messages,
+        recent_turns=recent_turns,
+        workspace_files=workspace_files,
+    )
 
     session.add(
         AIInteraction(
