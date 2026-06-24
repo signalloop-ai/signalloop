@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+import httpx
 import jwt
 from fastapi import Depends, Header, HTTPException, status
 from jwt import PyJWKClient
@@ -63,8 +64,52 @@ def verify_clerk_token(token: str) -> EmployerIdentity:
     if not isinstance(clerk_user_id, str) or not clerk_user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid employer token")
 
-    email = claims.get("email") or claims.get("email_address") or f"{clerk_user_id}@clerk.local"
+    # Clerk's default session token does NOT include an email claim, so we resolve the user's
+    # primary email from the Clerk Backend API. This is required for the (email-based)
+    # super-admin role assignment to work at all — without it every login falls back to a
+    # synthetic @clerk.local address that can never match SUPER_ADMIN_EMAILS.
+    email = claims.get("email") or claims.get("email_address")
+    if not email:
+        email = _resolve_email_from_clerk(clerk_user_id)
+    email = email or f"{clerk_user_id}@clerk.local"
     return EmployerIdentity(clerk_user_id=clerk_user_id, email=str(email))
+
+
+_email_cache: dict[str, str] = {}
+
+
+def _resolve_email_from_clerk(clerk_user_id: str) -> str | None:
+    """Look up a Clerk user's primary email via the Backend API (cached per user_id).
+
+    Returns None if no secret key is configured or the lookup fails; callers fall back to a
+    synthetic address so authentication still succeeds (the user just won't be matched as an
+    admin).
+    """
+    if not settings.clerk_secret_key:
+        return None
+    cached = _email_cache.get(clerk_user_id)
+    if cached:
+        return cached
+    try:
+        resp = httpx.get(
+            f"https://api.clerk.com/v1/users/{clerk_user_id}",
+            headers={"Authorization": f"Bearer {settings.clerk_secret_key}"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        primary_id = data.get("primary_email_address_id")
+        emails = {
+            e.get("id"): e.get("email_address")
+            for e in data.get("email_addresses", [])
+            if e.get("email_address")
+        }
+        email = emails.get(primary_id) or next(iter(emails.values()), None)
+    except Exception:
+        return None
+    if email:
+        _email_cache[clerk_user_id] = email
+    return email
 
 
 def get_or_create_employer(session: Session, identity: EmployerIdentity) -> Employer:

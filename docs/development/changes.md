@@ -5,6 +5,28 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-06-24 — Super admin role: resolve email from Clerk (real bug)
+
+Admin login always landed in the employer portal. Root cause: Clerk's default session token
+has **no email claim**, so `verify_clerk_token` fell back to a synthetic
+`{clerk_user_id}@clerk.local` address that can never match `SUPER_ADMIN_EMAILS`. Since admin
+role assignment is email-based, no one could ever become admin — locally *or* on Render.
+
+Fix (`auth.py`): when the JWT has no email, resolve the user's primary email from the Clerk
+Backend API (`GET /v1/users/{id}` with `CLERK_SECRET_KEY`), cached per user id. Falls back to
+the synthetic address if the lookup fails (auth still succeeds; user just isn't matched as
+admin). This also corrects employer emails (previously stored as `@clerk.local`).
+
+Verified end-to-end against the real Clerk API: the admin account
+(`redacted-personal-email@example.com`) resolves and assigns `super_admin`. Added
+`tests/test_auth_email_resolution.py` (4 tests: primary-email selection, caching,
+no-secret, API-failure). API suite: **261 passed**.
+
+Note: admin role is keyed on the account's email, and the JWT lacks email by default — so this
+Clerk Backend API resolution is required in every environment.
+
+---
+
 ## 2026-06-23 — Super Admin Portal: review fixes (correctness + missing sections)
 
 Code review of the phase-4 super admin portal surfaced metric bugs and a duplicated report
