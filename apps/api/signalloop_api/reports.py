@@ -811,40 +811,36 @@ def _build_proctoring_signals(
 
     snapshot_events = [e for e in proctoring_events if e.event_type == "snapshot"]
     snapshots_out: list[dict] = []
-    if snapshot_events and _BOTO3_AVAILABLE and settings.s3_bucket:
+    # Resolve each snapshot per-event: a presigned GET for S3-backed ones, or the inline
+    # data URL for ones captured without a working S3 upload (local dev, or S3/CORS failure).
+    # Handle both regardless of whether a bucket is configured — a configured bucket must not
+    # hide data-URL snapshots.
+    s3_client = None
+    if _BOTO3_AVAILABLE and settings.s3_bucket:
         try:
-            s3 = boto3.client("s3")
-            for ev in snapshot_events:
-                meta = ev.event_metadata or {}
-                s3_key = meta.get("s3_key")
-                if not s3_key:
-                    continue
-                try:
-                    url = s3.generate_presigned_url(
-                        "get_object",
-                        Params={"Bucket": settings.s3_bucket, "Key": s3_key},
-                        ExpiresIn=3600,
-                    )
-                    snapshots_out.append({
-                        "timestamp": ev.occurred_at.isoformat() if ev.occurred_at else None,
-                        "trigger": meta.get("trigger", "periodic"),
-                        "url": url,
-                    })
-                except Exception:
-                    pass
+            s3_client = boto3.client("s3")
         except Exception:
-            pass
-    elif snapshot_events:
-        # Local dev: snapshots stored as inline data URLs (no S3 configured)
-        for ev in snapshot_events:
-            meta = ev.event_metadata or {}
-            data_url = meta.get("data_url")
-            if not data_url:
-                continue
+            s3_client = None
+    for ev in snapshot_events:
+        meta = ev.event_metadata or {}
+        url = None
+        s3_key = meta.get("s3_key")
+        if s3_key and s3_client is not None:
+            try:
+                url = s3_client.generate_presigned_url(
+                    "get_object",
+                    Params={"Bucket": settings.s3_bucket, "Key": s3_key},
+                    ExpiresIn=3600,
+                )
+            except Exception:
+                url = None
+        if url is None:
+            url = meta.get("data_url")
+        if url:
             snapshots_out.append({
                 "timestamp": ev.occurred_at.isoformat() if ev.occurred_at else None,
                 "trigger": meta.get("trigger", "periodic"),
-                "url": data_url,
+                "url": url,
             })
 
     return {

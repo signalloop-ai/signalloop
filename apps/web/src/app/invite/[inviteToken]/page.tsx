@@ -675,25 +675,38 @@ export default function CandidateWorkspace() {
           body: JSON.stringify({ filename }),
         }
       );
+      // Prefer the S3 presigned PUT; fall back to an inline data URL whenever S3 is
+      // unavailable (503) OR the browser upload fails (no bucket locally, missing CORS,
+      // network) — so snapshots are never silently lost and still render in the report.
+      let uploadedToS3 = false;
       if (urlResp.ok) {
-        // S3 path: use presigned PUT
-        const { upload_url, s3_key } = (await urlResp.json()) as { upload_url: string; s3_key: string };
-        await fetch(upload_url, {
-          method: "PUT",
-          body: blob,
-          headers: { "Content-Type": "image/jpeg" },
-        });
-        console.debug("[snapshot] uploaded to S3, key:", s3_key);
-        queueProctoringEvent("snapshot", { s3_key, trigger });
-      } else {
-        // Local dev fallback: encode image inline so reports can display it without S3
+        try {
+          const { upload_url, s3_key } = (await urlResp.json()) as { upload_url: string; s3_key: string };
+          const put = await fetch(upload_url, {
+            method: "PUT",
+            body: blob,
+            headers: { "Content-Type": "image/jpeg" },
+          });
+          if (put.ok) {
+            console.debug("[snapshot] uploaded to S3, key:", s3_key);
+            queueProctoringEvent("snapshot", { s3_key, trigger });
+            uploadedToS3 = true;
+          } else {
+            console.debug("[snapshot] S3 PUT failed:", put.status);
+          }
+        } catch (e) {
+          console.debug("[snapshot] S3 PUT errored (CORS/network?), using data URL:", e);
+        }
+      }
+      if (!uploadedToS3) {
+        // Inline fallback: encode the image so the report can display it without S3.
         const dataUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = (e) => resolve(e.target?.result as string);
           reader.onerror = reject;
           reader.readAsDataURL(blob);
         });
-        console.debug("[snapshot] stored as data URL, trigger:", trigger);
+        console.debug("[snapshot] stored as inline data URL, trigger:", trigger);
         queueProctoringEvent("snapshot", { data_url: dataUrl, trigger });
       }
     } catch (err) {
