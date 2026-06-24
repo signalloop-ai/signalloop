@@ -34,13 +34,21 @@ marks the few steps the user must do (logins, installs, final approval).
 - A licensed music track (Epidemic Sound / Artlist / YouTube Audio Library).
 
 ## 4. Coordination points `[HUMAN]`
+
+**Two different accounts** (they can't be signed in at once — Clerk is single-session). Easiest:
+use **two browser profiles/windows**, one per account, so no mid-recording sign-out dance.
+- **Employer (regular):** `redacted-personal-email@example.com` → used for the employer portal + the evidence
+  report (Blocks B–D). *Must own the invite to view its report.*
+- **Admin:** `redacted-personal-email@example.com` → used ONLY for the `/admin` roster shot (Block F). Note an
+  admin is auto-redirected away from `/employer`, so do not use it for the report.
+
 1. Install the tools above (and grant Screen Studio screen-recording permission).
-2. **Create a fresh invite you own:** log into the employer portal at
+2. **Create a fresh invite you own:** signed in as **`redacted-personal-email@example.com`**, go to
    http://localhost:3000/employer, create an invite (any email, Standard FastAPI v2, untimed),
-   and copy the invite link. Hand that link to the agent. *(Owning the invite lets you view its
-   report in step 6.)* If you'd rather skip this, the agent can use the pre-made link in §5, and
-   you view the report via the **admin** portal instead (you can see any report there).
-3. Stay logged in (employer + admin: `redacted-personal-email@example.com`) so the report/admin pages render.
+   and copy the invite link → hand it to the agent. *(Owning it lets you open its report in
+   Block D.)*
+3. Stay signed in as **`redacted-personal-email@example.com`** for Blocks B–D; switch to (or use the second
+   profile for) **`redacted-personal-email@example.com`** for the Block F admin shot.
 4. Final review of the cut before publishing.
 
 ## 5. Recording runbook — ONE candidate session produces both the workspace footage and a real,
@@ -76,10 +84,11 @@ Pre-made fallback invite (untimed, Standard v2):
 9. Click **Run** again → tests pass. (Nice "green" beat.)
 10. Click **Submit** → the confirmation modal appears (good beat) → confirm.
 
-**Block D — the evidence report** `[HUMAN] logged in` (maps to VO 05_report)
-11. As the employer (the account that owns the invite), open the attempt's **Evidence Report**
-    (Employer portal → the attempt → it auto-generates on first open). If you used the §5
-    fallback invite, instead open it via **/admin** (admin can view any report).
+**Block D — the evidence report** `[HUMAN] signed in as redacted-personal-email@example.com` (maps to VO 05_report)
+11. As the **employer who owns the invite** (`redacted-personal-email@example.com`), open the attempt's
+    **Evidence Report** in the employer portal → the report auto-generates on first open. (Use
+    the invite you created in §4 step 2 so this account owns it. The §5 fallback invite may be
+    owned by another account — only use it if `redacted-personal-email@example.com` owns it.)
 12. Record, slowly, with zooms: the **recommendation banner + score ring** → the **score
     breakdown bars** → the **AI collaboration** section → the **FAVO** section → the **follow-up
     interview questions**. (If a proctoring snapshot exists, show the Proctoring Signals strip.)
@@ -89,13 +98,13 @@ Pre-made fallback invite (untimed, Standard v2):
     selector** (Standard FastAPI v2 / Advanced FastAPI v1), then click **Details** to reveal the
     assessment detail modal. This visually backs "standard & advanced modes / more skills."
 
-**Block F — breadth + close** (maps to VO 06_close)
-14. Go to **http://localhost:3000/admin** (logged in as the admin) — a 3-second establishing
-    pan over the employer roster.
+**Block F — breadth + close** `[HUMAN] signed in as redacted-personal-email@example.com (admin)` (maps to VO 06_close)
+14. Switch to the **admin** account (`redacted-personal-email@example.com`) — or its browser profile — and go
+    to **http://localhost:3000/admin**: a 3-second establishing pan over the employer roster.
 15. End on a clean **SignalLoop logo** frame (use the app header, or a title card in the editor).
 
 ## 6. Assembly runbook (editor)
-1. Import the six VO MP3s in order onto the audio track — this is your **master timeline**.
+1. Import the seven VO MP3s in order onto the audio track — this is your **master timeline**.
 2. Lay each recorded block under its matching VO section (see the maps above), trimming so the
    key action lands under the matching sentence.
 3. Add **auto-captions** from the VO; spot-fix against plan §3; keep them short + high-contrast.
