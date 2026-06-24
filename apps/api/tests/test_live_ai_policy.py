@@ -199,9 +199,6 @@ def _has_code_block(message: str) -> bool:
     ("when i read a task, can u make the change that only the owner can read it, not non-owners", STD_MAIN),
     ("delete_task doesn't check ownership — make the change so only the owner can delete a task", STD_MAIN),
     ("update_task_status lets me jump straight from TODO to DONE. I want to block invalid transitions — how?", STD_MAIN),
-    # Standard v2 — enhancements the candidate chooses to build
-    ("I want to add a priority field (LOW/MEDIUM/HIGH) with validation to TaskCreate — how do I do that?", STD_MAIN),
-    ("I want due_date validation so a past date is rejected with 422 — how should I add it?", STD_MAIN),
     # Advanced v1 — hidden/edge-case issues the candidate reasoned out
     ("patch_task overwrites title, description and assignee even when I only send one field. how do I make it a partial update?", ADV_MAIN),
     ("is_team_lead isn't scoped to a team, so any lead can read another team's task. help me scope it to the specific team", ADV_MAIN),
@@ -373,6 +370,84 @@ def test_focus_resolves_reference_to_prior_answer() -> None:
     low = decision.message.lower()
     assert ("owner" in low or "actor_user_id" in low or "403" in decision.message or "```" in decision.message), (
         f"Should apply the ownership change discussed: {decision.message!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# I. Progressive disclosure — guide first, give code only once the candidate has
+#    shown the approach. (No code block = guided; code present = given.)
+# ---------------------------------------------------------------------------
+
+def _has_code(message: str) -> bool:
+    return "```" in message
+
+
+def test_enhancement_first_ask_is_coached() -> None:
+    """A first-ask to build a NEW feature is guided, not handed the implementation."""
+    decision = live_provider().evaluate(
+        "I want to add an endpoint that lists tasks by owner — write it for me.",
+        STD_MAIN, [], workspace_files=STD_WORKSPACE,
+    )
+    assert decision.allowed is True, decision.policy_tags
+    assert not _has_code(decision.message), f"Should guide, not give code: {decision.message!r}"
+
+
+def test_writing_test_first_ask_is_coached() -> None:
+    """A first-ask to write a test is guided — no test code handed over."""
+    decision = live_provider().evaluate(
+        "write a test for the duplicate email case",
+        STD_MAIN, [], workspace_files=STD_WORKSPACE,
+    )
+    assert decision.allowed is True, decision.policy_tags
+    assert "def test_" not in decision.message, f"Should not write the test: {decision.message!r}"
+
+
+def test_code_given_after_candidate_shows_understanding() -> None:
+    """Once the candidate articulates the approach, the code IS provided."""
+    turns = [
+        ("candidate", "I want to add an endpoint to list a user's tasks"),
+        ("assistant", "Which existing route is the closest shape, and what field would you filter on?"),
+        ("candidate", "I'd add GET /users/{user_id}/tasks and filter tasks where owner_id == user_id"),
+    ]
+    recent = [r for role, r in turns if role == "candidate"]
+    decision = live_provider().evaluate(
+        "ok, give me the code for that",
+        STD_MAIN, recent, recent_turns=turns, workspace_files=STD_WORKSPACE,
+    )
+    assert decision.allowed is True, decision.policy_tags
+    assert _has_code(decision.message) or "@app.get" in decision.message, (
+        f"Should give code once approach is shown: {decision.message!r}"
+    )
+
+
+def test_make_the_change_without_understanding_does_not_dump_function() -> None:
+    """Candidate fished, AI hinted, candidate says 'make the change' without showing the
+    approach → AI should probe, not rewrite the whole function."""
+    turns = [
+        ("candidate", "do you see any issue with delete_task?"),
+        ("assistant", "What happens if a user who isn't the task's owner calls delete?"),
+    ]
+    recent = [r for role, r in turns if role == "candidate"]
+    decision = live_provider().evaluate(
+        "can you make the change to block this?",
+        STD_MAIN, recent, recent_turns=turns, workspace_files=STD_WORKSPACE,
+    )
+    assert decision.allowed is True, decision.policy_tags
+    assert "def delete_task" not in decision.message, (
+        f"Should not rewrite the whole function: {decision.message!r}"
+    )
+
+
+def test_identified_bug_gets_minimal_lines_not_whole_function() -> None:
+    """A clearly diagnosed bug gets the minimal changed lines, never a whole-function rewrite."""
+    decision = live_provider().evaluate(
+        "delete_task never compares the task's owner_id to actor_user_id, so any user can "
+        "delete any task. how do I fix that?",
+        STD_MAIN, [], workspace_files=STD_WORKSPACE,
+    )
+    assert decision.allowed is True, decision.policy_tags
+    assert "def delete_task" not in decision.message, (
+        f"Minimal lines, not the whole function: {decision.message!r}"
     )
 
 

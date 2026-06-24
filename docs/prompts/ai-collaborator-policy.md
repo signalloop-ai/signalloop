@@ -26,15 +26,26 @@ Supporting pieces:
   the LLM call/parse fails or no provider is configured. It blocks only high-precision
   explicit abuse and otherwise allows. It must never override a working LLM.
 
-### The three behavior rules (generator)
+### Generator behavior — guide first, give code once earned (progressive disclosure)
 
-1. **Candidate identified the problem** — public bug, hidden/edge-case bug, or enhancement —
-   **and knows the fix** → give the code (only the changed lines). Source of the issue does
-   not matter; the signal is that the candidate did the diagnostic work.
-2. **Candidate asks the assistant to find the problem** (no diagnosis of their own) →
-   coach Socratically with one pointed question. This is NOT a block and NOT a scored
-   violation — it is normal coaching.
-3. **General / conceptual / how-to question** → answer directly; code is fine.
+The generator's job is to make the candidate do the thinking. For anything that asks it to
+implement, fix, or write (bug fix, enhancement/new feature, or test), it decides from what the
+candidate has demonstrated **in the conversation**:
+
+1. **Hasn't shown the approach yet** — first ask, "just do it / make the change for me", named
+   the goal but not HOW, vague "what's wrong?", or a pasted failure with no diagnosis →
+   **Socratic**: one pointed question (or a conceptual hint / pointer to a similar pattern).
+   No implementation, fix, or test code yet. Naming a goal ("I want feature X", "write a test
+   for Y") is NOT understanding — probe first.
+2. **Has shown they get it** — articulated the specific change/approach, answered the guiding
+   question, or identified the exact behavior and why → **give the code, kept tight**: a bug
+   fix is only the minimal changed lines (2-3, never the whole function); an enhancement/test
+   is the focused implementation/test, nothing extra.
+3. **Concept / how-to / syntax question** → answer directly with a tiny snippet.
+
+This replaces the earlier "identified the issue → give code immediately" rule: simply *naming*
+an enhancement or asking for a test no longer yields the full code — the candidate must first
+show the gist. Coaching is never a block or a scored violation.
 
 ## Default: answer the question
 
