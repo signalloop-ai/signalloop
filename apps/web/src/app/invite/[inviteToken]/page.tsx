@@ -1167,10 +1167,11 @@ export default function CandidateWorkspace() {
                 </span>
               );
             })()}
-            {candidateTestCount > 0 ? (
-              <span className="progress-chip done">✓ My tests +{candidateTestCount}</span>
-            ) : null}
-            {(publicTestsRun || candidateTestCount > 0) ? <span className="status-box-divider" /> : null}
+            {/* My tests — always shown so candidates know it's tracked, count updates live */}
+            <span className={`progress-chip ${candidateTestCount > 0 ? "done" : ""}`}>
+              {candidateTestCount > 0 ? `✓ My tests +${candidateTestCount}` : "My tests 0"}
+            </span>
+            <span className="status-box-divider" />
             {/* Attempt state & timer */}
             <span className={`status-pill ${submitted ? "ready" : isExpired ? "error" : statusClass(attempt.status)}`}>
               {submitted ? "submitted" : isExpired ? "expired" : attempt.status === "started" ? "In progress" : attempt.status}
