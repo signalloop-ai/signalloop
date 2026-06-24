@@ -323,6 +323,47 @@ button:disabled {
   margin: 5px 0 0;
 }
 
+.ai-tips {
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.ai-tips > summary {
+  color: var(--accent-dark);
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+
+.ai-tips > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ai-tips > summary::before {
+  content: "▸ ";
+}
+
+.ai-tips[open] > summary::before {
+  content: "▾ ";
+}
+
+.ai-tips-body {
+  color: var(--muted);
+  line-height: 1.45;
+  margin-top: 6px;
+}
+
+.ai-tips-body ul {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 6px;
+  padding-left: 16px;
+}
+
+.ai-tips-eg {
+  margin: 4px 0 0;
+}
+
 .file-list {
   display: grid;
   gap: 3px;

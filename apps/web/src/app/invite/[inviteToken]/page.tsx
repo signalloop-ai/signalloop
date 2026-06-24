@@ -1338,6 +1338,19 @@ export default function CandidateWorkspace() {
             <div className="panel-header">
               <h2>AI Collaborator</h2>
               <p>Constrained to candidate-visible context and one focused issue at a time.</p>
+              <details className="ai-tips">
+                <summary>How to work with the AI</summary>
+                <div className="ai-tips-body">
+                  <ul>
+                    <li>It coaches first, then gives code once you show your approach — so answer its questions instead of repeating &quot;just do it&quot;.</li>
+                    <li>Found a bug? Say what&apos;s wrong and where. Stuck on syntax/concept? Ask directly and you&apos;ll get a straight answer.</li>
+                    <li>For an enhancement or a test, describe your plan first, then ask for the code.</li>
+                    <li>It can see your open files — refer to functions by name.</li>
+                  </ul>
+                  <p className="ai-tips-eg"><strong>Try:</strong> &quot;I think delete_task doesn&apos;t check the owner — how do I block non-owners?&quot;</p>
+                  <p className="ai-tips-eg"><strong>Avoid:</strong> &quot;what&apos;s wrong with my code?&quot; · &quot;give me the full solution&quot; · &quot;just write it for me&quot;</p>
+                </div>
+              </details>
             </div>
             <div className="assistant-chat">
               <div className="chat-messages" aria-label="AI messages" ref={chatMessagesRef}>

@@ -52,9 +52,27 @@ You will not see the exact hidden checks during the attempt. Read the code and t
 
 ## AI collaborator policy
 
-Once you have identified a specific issue, you may ask the assistant to help you implement the fix. You may also ask it to explain Python, FastAPI, or pytest mechanics, interpret test output, or discuss tradeoffs for a design decision you have already made.
+The embedded assistant is a constrained collaborator: it coaches you toward the answer and gives you code once you show you understand the approach. It is not an answer machine — but used well, it is genuinely helpful.
 
-Do not ask it to enumerate every defect, provide a full solution, or generate your final explanation.
+### How to get the most from it
+
+- **Found a bug?** Say what's wrong and where ("`patch_task` overwrites every field, not just the ones I sent"). It confirms and shows you the small change to make.
+- **Adding an enhancement or writing a test?** It asks a guiding question first. Answer it — once you describe your approach (the route and what to filter/validate; or what a test should send and assert), it gives you the code. Engage with the question instead of asking it to "just do it."
+- **Syntax or concept question?** Ask directly ("how do I raise a 409 in FastAPI?", "what does `model_dump(exclude_unset=True)` do?") — you get a straight answer.
+- It can see the files you're working on, so refer to functions by name.
+- If it replies with a question, that's the path forward — answering it is what unlocks the code. Don't give up after one Socratic question.
+
+### Prompts that work vs. prompts that stall
+
+| Instead of this… | Try this… |
+| --- | --- |
+| "What's wrong with my code?" / "Find all the bugs" | "I think `is_team_lead` isn't scoped to a team — how do I fix that?" |
+| "Give me the complete solution" / "Write all the tests" | "How do I raise a 409 in FastAPI?" — or, after describing your plan, "ok give me the code for that" |
+| "Just write the dependency feature for me" | "For task dependencies I'd add a blocker list and reject cycles with DFS — does that sound right?" |
+| Pasting a test and asking "make this pass" | "The archived-task test expects it hidden but I still see it — what should I check?" |
+| "Should I return 403 or 404? You decide." | "What are the tradeoffs between 403 and 404 for a non-member?" |
+
+It will not enumerate every defect, write the whole solution, rewrite whole files, write your full test suite, reveal hidden tests, or make design decisions for you — those are the parts being assessed.
 
 ## Useful commands
 
