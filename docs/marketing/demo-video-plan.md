@@ -85,14 +85,29 @@ overlays.
 - CAP: "Frame · Ask · Verify · Own + interview questions."
 - SHOT: pause on the FAVO section, then the follow-up questions list.
 
-**[2:18–2:42] Integrity + breadth**
+**[2:18–2:36] Platform / extensibility** (VO clip `05b_platform`)
+- VO: "You just saw our FastAPI track, in standard and advanced modes. We started there
+  because it's common — but SignalLoop isn't tied to one stack: new skills slot in easily, each
+  assessment can be tailored to the employer and the role, and we're expanding across
+  engineering — and beyond."
+- CAP: "Any stack · standard & advanced · tailored to the role"
+- SHOT: employer invite screen showing the assessment selector (**Standard FastAPI v2** /
+  **Advanced FastAPI v1**) and the assessment **Details** modal. (Conveys "standard & advanced"
+  + "more skills/packs.")
+
+**[2:36–2:58] Integrity + breadth**
 - VO: "Integrity is built in — AI-policy signals, paste detection, and optional proctoring roll
   into one integrity score. And a super-admin view gives operators the full picture across every
   hiring team."
 - CAP: "Integrity, built in."
 - SHOT: integrity banner + a webcam-snapshot thumbnail strip; quick cut to the `/admin` roster.
 
-**[2:42–2:55] Close**
+**[2:58–3:10] Close**
+
+> Timing note: the platform beat adds ~16s, nudging the raw cut just over 3:00. Trim silences
+> between VO clips (and tighten the report scroll) to land at/under 3:00 — or keep ~3:05, which
+> is fine for web/LinkedIn.
+
 - VO: "SignalLoop — see how engineers actually build, in the age of AI."
 - CAP: "SignalLoop · <yourdomain>"
 - SHOT: clean logo card + URL / "Request a demo".

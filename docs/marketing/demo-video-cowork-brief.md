@@ -13,9 +13,9 @@ marks the few steps the user must do (logins, installs, final approval).
 ## 1. What's already prepared (in this repo)
 - **Script + shot list + captions:** `docs/marketing/demo-video-plan.md` (§3 script, §4 shots,
   §6 the exact prompts to type). Read this first — it's the source of truth for content.
-- **Voiceover MP3s (already generated):** `docs/marketing/voiceover/` — six files:
-  `01_hook`, `02_what`, `03_task`, `04_collaborator`, `05_report`, `06_close`. Use these as the
-  master audio timeline. (Voice "Adam"; ask the human if they want it re-generated in another
+- **Voiceover MP3s (already generated):** `docs/marketing/voiceover/` — seven files, in order:
+  `01_hook`, `02_what`, `03_task`, `04_collaborator`, `05_report`, `05b_platform`, `06_close`.
+  Use these as the master audio timeline. (Voice "Adam"; ask the human if they want another
   voice.)
 - **Captions:** the CAP lines in plan §3. Easiest path: auto-caption from the VO in your editor,
   then spot-fix against §3.
@@ -84,10 +84,15 @@ Pre-made fallback invite (untimed, Standard v2):
     breakdown bars** → the **AI collaboration** section → the **FAVO** section → the **follow-up
     interview questions**. (If a proctoring snapshot exists, show the Proctoring Signals strip.)
 
-**Block E — breadth** (maps to VO 06_close)
-13. Go to **http://localhost:3000/admin** (logged in as the admin) — a 3-second establishing
+**Block E — platform / extensibility** `[HUMAN] logged in` (maps to VO 05b_platform)
+13. In the employer portal, open the **Create invite** controls and show the **assessment
+    selector** (Standard FastAPI v2 / Advanced FastAPI v1), then click **Details** to reveal the
+    assessment detail modal. This visually backs "standard & advanced modes / more skills."
+
+**Block F — breadth + close** (maps to VO 06_close)
+14. Go to **http://localhost:3000/admin** (logged in as the admin) — a 3-second establishing
     pan over the employer roster.
-14. End on a clean **SignalLoop logo** frame (use the app header, or a title card in the editor).
+15. End on a clean **SignalLoop logo** frame (use the app header, or a title card in the editor).
 
 ## 6. Assembly runbook (editor)
 1. Import the six VO MP3s in order onto the audio track — this is your **master timeline**.
