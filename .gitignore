@@ -48,3 +48,6 @@ htmlcov/
 *.tar
 *.tar.gz
 .opencode
+
+# Demo video voiceover artifacts (generated)
+docs/marketing/voiceover/
