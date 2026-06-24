@@ -1397,6 +1397,25 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+/* Super-admin roster has 8 columns: Employer, Role, Created, Last activity,
+   Invites, Submitted, Reports, Avg score. */
+.admin-roster-table .attempt-row {
+  grid-template-columns:
+    minmax(180px, 2fr) minmax(70px, 0.7fr) minmax(80px, 0.8fr)
+    minmax(96px, 0.9fr) minmax(56px, 0.5fr) minmax(74px, 0.6fr)
+    minmax(64px, 0.5fr) minmax(74px, 0.6fr);
+  min-width: 960px;
+}
+
+/* Super-admin employer-detail attempts table has 6 columns: Candidate, Status,
+   Pack, Submitted, Score, Report. */
+.admin-attempts-table .attempt-row {
+  grid-template-columns:
+    minmax(160px, 1.6fr) minmax(96px, 0.8fr) minmax(120px, 1fr)
+    minmax(96px, 0.8fr) minmax(64px, 0.6fr) minmax(110px, 0.9fr);
+  min-width: 820px;
+}
+
 .empty-state {
   color: var(--muted);
   font-size: 14px;

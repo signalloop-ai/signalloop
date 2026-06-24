@@ -140,7 +140,7 @@ export default function AdminEmployerDetailPage() {
             <div className="section-title">
               <h2>Attempts</h2>
             </div>
-            <div className="attempt-table">
+            <div className="attempt-table admin-attempts-table">
               <div className="attempt-row table-head">
                 <span>Candidate</span>
                 <span>Status</span>

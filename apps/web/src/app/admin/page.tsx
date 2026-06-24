@@ -83,7 +83,7 @@ export default function AdminRosterPage() {
 
         {error ? <p className="submission-error">{error}</p> : null}
 
-        <div className="attempt-table">
+        <div className="attempt-table admin-roster-table">
           <div className="attempt-row table-head">
             <span>Employer</span>
             <span>Role</span>
