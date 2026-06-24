@@ -396,10 +396,6 @@ export default function CandidateWorkspace() {
   }, [syntaxDiagnostics]);
 
   const reviewAnsweredCount = submissionReview.changed.trim().length > 0 ? 1 : 0;
-  const candidateTestsAdded = useMemo(
-    () => Object.keys(files).some((path) => path.startsWith("tests/") && files[path] !== initialFiles[path]),
-    [files, initialFiles],
-  );
   const candidateTestCount = useMemo(() => {
     const countTests = (content: string) => (content.match(/^def test_/gm) ?? []).length;
     const currentTotal = Object.entries(files)
@@ -1171,10 +1167,10 @@ export default function CandidateWorkspace() {
                 </span>
               );
             })()}
-            {candidateTestsAdded ? (
+            {candidateTestCount > 0 ? (
               <span className="progress-chip done">✓ My tests +{candidateTestCount}</span>
             ) : null}
-            {(publicTestsRun || candidateTestsAdded) ? <span className="status-box-divider" /> : null}
+            {(publicTestsRun || candidateTestCount > 0) ? <span className="status-box-divider" /> : null}
             {/* Attempt state & timer */}
             <span className={`status-pill ${submitted ? "ready" : isExpired ? "error" : statusClass(attempt.status)}`}>
               {submitted ? "submitted" : isExpired ? "expired" : attempt.status === "started" ? "In progress" : attempt.status}
@@ -1247,7 +1243,7 @@ export default function CandidateWorkspace() {
               <span>{activePath || "No file selected"}</span>
             </div>
             <span className="editor-autosave">
-              {saveStatus || "Files auto-saved every 60s"}
+              {saveStatus || "Changes auto-save"}
             </span>
           </div>
           <div className="editor-wrapper">
@@ -1273,11 +1269,11 @@ export default function CandidateWorkspace() {
               onChange={(value) => {
                 if (!activePath) return;
                 setFiles((current) => ({ ...current, [activePath]: value ?? "" }));
-                setSaveStatus("Unsaved changes.");
+                setSaveStatus("Saving…");
                 if (autoSnapshotTimeoutRef.current) window.clearTimeout(autoSnapshotTimeoutRef.current);
                 autoSnapshotTimeoutRef.current = window.setTimeout(() => {
                   void saveSnapshot("autosave");
-                }, 60_000);
+                }, 3_000);
               }}
             />
           </div>
@@ -1529,12 +1525,12 @@ export default function CandidateWorkspace() {
                 );
               })()}
               <div className="submit-status-item">
-                <span className={`submit-status-icon ${candidateTestsAdded ? "done" : ""}`}>
-                  {candidateTestsAdded ? "✓" : "○"}
+                <span className={`submit-status-icon ${candidateTestCount > 0 ? "done" : ""}`}>
+                  {candidateTestCount > 0 ? "✓" : "○"}
                 </span>
                 <div>
                   <strong>My tests</strong>
-                  <span>{candidateTestsAdded ? `${candidateTestCount} written` : "None added yet"}</span>
+                  <span>{candidateTestCount > 0 ? `${candidateTestCount} added` : "None added yet"}</span>
                   <em>Tests you wrote — scored at submission, not on each run</em>
                 </div>
               </div>

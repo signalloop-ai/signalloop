@@ -617,6 +617,7 @@ button:disabled {
   line-height: 1.45;
   margin: 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .tag-row {
