@@ -2,6 +2,18 @@
 
 This directory contains the bounded implementation tasks for the SignalLoop MVP.
 
+## Status: all phases complete ✅
+
+All 12 MVP phases below are **complete** and validated (local + hosted pilot). The post-MVP
+enhancement workstreams are also complete:
+
+- **Phase 2 — Assessment System Enhancement** (`docs/enhancements/phase-2-assessment-system/`) ✅
+- **Phase 3 — Evidence-Based Proctoring** (`docs/enhancements/phase-3-proctoring/`) ✅
+- **Phase 4 — Super Admin Portal** (`docs/enhancements/phase-4-super-admin-portal/`) ✅
+
+The AI collaborator was substantially redesigned post-MVP (two-component architecture +
+progressive disclosure); see `docs/retrospectives/ai-collaborator-journey.md`.
+
 ## Rules
 
 - Complete phases in order.

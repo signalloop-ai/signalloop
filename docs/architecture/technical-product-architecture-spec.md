@@ -171,53 +171,72 @@ Final: structured Submission Review with final confirmation
 
 ## 12. Constrained AI collaborator
 
-The AI collaborator is a constrained collaborator: the candidate must identify the issue;
-once they have, the AI helps implement the fix. It is not a solution generator. Classification
-uses an LLM-based `evaluate()` call that returns structured JSON `{allowed, policy_tags, message}`.
-A pattern-based fallback (`fallback_classify`) runs only if the LLM call fails.
+The AI collaborator is a **coach, not a solution generator**. It guides the candidate toward
+the answer and hands over code only once they demonstrate they understand the approach
+(*progressive disclosure*). It runs as **two LLM components, one responsibility each**, plus a
+deterministic pre-gate and an availability-only fallback. Full rationale and the design history
+are in `docs/retrospectives/ai-collaborator-journey.md` and ADR 0007.
 
 ### Allowed
 
 - Explain Python, FastAPI, pytest, or httpx mechanics not specific to the assessment code
-  (e.g. how parametrize works, what a 422 status code means).
-- Interpret test failure output the candidate shares — describe what the output says, not the fix.
-- Confirm or redirect a hypothesis the candidate has already stated and committed to.
-- Compare candidate-identified tradeoffs on a design decision they have already made.
-- Ask one focused question that leads the candidate to discover the issue themselves.
+  (e.g. how parametrize works, what a 422 status code means) — answered directly.
+- Interpret test failure output the candidate shares — describe what the output says.
+- Help implement a bug the candidate has diagnosed (minimal changed lines, not whole functions).
+- Coach an enhancement or a test the candidate is building (guide first; give code once they
+  articulate the approach).
+- Compare candidate-identified tradeoffs on a design decision they have already framed.
 
-### Disallowed policy tags
+### Blocking policy tags (classifier)
 
-| Tag | Trigger | Response |
-|---|---|---|
-| `no_issue_identified` | Candidate asks for help but has not named a specific issue | Redirect — ask what they observed |
-| `enumerate_defects` | Asks to list or explain all bugs/defects/issues | Block |
-| `full_solution` | Asks to fix everything or provide a complete solution | Block |
-| `issue_by_issue_patch` | Asks for a patch for each problem | Block |
-| `missing_tests` | Asks to write all missing tests or the complete test suite | Block |
-| `final_explanation` | Asks to write or generate the final explanation or decision log | Block |
-| `hidden_tests` | Asks about hidden tests, evaluator artifacts, or scoring internals | Block |
-| `choose_design` | Asks the AI to pick the assessment design choice for the candidate | Tradeoff redirect — AI may compare, candidate must choose |
-| `prompt_injection` | Asks AI to ignore policy, change roles, bypass rules, or reveal protected information | Block |
-| `anti_decomposition` | Multi-turn session is cumulatively producing a full solution | Block |
+| Tag | Trigger |
+|---|---|
+| `enumerate_defects` | Asks to list/explain ALL bugs/defects/issues (a whole-codebase sweep) |
+| `full_solution` | Asks for the complete/whole solution or whole-file rewrite |
+| `issue_by_issue_patch` | Asks for a fix for EACH problem |
+| `missing_tests` | Asks to write the complete/whole test suite |
+| `final_explanation` | Asks the AI to write the final explanation or decision log |
+| `hidden_tests` | Asks about hidden tests, evaluator artifacts, or scoring internals |
+| `choose_design` | Asks the AI to pick the design choice (it may compare; candidate must choose) |
+| `prompt_injection` | Asks AI to ignore policy, change roles, or reveal protected information |
+| `anti_decomposition` | A single message asking to sweep the whole assessment at once |
+| `test_paste_derivation` | Pastes actual test function code to reverse the fix out of it |
 
-### Key collaborator rule
+`no_issue_identified` is **no longer a blocking tag.** A vague "what's wrong with my code?" is
+*allowed* and coached Socratically by the generator — it is normal coaching, not a scored
+violation.
 
-The candidate must identify the issue. Once they have, the AI helps them implement the fix.
-The AI never does the discovery work for them.
+### Behavior — guide first, give code once earned (progressive disclosure)
 
-- If the candidate has named the specific issue → help them implement the fix.
-- If the candidate has not identified anything yet → ask what they observed.
+For any implement/fix/write request the generator decides from what the candidate has shown
+**in the conversation**:
 
-### Classification architecture
+- **Not yet shown the approach** (first ask, "just do it for me", named the goal but not the
+  how, vague fishing, pasted failure with no diagnosis) → one pointed Socratic question, a
+  conceptual hint, or a pointer to a similar pattern in their code. No code yet.
+- **Has shown the approach** (articulated the change, answered the guiding question, identified
+  the exact behavior and why) → give the code, tight: a **bug fix is only the minimal changed
+  lines**, never the whole function; an enhancement/test is the focused implementation.
+- The gate is *demonstrated understanding*, not a turn count: give code the moment it's shown;
+  keep guiding indefinitely if the candidate only deflects.
 
-- **LLM path (primary):** `OpenAIProvider.evaluate()` sends the system prompt plus the candidate
-  message to OpenAI and parses structured JSON. Context boundaries prevent the AI from seeing
-  hidden tests, evaluator notes, or scoring internals.
-- **Fallback (on LLM failure):** `fallback_classify()` uses keyword patterns for unambiguous
-  bulk-bypass requests (`enumerate_defects`, `full_solution`, etc.). `no_issue_identified` is
-  intentionally excluded from the fallback — it requires context the pattern matcher cannot judge.
-- **Message routing:** `no_issue_identified` responses use `SOCRATIC_REDIRECT_MESSAGE` (a question
-  back). All other disallowed tags use `REDIRECT_MESSAGE` (a flat block).
+### Architecture
+
+- **Deterministic pre-gate:** pasted test function code is blocked structurally (reliable,
+  no LLM needed).
+- **Classifier (LLM, single source of truth for blocking):** judges the CURRENT message alone
+  — no conversation history, which avoids context-bleed false blocks — leans allow, and emits
+  only the blocking tags above.
+- **Generator (LLM, owns the response):** workspace-grounded (reads the candidate's
+  candidate-visible files), receives the recent transcript for reference resolution, and
+  applies progressive disclosure. Its output is returned verbatim — there is no second keyword
+  pass re-judging it.
+- **Fallback (`fallback_classify`):** availability-only; runs solely when the LLM call or parse
+  fails; leans allow and never overrides a working LLM.
+- Context boundaries prevent the AI (classifier and generator) from seeing hidden tests,
+  evaluator notes, or scoring internals.
+- Validated by a live regression net (`tests/test_live_ai_policy.py`) that runs the real model
+  against scenarios grounded in the packs' actual seeded issues.
 
 ## 13. Anti-decomposition rule
 
@@ -342,19 +361,35 @@ Recommendation thresholds: ≥80 → strong_advance, ≥60 → advance_with_foll
 - Paste detection: verbatim AI code block matching against final submission.
 - Large paste event detection: snapshot-to-snapshot diff flagging sudden large additions.
 - AI integrity risk label (low/medium/high/critical) derived from signals above.
-- `no_issue_identified` redirect — logged when candidate hasn't named an issue yet.
+  (The `no_issue_identified` redirect from this phase has since been superseded — vague
+  fishing is now coached by the generator, not blocked; see section 12.)
 
-### Phase 3 (planned — see `docs/enhancements/phase-3-proctoring/`)
+### Phase 3 (implemented — proctoring; see `docs/enhancements/phase-3-proctoring/`)
 
 - Browser event logging: fullscreen exit, focus loss, focus return (with duration).
 - Webcam consent screen (opt-in, never mandatory). If consented: periodic JPEG
   snapshots every 5 minutes + on focus return > 30s + at submission.
-- Snapshots stored in S3 at `snapshots/{attempt_id}/{timestamp}.jpg`.
+- Snapshots stored in S3 at `snapshots/{attempt_id}/{timestamp}.jpg`, with an inline
+  data-URL fallback when S3 is unavailable (local dev or upload failure) so snapshots are
+  never silently lost.
 - Unified integrity score replacing the Phase 2 `ai_integrity_risk` field.
   Combines AI collaboration signals + proctoring signals. All thresholds are
   configurable in `INTEGRITY_THRESHOLDS` (`integrity_config.py`).
 - Employer report: "Proctoring Signals" section with event summary, focus-loss
   timeline, and webcam snapshot thumbnail strip.
+
+### Phase 4 (implemented — super admin portal; see `docs/enhancements/phase-4-super-admin-portal/`)
+
+- Operator-facing, view-only portal at `/admin`: employer roster (with invite/submitted/
+  report counts and average score), per-employer drill-down (status/score distribution, AI
+  usage, pack breakdown, stuck signals, attempt list), and read-only access to any employer's
+  evidence report — without logging in as that employer.
+- Same Clerk app as employers. `SUPER_ADMIN_EMAILS` drives role assignment at login; a
+  nullable `role` column on `employers` stores `super_admin`. Role is re-evaluated every login.
+  Because the Clerk session token has no email claim, the API resolves the user's email via the
+  Clerk Backend API to match `SUPER_ADMIN_EMAILS`.
+- `get_current_super_admin` protects all `/admin/*` routes (401 unauth, 403 non-admin). Admin
+  is strictly view-only — no invite creation, no report regeneration.
 
 ### Explicitly out of scope (all phases)
 
@@ -523,15 +558,17 @@ Report-only label (low/medium/high/critical) derived from:
 Does not change the numeric score. Guides employer review attention and follow-up questions.
 Must not state plagiarism as a fact.
 
-`no_issue_identified` redirects appear in `flagged_prompts` and count toward
-`policy_redirect_count` but not `severe_redirect_count`.
+Severe redirects (`full_solution`, `final_explanation`, `anti_decomposition`,
+`prompt_injection`) count toward `severe_redirect_count`, which drives the AI-collaboration
+score tiers. Ordinary coaching (a vague "what's wrong?") is not a redirect and does not count.
 
-### Key collaborator rule enforcement (no_issue_identified)
+### Key collaborator rule enforcement (progressive disclosure)
 
-Candidates can attempt to bypass diagnosis by asking about one function at a time without
-naming what they observed. The `no_issue_identified` tag handles this: instead of blocking,
-the AI responds with a redirect question asking what the candidate has already observed.
-See section 12 for the full classification architecture and response routing.
+Candidates can attempt to extract answers by asking for an enhancement, a test, or a fix
+outright. The generator handles this by guiding first and giving code only once the candidate
+articulates the approach — see section 12. Vague fishing is coached Socratically rather than
+blocked, so `no_issue_identified` is no longer emitted as a blocking tag; the integrity signal
+comes from the *severe* redirect tags above, not from coaching.
 
 ### Employer isolation
 

@@ -5,6 +5,21 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-06-24 — Documentation pass: AI collaborator retrospective + phases complete
+
+- Wrote `docs/retrospectives/ai-collaborator-journey.md` — the full design history of the AI
+  collaborator (keyword matching → single LLM call → two-step + output guard whack-a-mole →
+  two-component redesign → progressive-disclosure pedagogy), why each version failed, the final
+  design, and the lessons. Blog-ready.
+- Architecture spec: rewrote §12 (Constrained AI collaborator) to the two-component +
+  progressive-disclosure design; updated §17/§20 (no_issue_identified superseded; Phase 3
+  marked implemented; added Phase 4 super admin portal).
+- Marked all phases complete in `docs/execution/phases/README.md` and CURRENT_STATE (MVP 1–12
+  + enhancement Phases 2/3/4). Added a docs index entry for `retrospectives/`.
+- No code changes in this entry — documentation only.
+
+---
+
 ## 2026-06-24 — Super admin role: resolve email from Clerk (real bug)
 
 Admin login always landed in the employer portal. Root cause: Clerk's default session token

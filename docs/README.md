@@ -30,7 +30,10 @@ Before making implementation changes, read:
 - `prompts/` - constrained AI collaborator policy.
 - `reports/` - Engineering Evidence Report structure.
 - `development/` - local setup and development notes.
-- `deployment/` - pilot deployment notes for Render, Supabase, Clerk, and execution-runtime boundaries.
+- `deployment/` - pilot deployment notes for Render, Supabase, Clerk, and execution-runtime
+  boundaries, plus the production execution-isolation plan (`production-isolation-plan.md`).
+- `retrospectives/` - design-journey write-ups. `ai-collaborator-journey.md` records how the
+  AI collaborator evolved into the two-component, progressive-disclosure design (blog-ready).
 
 Work one phase or enhancement task at a time. Do not use planning docs as permission to
 implement future scope early.

@@ -2,13 +2,23 @@
 
 ## Project status
 
-Phase 12 Documentation and Handoff is complete. Local and hosted MVP validation are complete enough for pilot use. Render web/API, Supabase persistence, Clerk-gated employer portal, and AWS ECS/Fargate public/hidden execution have been validated end-to-end, including a hosted browser-level candidate submission and employer report flow.
+**All phases are complete.** MVP phases 1–12 and the post-MVP enhancement workstreams —
+Phase 2 (Assessment System), Phase 3 (Proctoring), and Phase 4 (Super Admin Portal) — are
+implemented, validated, and merged to `main`. Local and hosted pilot are working: Render
+web/API, Supabase persistence, Clerk employer/admin auth, and candidate execution
+(`direct` on the hosted pilot; Docker worker locally; ECS/Fargate scaffold for production).
 
-The active post-MVP workstream is Phase 4: Super Admin Portal.
+The AI collaborator was substantially redesigned post-MVP into a two-component architecture
+with progressive disclosure — see `docs/retrospectives/ai-collaborator-journey.md` for the
+full design history, and `docs/prompts/ai-collaborator-policy.md` for the current policy.
 
 ## Current phase
 
-**Phase 4 is implemented.** The super admin portal is built and locally validated:
+**No active phase — all complete.** Open follow-ups: production execution isolation
+(`ecs_fargate`, see `docs/deployment/production-isolation-plan.md`) and optional local S3 for
+snapshots. Earlier phase notes follow as historical record.
+
+**Phase 4 is implemented.** The super admin portal is built and validated:
 recruitment list, per-employer operational summary, and drill-through to any
 employer's evidence report. Admin uses the same Clerk login; role is assigned
 from `SUPER_ADMIN_EMAILS` env var. Admin is view-only — cannot create invites.
@@ -326,6 +336,28 @@ UX polish close-out).
   (anti_decomposition now requires a broad multi-issue sweep) with a counter-example and a
   live test that a genuine sweep still blocks.
 
+## Settled state after June 2026 AI collaborator pedagogy + docs completion
+
+- **Progressive disclosure** is the collaborator's pedagogy: guide first, give code once the
+  candidate demonstrates the approach. Bug fix → minimal changed lines (never whole function);
+  enhancement/test → focused code once the gist is shown; concept → answered directly. The gate
+  is demonstrated understanding, not a turn count; pure deflection never yields code.
+- Classifier loosened so single-feature/single-test requests and "give me the code for this"
+  follow-ups are allowed (the generator gates them); singular "find the bug for me" is fishing,
+  not enumerate_defects.
+- **Workspace grounding:** the generator reads the candidate's candidate-visible files and
+  answers about their actual code.
+- **Prod model:** generator runs on `gpt-4o` (default + both `.env` examples). `gpt-5` failed
+  in prod because it needs `max_completion_tokens` and a larger budget (reasoning model); the
+  OpenAI error is now logged instead of swallowed.
+- **Candidate guidance:** the AI Collaborator panel has a collapsible "How to work with the AI"
+  tips block, and both candidate READMEs have a how-to + good/bad prompt table.
+- **Docs:** `docs/retrospectives/ai-collaborator-journey.md` (full design history, blog-ready);
+  architecture spec §12/§17 updated to the two-component + progressive-disclosure design and
+  Phase 3/4 marked implemented; `docs/deployment/production-isolation-plan.md` for the
+  `ecs_fargate` path.
+- All work merged to `main`. API suite 261 passed; live AI suite 48 passed; web build + e2e pass.
+
 ## What does not exist yet
 
 - External LLM-assisted report review is not invoked yet; reports include
@@ -334,11 +366,18 @@ UX polish close-out).
 
 ## Next task
 
-**Phase 3 is complete.**
+**All phases complete and merged to `main`.** No active build task. Candidate-facing,
+employer, and admin flows are working on the hosted pilot.
 
-Phase 3 (proctoring signals) is implemented and validated. All e2e tests pass.
-The `phase-3-proctoring` branch contains all Phase 3 work (Tasks 03 and 04)
-and is ready to merge to main.
+Optional follow-ups (not blocking the pilot):
+- Production execution isolation: move hosted execution from `direct` to `ecs_fargate`
+  (`docs/deployment/production-isolation-plan.md`).
+- Local snapshots via S3 (needs an admin-created dev bucket + CORS), or keep the inline
+  data-URL fallback that already works locally.
+- Optional `gpt-5` generator support (needs `max_completion_tokens` + a larger budget); the
+  pilot runs on `gpt-4o`.
+
+Phase 3 (proctoring) and Phase 4 (super admin portal) are implemented, validated, and merged.
 
 Phase 2 historical reference: see `docs/development/changes.md` for the full session-by-session log. Phase 2 final hosted validation (2026-06-18) passed with API tests 38 passed, worker tests 22 passed, web typecheck/lint/build passed, Playwright e2e 2 passed/1 skipped, and a full browser-level attempt (public tests → submission → hidden evaluation → report generation → report rendering) working on Render without browser console errors.
 
