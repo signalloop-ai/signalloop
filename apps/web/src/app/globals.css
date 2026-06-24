@@ -543,7 +543,8 @@ button:disabled {
 
 .rules,
 .assistant-chat {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   padding: 14px;
 }
@@ -573,13 +574,13 @@ button:disabled {
 
 .assistant-chat {
   flex: 1;
-  grid-template-rows: minmax(0, 1fr) auto auto auto;
   min-height: 0;
   overflow: hidden;
 }
 
 .chat-messages {
   display: grid;
+  flex: 1;
   gap: 10px;
   min-height: 0;
   overflow: auto;
