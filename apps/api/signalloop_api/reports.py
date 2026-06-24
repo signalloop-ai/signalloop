@@ -834,6 +834,18 @@ def _build_proctoring_signals(
                     pass
         except Exception:
             pass
+    elif snapshot_events:
+        # Local dev: snapshots stored as inline data URLs (no S3 configured)
+        for ev in snapshot_events:
+            meta = ev.event_metadata or {}
+            data_url = meta.get("data_url")
+            if not data_url:
+                continue
+            snapshots_out.append({
+                "timestamp": ev.occurred_at.isoformat() if ev.occurred_at else None,
+                "trigger": meta.get("trigger", "periodic"),
+                "url": data_url,
+            })
 
     return {
         "webcam_consented": attempt.webcam_consent,
