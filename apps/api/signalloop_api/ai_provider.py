@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Protocol
 
 import httpx
@@ -18,6 +19,9 @@ from signalloop_api.ai_policy import (
     redirect_message_for_tag,
 )
 from signalloop_api.config import settings
+
+
+logger = logging.getLogger("signalloop_api.ai_provider")
 
 
 class AIProvider(Protocol):
@@ -137,7 +141,12 @@ class OpenAIProvider:
             json=payload,
             timeout=30,
         )
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            # Surface the real OpenAI error (e.g. unknown/forbidden model) instead of a bare
+            # status code, so it shows up in logs.
+            raise RuntimeError(f"OpenAI API {resp.status_code} for model '{model}': {resp.text[:400]}") from exc
         return str(resp.json()["choices"][0]["message"]["content"]).strip()
 
     def evaluate(
@@ -180,6 +189,7 @@ class OpenAIProvider:
             clf = parse_classifier_response(raw_classification, message, recent_messages)
         except Exception:
             # Network/API failure -> degraded, lenient pattern fallback.
+            logger.exception("AI classifier call failed (model=%s); using pattern fallback", self.classifier_model)
             decision = fallback_classify(message, recent_messages)
             clf = ClassifierDecision(
                 allowed=decision.allowed,
@@ -204,6 +214,7 @@ class OpenAIProvider:
                 GENERATOR_PROMPT, user_content, self.generator_model, max_tokens=350
             )
         except Exception:
+            logger.exception("AI generator call failed (model=%s)", self.generator_model)
             response_text = "I could not generate a response right now."
 
         return AIDecision(allowed=True, policy_tags=[], message=response_text)

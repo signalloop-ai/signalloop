@@ -92,7 +92,7 @@ class Settings:
         self.s3_bucket = getenv("S3_BUCKET") or self.signalloop_run_bucket
         self.snapshot_interval_seconds = parse_int(getenv("SNAPSHOT_INTERVAL_SECONDS"), default=300)
         self.openai_api_key = getenv("OPENAI_API_KEY")
-        self.openai_model = getenv("OPENAI_MODEL", "gpt-5")
+        self.openai_model = getenv("OPENAI_MODEL", "gpt-4o")
         self.openai_classifier_model = getenv("OPENAI_CLASSIFIER_MODEL", "gpt-4o-mini")
         self.clerk_secret_key = getenv("CLERK_SECRET_KEY")
         self.environment = getenv("SIGNALLOOP_ENV", "local")
