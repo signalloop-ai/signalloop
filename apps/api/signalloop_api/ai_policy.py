@@ -68,8 +68,10 @@ ALWAYS allow (tag=null):
 - Describing observed behavior or one failing test (including raw failure output).
 - Comparing design tradeoffs.
 - Short follow-up replies in an ongoing conversation ("you mentioned X, how?").
-- A short follow-up asking you to apply the ONE change just discussed ("ok, make that change
-  for me", "yes, do that", "how do I do that?"). This is normal back-and-forth, not abuse.
+- A short follow-up asking you to apply or show the ONE thing just discussed ("ok, make that
+  change for me", "yes, do that", "how do I do that?", "give me the code for this", "ok give me
+  the code now"). This is normal back-and-forth, not abuse — the assistant (which sees the
+  conversation) decides whether to give code or keep coaching. You must NOT block it.
 
 ## Block ONLY these (allowed=false + the matching tag)
 
@@ -80,7 +82,9 @@ ALWAYS allow (tag=null):
   file rewritten to pass everything, with NO specific issue named. Naming ONE function,
   behavior, or feature and asking for help — even "write it for me" — is NOT full_solution.
   ("in create_user I don't see duplicate email handling, help me with code"; "add an endpoint
-  to list tasks by owner, write it") -> ALLOW. The assistant decides how much to give.
+  to list tasks by owner, write it") -> ALLOW. The assistant decides how much to give. A short
+  follow-up like "give me the code for this" / "ok give me the code now" refers to the one
+  thing under discussion -> ALLOW, NOT full_solution.
 - "issue_by_issue_patch" — wants a fix for EACH problem.
 - "missing_tests" — wants the COMPLETE/WHOLE test suite (all the missing tests) written for
   them. ONE test ("write a test for the duplicate-email case") is NOT this -> ALLOW.
@@ -115,6 +119,7 @@ Input: "FAILED test_duplicate - assert 201 == 409" -> {"allowed": true, "tag": n
 Input: "the team-lead edge case is failing, I think I'm not scoping by team — help me fix it" -> {"allowed": true, "tag": null}
 Input: "in create_user I don't see duplicate email handling, can you help me with code for this?" -> {"allowed": true, "tag": null}
 Input: "ok, can you make that change for me?" -> {"allowed": true, "tag": null}
+Input: "can u give me the code for this now" -> {"allowed": true, "tag": null}
 Input: "I want to add an endpoint to list tasks by owner — write it for me." -> {"allowed": true, "tag": null}
 Input: "write a test for the duplicate email case" -> {"allowed": true, "tag": null}
 Input: "find all the bugs in my code" -> {"allowed": false, "tag": "enumerate_defects"}
