@@ -114,17 +114,17 @@ function ScoreRing({ score, max }: { score: number; max: number }) {
   const r = 38;
   const circ = 2 * Math.PI * r;
   const dash = pct * circ;
-  const color = pct >= 0.7 ? "#0f766e" : pct >= 0.4 ? "#d97706" : "#dc2626";
+  const color = pct >= 0.7 ? "#10b981" : pct >= 0.4 ? "#f59e0b" : "#ef4444";
   return (
     <svg width="96" height="96" viewBox="0 0 96 96" aria-hidden="true">
-      <circle cx="48" cy="48" r={r} fill="none" stroke="#e8edf3" strokeWidth="10" />
+      <circle cx="48" cy="48" r={r} fill="none" stroke="#243357" strokeWidth="10" />
       <circle
         cx="48" cy="48" r={r} fill="none" stroke={color} strokeWidth="10"
         strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
         transform="rotate(-90 48 48)"
       />
-      <text x="48" y="44" textAnchor="middle" fontSize="22" fontWeight="700" fill="#18212f">{score}</text>
-      <text x="48" y="62" textAnchor="middle" fontSize="12" fill="#607083">/ {max}</text>
+      <text x="48" y="44" textAnchor="middle" fontSize="22" fontWeight="700" fill="#eef2ff" fontFamily="var(--font-mono)">{score}</text>
+      <text x="48" y="62" textAnchor="middle" fontSize="12" fill="#7c91b8" fontFamily="var(--font-mono)">/ {max}</text>
     </svg>
   );
 }

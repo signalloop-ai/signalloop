@@ -44,6 +44,18 @@ Core flow:
 
 Candidate onboarding, workspace UI, Monaco editor, file tree, test output panel, AI assistant panel, structured Submission Review, employer report UI.
 
+The UI uses a single dark design language derived from the Calibr reference — see
+`docs/design/calibr-design-language.md` for tokens, typography, and component patterns. The
+design tokens live in `apps/web/src/app/globals.css` `:root` (dark surfaces `--bg0..bg4`,
+borders `--b0..b2`, text `--t0..t2`, and semantic accent pairs), with legacy aliases so every
+class resolves to the dark palette. The employer portal (`/employer`) is an app shell with a
+left sidebar (Overview / Assessments / Candidates / Reports + Settings / Help & docs) and
+client-side view switching. The Assessments view shows the single live coding module plus a
+"Coming soon" roadmap of unsupported assessment types (preview only — coding is the only
+supported module). The admin portal and evidence report reuse the same tokens; Monaco runs in
+`vs-dark`. The Clerk sign-in modal and UserButton keep Clerk's default readable surface with
+only the primary action tinted to the brand blue.
+
 Candidate IDE enhancements may include syntax diagnostics, public-test-output links,
 color-coded public test output, and file indicators. These features must use only
 candidate-visible files and public test output; hidden tests and evaluator artifacts must

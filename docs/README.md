@@ -26,6 +26,8 @@ Before making implementation changes, read:
 - `assessment/` - assessment design and evaluation documentation.
   - `assessment/fastapi-task-api-advanced-v1.md` - advanced FastAPI pack specification.
     Implemented at `assessment_packs/fastapi_task_api_advanced_v1/`.
+- `design/` - UI design language. `calibr-design-language.md` is the dark design system
+  (tokens, typography, component patterns) shared by the candidate, employer, and admin UIs.
 - `decisions/` - architecture decision records.
 - `prompts/` - constrained AI collaborator policy.
 - `reports/` - Engineering Evidence Report structure.

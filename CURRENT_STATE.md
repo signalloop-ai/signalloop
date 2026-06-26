@@ -27,6 +27,62 @@ Phase 2 is complete. All 11 planned Phase 2 tasks are implemented, locally valid
 and deployed to Render. The current state reflects the June 2026 UI polish session which
 also switched hosted execution to `DirectExecutionProvider` (`EXECUTION_BACKEND=direct`).
 
+## Settled state after June 2026 Calibr dark redesign
+
+- **New design language** derived from the Calibr reference UI is documented in
+  `docs/design/calibr-design-language.md` (dark navy palette, Inter + JetBrains Mono,
+  component patterns, and the supported-vs-unsupported product mapping).
+- **Theme flipped light → dark in one place.** `apps/web/src/app/globals.css` `:root` now
+  holds the Calibr dark tokens (`--bg0..bg4`, `--b0..b2`, `--t0..t2`, semantic fg/bg pairs)
+  plus legacy aliases (`--bg`, `--panel`, `--accent`, …) so existing class selectors resolve
+  to dark values. All raw-hex selectors were remapped to tokens. Score thresholds:
+  ≥80 green, 60–79 amber, <60 red. Applies to employer, admin, evidence report, and the
+  candidate workspace (Monaco was already `vs-dark`).
+- **Fonts:** Inter + JetBrains Mono loaded via `<link>` in `layout.tsx`; all numeric values
+  (scores, counts, timers) use `var(--font-mono)`.
+- **Brand logo** recolored from teal (`#0f766e`/`#5eead4`) to the blue/cyan accent
+  (`#3b82f6`/`#22d3ee`) across employer, admin, report, and candidate pages.
+- **Employer "Build assessment" flow** restructured to the Calibr layout: a single
+  "Coding challenge (Python)" module card with a **Basic/Advanced** level selector
+  (mapped to `standard_v2` / `advanced_v1`), plus a right-hand **Assessment summary** panel
+  (Modules / Total time tiles) holding the candidate email, **Timing enforcement**
+  (Strict = timed/hard-cutoff vs Untimed; "Soft limit" intentionally dropped), evaluator
+  feedback, and Send invite. The Calibr "Score visibility" control is intentionally absent
+  (not supported). Other Calibr modules (system design, SQL, psychometric, etc.) are not
+  offered — coding is the only module.
+- **Clerk sign-in modal + UserButton popover** keep Clerk's default (readable) light
+  surface with only `colorPrimary` tinted to our blue. Forcing a dark `colorBackground`
+  (and Clerk's `dark` base theme, which did not apply in this version) made the modal text
+  and the "Continue with Google" button invisible — both were removed. Verified in-browser:
+  the sign-in modal renders with a clearly visible Google button. `@clerk/themes` is not a
+  dependency.
+- **Employer portal restructured into the Calibr app shell**: fixed top bar + left
+  sidebar with a Workspace nav (Overview, Assessments, Candidates, Reports) and an Account
+  section (Settings, Help & docs — placeholders). Client-side view switching via `nav`
+  state, no routing change.
+  - **Overview**: four colored stat tiles (total/submitted/in-progress/invited) + How-it-works
+    + recent-activity feed.
+  - **Assessments**: the live "Coding challenge" card (Basic/Advanced) + send panel, plus a
+    "More assessment types — Coming soon" roadmap grid (Debugging, System design, AI & LLM,
+    SQL, Logical reasoning, Psychometric, Communication) shown as non-selectable preview
+    cards with per-module accent icons. These remain unsupported — they only advertise the
+    roadmap.
+  - **Candidates**: filterable (All/Submitted/In progress/Invited) attempt table.
+  - **Reports**: submitted attempts with report links.
+- **Local full stack confirmed running** for manual testing: API (`uvicorn` on `:8015` with
+  local Postgres, migrations current) + web (`:3000`). With the API down, the employer page
+  shows "Failed to fetch" and counts stay at 0 — that was the cause of the
+  "counts not incrementing / Send invite does nothing / candidate data not updating" reports,
+  not a frontend bug. Send invite verified working (count incremented, invite URL generated).
+- **Verification:** web `tsc --noEmit` clean and `next build` passing. Playwright e2e:
+  **30 passed / 2 skipped** (the two live specs auto-skip without API tokens) with
+  `--workers=1`. The employer create-invite e2e was updated for the new segmented controls
+  (level/timing/evaluator are now `role="group"` buttons; submit is "Send invite"; the email
+  input carries `aria-label="Candidate email"`). Employer dashboard, candidate IDE (populated,
+  `vs-dark` Monaco), and evidence report were all visually confirmed in-browser in the dark
+  theme. Pre-existing lint findings (set-state-in-effect, snapshot exhaustive-deps) are
+  unchanged; one new no-page-custom-font warning from the font `<link>`.
+
 ## Last completed phase
 
 Phase 4: Super Admin Portal (roster, employer detail, report drill-through).

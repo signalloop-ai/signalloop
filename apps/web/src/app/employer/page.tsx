@@ -1,7 +1,11 @@
 "use client";
 
 import { SignInButton, UserButton, useAuth, useUser } from "@clerk/nextjs";
-import { ChevronDown, ClipboardCopy, FileText, HelpCircle, Info, Loader2, LogIn, Plus, ShieldCheck, X } from "lucide-react";
+import {
+  Activity, BarChart3, BookOpen, Brain, Bug, ChevronDown, ClipboardCopy, ClipboardList, Clock, Code2,
+  Database, ExternalLink, FileText, HelpCircle, Info, Languages, LayoutDashboard, Loader2, LogIn,
+  Network, Plus, Puzzle, Settings, ShieldCheck, UserCircle, Users, X,
+} from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -85,6 +89,20 @@ const ASSESSMENT_INFO = {
   },
 } as const;
 
+// ── Roadmap module types (shown as "Coming soon" — not yet supported) ──────────
+// Coding is the only live module today; these preview what is planned so employers
+// can see the direction. They are not selectable.
+
+const COMING_SOON_MODULES = [
+  { name: "Debugging & code review", icon: Bug, color: "var(--red)", bg: "var(--red-bg)", tags: ["Bug tracing", "Root cause"], desc: "Real codebases with planted bugs. Tests the ability to read, trace, and fix unfamiliar code under time pressure." },
+  { name: "System design", icon: Network, color: "var(--purple)", bg: "var(--purple-bg)", tags: ["Architecture", "Scalability"], desc: "Architecture and scalability questions probed adaptively. Tests distributed-systems depth and trade-off reasoning." },
+  { name: "AI & LLM awareness", icon: Brain, color: "var(--cyan)", bg: "var(--cyan-bg)", tags: ["ML fundamentals", "Prompt design"], desc: "Conceptual ML, prompt engineering, and responsible AI use beyond surface-level familiarity." },
+  { name: "SQL & data querying", icon: Database, color: "var(--orange)", bg: "var(--orange-bg)", tags: ["Queries", "Optimisation"], desc: "Write, optimise, and debug SQL against realistic schemas, from simple joins to multi-CTE query planning." },
+  { name: "Logical reasoning", icon: Puzzle, color: "var(--amber)", bg: "var(--amber-bg)", tags: ["Patterns", "Deduction"], desc: "Abstract pattern recognition and structured analytical thinking with adaptive branching." },
+  { name: "Psychometric profile", icon: UserCircle, color: "var(--green)", bg: "var(--green-bg)", tags: ["OCEAN", "Values fit"], desc: "Big Five and situational-judgement tests calibrated to engineering role archetypes." },
+  { name: "Communication & language", icon: Languages, color: "var(--indigo)", bg: "var(--indigo-bg)", tags: ["Writing", "Clarity"], desc: "Written clarity, business English, and language comprehension calibrated to proficiency levels." },
+] as const;
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function recommendationLabel(value: string | null): string {
@@ -111,10 +129,10 @@ function ScoreBadge({ score }: { score: number | null }) {
 
 const Logo = () => (
   <svg className="topbar-logo" width="30" height="30" viewBox="0 0 30 30" fill="none" aria-label="SignalLoop">
-    <rect width="30" height="30" rx="7" fill="#0f766e" />
+    <rect width="30" height="30" rx="7" fill="#3b82f6" />
     <path d="M15 6C19.97 6 24 10.03 24 15C24 19.97 19.97 24 15 24C10.5 24 6.8 20.7 6.1 16.4" stroke="white" strokeWidth="2.3" strokeLinecap="round" />
     <path d="M4.5 14.5L6.2 17.2L9 15.5" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" />
-    <circle cx="15" cy="6" r="2" fill="#5eead4" />
+    <circle cx="15" cy="6" r="2" fill="#22d3ee" />
   </svg>
 );
 
@@ -315,11 +333,16 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
   const [createdInviteUrl, setCreatedInviteUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [showAssessmentDetail, setShowAssessmentDetail] = useState(false);
+  const [nav, setNav] = useState<"Overview" | "Assessments" | "Candidates" | "Reports">("Overview");
+  const [filter, setFilter] = useState<"All" | "Submitted" | "In progress" | "Invited">("All");
 
   const emailValid = useMemo(() => {
     const trimmed = candidateEmail.trim();
     return trimmed.length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
   }, [candidateEmail]);
+
+  const recommendedMinutes = assessmentLevel === "advanced" ? 120 : 90;
+  const totalTime = timingMode === "timed" ? durationMinutes : recommendedMinutes;
 
   const submittedCount = useMemo(
     () => attempts.filter((attempt) => attempt.status === "submitted").length,
@@ -327,6 +350,38 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
   );
   const reportCount = useMemo(
     () => attempts.filter((attempt) => attempt.report_id !== null).length,
+    [attempts],
+  );
+
+  const isInProgress = (status: string) =>
+    status === "opened" || status === "in_progress" || status === "started";
+
+  const inProgressCount = useMemo(
+    () => attempts.filter((attempt) => isInProgress(attempt.status)).length,
+    [attempts],
+  );
+  const invitedCount = useMemo(
+    () => attempts.filter((attempt) => attempt.status === "created").length,
+    [attempts],
+  );
+
+  function statusInfo(status: string): { label: string; cls: string; dot: string } {
+    if (status === "submitted") return { label: "Submitted", cls: "ready", dot: "var(--green)" };
+    if (status === "expired") return { label: "Expired", cls: "error", dot: "var(--red)" };
+    if (isInProgress(status)) return { label: "In progress", cls: "info", dot: "var(--blue)" };
+    if (status === "created") return { label: "Invited", cls: "warn", dot: "var(--amber)" };
+    return { label: status, cls: "warn", dot: "var(--t2)" };
+  }
+
+  const filteredAttempts = useMemo(() => {
+    if (filter === "All") return attempts;
+    if (filter === "Submitted") return attempts.filter((a) => a.status === "submitted");
+    if (filter === "Invited") return attempts.filter((a) => a.status === "created");
+    return attempts.filter((a) => isInProgress(a.status));
+  }, [attempts, filter]);
+
+  const reportAttempts = useMemo(
+    () => attempts.filter((a) => a.status === "submitted"),
     [attempts],
   );
 
@@ -376,203 +431,425 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
     }
   }
 
+  const navItems = [
+    { key: "Overview", icon: LayoutDashboard },
+    { key: "Assessments", icon: ClipboardList },
+    { key: "Candidates", icon: Users },
+    { key: "Reports", icon: BarChart3 },
+  ] as const;
+
+  const tableHead = (
+    <div className="attempt-row table-head">
+      <span>Candidate</span>
+      <span>Status</span>
+      <span>Configuration</span>
+      <span>Score</span>
+      <span>Action</span>
+    </div>
+  );
+
+  const attemptRow = (attempt: EmployerAttemptSummary) => {
+    const s = statusInfo(attempt.status);
+    return (
+      <div className="attempt-row" key={attempt.attempt_id}>
+        <div className="attempt-email-meta">
+          <span>{attempt.candidate_email ?? "No email"}</span>
+          <span className="attempt-sent-at">{timeAgo(attempt.created_at)}</span>
+        </div>
+        <span>
+          <span className={`status-pill ${s.cls}`}>{s.label}</span>
+          <span className="attempt-level-tag">{attempt.assessment_level}</span>
+        </span>
+        <span className="attempt-config">
+          {attempt.timing_mode === "timed" ? `Timed ${attempt.duration_minutes} min` : "Untimed"}
+          {" · "}
+          {attempt.evaluator_feedback_mode}
+        </span>
+        <span>
+          {attempt.recommendation ? (
+            <span className="attempt-recommendation">{recommendationLabel(attempt.recommendation)}</span>
+          ) : (
+            <ScoreBadge score={attempt.score_total} />
+          )}
+        </span>
+        <span className="attempt-actions">
+          <a
+            className="command-button secondary"
+            href={attempt.invite_url}
+            target="_blank"
+            rel="noreferrer"
+            title="Open the candidate's assessment link"
+          >
+            <ExternalLink size={15} aria-hidden="true" />
+            Assessment
+          </a>
+          {attempt.status === "submitted" ? (
+            <Link className="command-button secondary" href={`/employer/reports/${attempt.attempt_id}`}>
+              <FileText size={16} aria-hidden="true" />
+              {attempt.report_id ? "View report" : "Generate"}
+            </Link>
+          ) : null}
+        </span>
+      </div>
+    );
+  };
+
   return (
-    <main className="employer-page">
-      <header className="employer-header">
-        <div className="employer-brand">
+    <div className="portal-shell">
+      <header className="portal-topbar">
+        <div className="portal-topbar-brand">
           <Logo />
           <div>
             <h1>SignalLoop</h1>
-            <p>Manage candidate assessments, track progress, and review AI-assisted evidence reports.</p>
+            <p>Employer workspace</p>
           </div>
         </div>
         <UserButton />
       </header>
-
-      <section className="metric-row">
-        <div className="metric">
-          <span>Total invites</span>
-          <strong>{attempts.length}</strong>
-        </div>
-        <div className="metric">
-          <span>Submitted</span>
-          <strong>{submittedCount}</strong>
-        </div>
-        <div className="metric">
-          <span>Reports ready</span>
-          <strong>{reportCount}</strong>
-        </div>
-      </section>
-
-      <HowItWorks />
-
-      <section className="employer-section">
-        <div className="section-title">
-          <h2>Create invite</h2>
-        </div>
-        <form className="invite-form" onSubmit={submitInvite}>
-          {/* Row 1: email + submit button side by side */}
-          <label htmlFor="candidate-email">Candidate email</label>
-          <input
-            id="candidate-email"
-            type="email"
-            required
-            value={candidateEmail}
-            onChange={(event) => setCandidateEmail(event.target.value)}
-            placeholder="candidate@example.com"
-            aria-describedby={candidateEmail && !emailValid ? "email-error" : undefined}
-          />
-          <button className="command-button primary" disabled={creating || !emailValid} type="submit">
-            {creating
-              ? <><Loader2 size={15} className="spin" aria-hidden="true" /> Creating…</>
-              : <><Plus size={17} aria-hidden="true" /> Create invite</>
-            }
-          </button>
-          {candidateEmail && !emailValid ? (
-            <span id="email-error" className="submission-error" style={{ gridColumn: "1 / -1", marginTop: 0 }}>
-              Enter a valid email address
-            </span>
-          ) : null}
-
-          {/* Invite URL appears immediately after the email row */}
-          {createdInviteUrl ? (
-            <div className="invite-result" style={{ gridColumn: "1 / -1" }}>
-              <input
-                className="invite-url-input"
-                readOnly
-                value={createdInviteUrl}
-                onFocus={(e) => e.currentTarget.select()}
-                aria-label="Invite URL"
-              />
-              <button type="button" className="command-button secondary" onClick={copyInviteUrl}>
-                <ClipboardCopy size={16} aria-hidden="true" />
-                {copied ? "Copied!" : "Copy"}
-              </button>
-            </div>
-          ) : null}
-
-          {/* Row 2: assessment select + Details button side by side */}
-          <label htmlFor="assessment-level">Assessment</label>
-          <select
-            id="assessment-level"
-            value={assessmentLevel}
-            onChange={(event) => {
-              const nextLevel = event.target.value as InviteConfiguration["assessmentLevel"];
-              setAssessmentLevel(nextLevel);
-              setDurationMinutes(nextLevel === "advanced" ? 120 : 90);
-            }}
-          >
-            <option value="standard">Standard FastAPI v2 — 3 bugs · 4 hidden · 2 enhancements · 90 min</option>
-            <option value="advanced">Advanced FastAPI v1 — 4 bugs · 3 hidden · 2 enhancements · 120 min</option>
-          </select>
-          <button
-            type="button"
-            className="form-action-btn"
-            onClick={() => setShowAssessmentDetail(true)}
-          >
-            <Info size={14} aria-hidden="true" />
-            Details
-          </button>
-
-          {/* Remaining selects span both columns */}
-          <label htmlFor="timing-mode">Timing</label>
-          <select
-            id="timing-mode"
-            style={{ gridColumn: "1 / -1" }}
-            value={timingMode}
-            onChange={(event) => setTimingMode(event.target.value as InviteConfiguration["timingMode"])}
-          >
-            <option value="untimed">Untimed — recommended time shown, not enforced</option>
-            <option value="timed">Timed — hard cutoff, auto-submit on expiry</option>
-          </select>
-          {timingMode === "timed" ? (
-            <>
-              <label htmlFor="duration-minutes">Duration</label>
-              <select
-                id="duration-minutes"
-                style={{ gridColumn: "1 / -1" }}
-                value={durationMinutes}
-                onChange={(event) => setDurationMinutes(Number(event.target.value))}
-              >
-                <option value={60}>60 minutes</option>
-                <option value={90}>90 minutes</option>
-                <option value={120}>120 minutes</option>
-                <option value={150}>150 minutes</option>
-              </select>
-            </>
-          ) : null}
-
-          <label htmlFor="evaluator-feedback-mode">Evaluator feedback</label>
-          <select
-            id="evaluator-feedback-mode"
-            style={{ gridColumn: "1 / -1" }}
-            value={evaluatorFeedbackMode}
-            onChange={(event) => setEvaluatorFeedbackMode(event.target.value as InviteConfiguration["evaluatorFeedbackMode"])}
-          >
-            <option value="strict">Strict — hidden results in employer report only</option>
-            <option value="guided">Guided — candidate sees aggregate pass/fail counts (no test details)</option>
-          </select>
-        </form>
-
-        {error ? <p className="submission-error">{error}</p> : null}
-      </section>
-
-      <section className="employer-section">
-        <div className="section-title">
-          <h2>Candidate attempts</h2>
-          {loading ? <span className="autosave-chip">Refreshing…</span> : null}
-        </div>
-        <div className="attempt-table">
-          <div className="attempt-row table-head">
-            <span>Candidate</span>
-            <span>Status</span>
-            <span>Configuration</span>
-            <span>Score</span>
-            <span>Action</span>
-          </div>
-          {attempts.map((attempt) => (
-            <div className="attempt-row" key={attempt.attempt_id}>
-              <div className="attempt-email-meta">
-                <span>{attempt.candidate_email ?? "No email"}</span>
-                <span className="attempt-sent-at">{timeAgo(attempt.created_at)}</span>
-              </div>
-              <span>
-                <span className={`status-pill ${attempt.status === "submitted" ? "ready" : attempt.status === "expired" ? "error" : "warn"}`}>
-                  {attempt.status === "created" ? "Invited"
-                    : attempt.status === "opened" || attempt.status === "in_progress" || attempt.status === "started" ? "In progress"
-                    : attempt.status === "submitted" ? "Submitted"
-                    : attempt.status === "expired" ? "Expired"
-                    : attempt.status}
-                </span>
-                <span className="attempt-level-tag">{attempt.assessment_level}</span>
-              </span>
-              <span className="attempt-config">
-                {attempt.timing_mode === "timed" ? `Timed ${attempt.duration_minutes} min` : "Untimed"}
-                {" · "}
-                {attempt.evaluator_feedback_mode}
-              </span>
-              <span>
-                {attempt.recommendation ? (
-                  <span className="attempt-recommendation">{recommendationLabel(attempt.recommendation)}</span>
-                ) : (
-                  <ScoreBadge score={attempt.score_total} />
-                )}
-              </span>
-              {attempt.status === "submitted" ? (
-                <Link className="command-button secondary" href={`/employer/reports/${attempt.attempt_id}`}>
-                  <FileText size={16} aria-hidden="true" />
-                  {attempt.report_id ? "View report" : "Generate"}
-                </Link>
-              ) : (
-                <span className="empty-state">Awaiting submission</span>
-              )}
-            </div>
+      <div className="portal-body">
+        <nav className="portal-sidebar">
+          <div className="portal-nav-label">Workspace</div>
+          {navItems.map(({ key, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              className={`portal-nav-item${nav === key ? " active" : ""}`}
+              onClick={() => setNav(key)}
+            >
+              <Icon size={16} aria-hidden="true" />
+              {key}
+            </button>
           ))}
-          {!attempts.length && !loading ? (
-            <p className="empty-state">No candidates invited yet — create an invite above to get started.</p>
-          ) : null}
-        </div>
-      </section>
+          <div className="portal-nav-spacer" />
+          <div className="portal-nav-label">Account</div>
+          <button type="button" className="portal-nav-item" title="Coming soon">
+            <Settings size={16} aria-hidden="true" />
+            Settings
+          </button>
+          <button type="button" className="portal-nav-item" title="Coming soon">
+            <BookOpen size={16} aria-hidden="true" />
+            Help &amp; docs
+          </button>
+        </nav>
+        <main className="portal-content">
+          <div className="portal-content-inner">
+
+            {nav === "Overview" ? (
+              <>
+                <div className="view-head">
+                  <h2>Overview</h2>
+                  <p>Workspace activity at a glance.</p>
+                </div>
+                <section className="metric-row" style={{ marginBottom: 24 }}>
+                  <div className="metric"><span>Total candidates</span><strong style={{ color: "var(--blue)" }}>{attempts.length}</strong></div>
+                  <div className="metric"><span>Submitted</span><strong style={{ color: "var(--green)" }}>{submittedCount}</strong></div>
+                  <div className="metric"><span>In progress</span><strong style={{ color: "var(--amber)" }}>{inProgressCount}</strong></div>
+                  <div className="metric"><span>Invited</span><strong style={{ color: "var(--purple)" }}>{invitedCount}</strong></div>
+                </section>
+                <HowItWorks />
+                <div className="section-title" style={{ margin: "24px 0 12px" }}>
+                  <h2 style={{ fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
+                    <Activity size={16} aria-hidden="true" /> Recent activity
+                  </h2>
+                </div>
+                {attempts.length ? (
+                  <div className="activity-list">
+                    {attempts.slice(0, 8).map((a) => {
+                      const s = statusInfo(a.status);
+                      return (
+                        <div className="activity-row" key={a.attempt_id}>
+                          <span className="activity-dot" style={{ background: s.dot }} />
+                          <span className="activity-text"><strong>{a.candidate_email ?? "Candidate"}</strong> — {s.label.toLowerCase()}</span>
+                          <span className="activity-time">{timeAgo(a.created_at)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="empty-state">No activity yet — create an invite on the Assessments page.</p>
+                )}
+              </>
+            ) : null}
+
+            {nav === "Assessments" ? (
+              <>
+                <div className="view-head">
+                  <h2>Build assessment</h2>
+                  <p>Coding is the only live module today. Pick a level and timing, then send an invite.</p>
+                </div>
+        <form className="build-grid" onSubmit={submitInvite}>
+          <div className="build-left">
+          {/* Left: the single supported module — Python coding challenge */}
+          <div className="mod-card">
+            <div className="mod-card-head">
+              <span className="mod-icon">
+                <Code2 size={18} aria-hidden="true" />
+              </span>
+              <div>
+                <p className="mod-title">Coding challenge</p>
+                <p className="mod-sub">Python · debug &amp; extend a FastAPI service</p>
+              </div>
+            </div>
+            <div className="mod-tags">
+              <span className="mod-tag">Debugging</span>
+              <span className="mod-tag">API design</span>
+              <span className="mod-tag">Pytest</span>
+            </div>
+            <p className="mod-desc">{ASSESSMENT_INFO[assessmentLevel].description}</p>
+            <div className="mod-divider" />
+            <div>
+              <div className="mod-row">
+                <span className="mod-row-label">
+                  <Code2 size={13} aria-hidden="true" /> Language
+                </span>
+                <span className="mod-time">Python</span>
+              </div>
+              <div className="mod-row">
+                <span className="mod-row-label">
+                  <Info size={13} aria-hidden="true" /> Level
+                </span>
+                <div className="seg" role="group" aria-label="Assessment level">
+                  {([
+                    ["standard", "Basic"],
+                    ["advanced", "Advanced"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={assessmentLevel === value ? "active" : undefined}
+                      onClick={() => {
+                        setAssessmentLevel(value);
+                        setDurationMinutes(value === "advanced" ? 120 : 90);
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="mod-row">
+                <span className="mod-row-label">
+                  <Clock size={13} aria-hidden="true" /> Recommended time
+                </span>
+                <span className="mod-time">{recommendedMinutes}m</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setShowAssessmentDetail(true)}
+            >
+              <Info size={14} aria-hidden="true" />
+              Assessment details
+            </button>
+          </div>
+
+          <div className="roadmap-label">More assessment types — coming soon</div>
+          <div className="module-grid">
+            {COMING_SOON_MODULES.map((m) => {
+              const Icon = m.icon;
+              return (
+                <div className="mod-card soon" key={m.name} aria-disabled="true">
+                  <div className="mod-card-head">
+                    <span
+                      className="mod-card-soonicon"
+                      style={{ background: m.bg, color: m.color, borderColor: m.color }}
+                    >
+                      <Icon size={18} aria-hidden="true" />
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p className="mod-title">{m.name}</p>
+                    </div>
+                    <span className="mod-soon-badge">Coming soon</span>
+                  </div>
+                  <div className="mod-tags">
+                    {m.tags.map((t) => <span className="mod-tag" key={t}>{t}</span>)}
+                  </div>
+                  <p className="mod-desc">{m.desc}</p>
+                </div>
+              );
+            })}
+          </div>
+          </div>
+
+          {/* Right: assessment summary + send invite (Calibr context panel) */}
+          <div className="build-summary">
+            <div>
+              <h3>Assessment summary</h3>
+              <p className="build-summary-sub">Active configuration</p>
+            </div>
+            <div className="summary-tiles">
+              <div className="summary-tile">
+                <div className="summary-tile-label">Modules</div>
+                <div className="summary-tile-value">1</div>
+                <div className="summary-tile-unit">selected</div>
+              </div>
+              <div className="summary-tile">
+                <div className="summary-tile-label">Total time</div>
+                <div className="summary-tile-value">{totalTime}</div>
+                <div className="summary-tile-unit">minutes</div>
+              </div>
+            </div>
+
+            <div className="build-divider" />
+
+            <div className="summary-field">
+              <span className="summary-field-label">Candidate email</span>
+              <input
+                id="candidate-email"
+                type="email"
+                required
+                value={candidateEmail}
+                onChange={(event) => setCandidateEmail(event.target.value)}
+                placeholder="candidate@company.com"
+                className="text-input"
+                aria-label="Candidate email"
+                aria-describedby={candidateEmail && !emailValid ? "email-error" : undefined}
+              />
+              {candidateEmail && !emailValid ? (
+                <span id="email-error" className="submission-error" style={{ marginTop: 0 }}>
+                  Enter a valid email address
+                </span>
+              ) : null}
+            </div>
+
+            <div className="summary-field">
+              <span className="summary-field-label">Timing enforcement</span>
+              <div className="seg full" role="group" aria-label="Timing enforcement">
+                {([
+                  ["timed", "Strict"],
+                  ["untimed", "Untimed"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={timingMode === value ? "active" : undefined}
+                    onClick={() => {
+                      setTimingMode(value);
+                      if (value === "timed") setDurationMinutes(recommendedMinutes);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {timingMode === "timed" ? (
+              <div className="summary-field">
+                <span className="summary-field-label">Duration</span>
+                <select
+                  id="duration-minutes"
+                  value={durationMinutes}
+                  onChange={(event) => setDurationMinutes(Number(event.target.value))}
+                >
+                  <option value={60}>60 minutes</option>
+                  <option value={90}>90 minutes</option>
+                  <option value={120}>120 minutes</option>
+                  <option value={150}>150 minutes</option>
+                </select>
+              </div>
+            ) : null}
+
+            <div className="summary-field">
+              <span className="summary-field-label">Evaluator feedback</span>
+              <div className="seg full" role="group" aria-label="Evaluator feedback">
+                {([
+                  ["strict", "Strict"],
+                  ["guided", "Guided"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={evaluatorFeedbackMode === value ? "active" : undefined}
+                    onClick={() => setEvaluatorFeedbackMode(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button className="command-button primary" disabled={creating || !emailValid} type="submit">
+              {creating
+                ? <><Loader2 size={15} className="spin" aria-hidden="true" /> Creating…</>
+                : <><Plus size={17} aria-hidden="true" /> Send invite</>
+              }
+            </button>
+
+            {error ? <p className="submission-error" style={{ marginTop: 0 }}>{error}</p> : null}
+
+            {createdInviteUrl ? (
+              <div className="invite-result">
+                <input
+                  className="invite-url-input"
+                  readOnly
+                  value={createdInviteUrl}
+                  onFocus={(e) => e.currentTarget.select()}
+                  aria-label="Invite URL"
+                />
+                <button type="button" className="command-button secondary" onClick={copyInviteUrl}>
+                  <ClipboardCopy size={16} aria-hidden="true" />
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </form>
+              </>
+            ) : null}
+
+            {nav === "Candidates" ? (
+              <>
+                <div className="view-head">
+                  <h2>Candidates</h2>
+                  <p>All candidate attempts, scores, and status.</p>
+                </div>
+                <div className="filter-bar">
+                  {(["All", "Submitted", "In progress", "Invited"] as const).map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      className={`filter-pill${filter === f ? " active" : ""}`}
+                      onClick={() => setFilter(f)}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                  <span className="filter-count">
+                    {filteredAttempts.length} {filteredAttempts.length === 1 ? "candidate" : "candidates"}
+                    {loading ? " · refreshing…" : ""}
+                  </span>
+                </div>
+                <div className="attempt-table">
+                  {tableHead}
+                  {filteredAttempts.map((a) => attemptRow(a))}
+                  {!filteredAttempts.length && !loading ? (
+                    <p className="empty-state">No candidates in this view.</p>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+
+            {nav === "Reports" ? (
+              <>
+                <div className="view-head">
+                  <h2>Reports</h2>
+                  <p>Submitted attempts and generated evidence reports.</p>
+                </div>
+                <div className="attempt-table">
+                  {tableHead}
+                  {reportAttempts.map((a) => attemptRow(a))}
+                  {!reportAttempts.length ? (
+                    <p className="empty-state">No submitted attempts yet.</p>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+
+          </div>
+        </main>
+      </div>
 
       {showAssessmentDetail ? (
         <AssessmentDetailModal
@@ -580,7 +857,7 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
           onClose={() => setShowAssessmentDetail(false)}
         />
       ) : null}
-    </main>
+    </div>
   );
 }
 

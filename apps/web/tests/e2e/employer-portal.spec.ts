@@ -336,20 +336,29 @@ test("employer can sign in with Clerk, create an invite, and view a report", asy
   await page.goto("/employer");
 
   await expect(page.getByRole("heading", { name: "SignalLoop" })).toBeVisible({ timeout: 10_000 });
+  // Overview is the landing view; recent activity lists the existing candidate.
   await expect(page.getByText("candidate@example.com")).toBeVisible();
+
+  // Candidates view shows the attempt table with the recommendation.
+  await page.getByRole("button", { name: "Candidates" }).click();
   await expect(page.locator(".attempt-recommendation").filter({ hasText: "advance" })).toBeVisible();
 
+  // Build and send an invite from the Assessments view.
+  await page.getByRole("button", { name: "Assessments" }).click();
   await page.getByLabel("Candidate email").fill("new-candidate@example.com");
-  await page.getByLabel("Assessment").selectOption("advanced");
-  await page.getByLabel("Timing").selectOption("timed");
-  await page.getByLabel("Evaluator feedback").selectOption("guided");
-  await page.getByRole("button", { name: "Create invite" }).click();
+  await page.getByRole("group", { name: "Assessment level" }).getByRole("button", { name: "Advanced" }).click();
+  await page.getByRole("group", { name: "Timing enforcement" }).getByRole("button", { name: "Strict" }).click();
+  await page.getByRole("group", { name: "Evaluator feedback" }).getByRole("button", { name: "Guided" }).click();
+  await page.getByRole("button", { name: "Send invite" }).click();
   await expect(page.locator("input.invite-url-input")).toHaveValue("http://127.0.0.1:3000/invite/new-token");
-  await expect(page.getByText("new-candidate@example.com")).toBeVisible();
-  await expect(page.getByText("Timed 120 min · guided")).toBeVisible();
   expect(createPayload).not.toBeNull();
   const submittedPayload = createPayload as unknown as Record<string, unknown>;
   expect(submittedPayload.evaluator_feedback_mode).toBe("guided");
+
+  // The new candidate appears in the Candidates view.
+  await page.getByRole("button", { name: "Candidates" }).click();
+  await expect(page.getByText("new-candidate@example.com")).toBeVisible();
+  await expect(page.getByText("Timed 120 min · guided")).toBeVisible();
 
   await page.getByRole("link", { name: "View" }).nth(0).click();
   await expect(page.getByRole("heading", { name: "Evidence Report" })).toBeVisible();

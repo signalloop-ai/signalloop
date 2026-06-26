@@ -11,10 +11,10 @@ import { EvidenceReportView } from "../../../_components/EvidenceReportView";
 
 const Logo = () => (
   <svg className="topbar-logo" width="30" height="30" viewBox="0 0 30 30" fill="none" aria-label="SignalLoop">
-    <rect width="30" height="30" rx="7" fill="#0f766e" />
+    <rect width="30" height="30" rx="7" fill="#3b82f6" />
     <path d="M15 6C19.97 6 24 10.03 24 15C24 19.97 19.97 24 15 24C10.5 24 6.8 20.7 6.1 16.4" stroke="white" strokeWidth="2.3" strokeLinecap="round" />
     <path d="M4.5 14.5L6.2 17.2L9 15.5" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" />
-    <circle cx="15" cy="6" r="2" fill="#5eead4" />
+    <circle cx="15" cy="6" r="2" fill="#22d3ee" />
   </svg>
 );
 

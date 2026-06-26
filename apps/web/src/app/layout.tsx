@@ -9,6 +9,17 @@ export const metadata: Metadata = {
 
 const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
+// Clerk sign-in modal + UserButton popover. We keep Clerk's default (readable)
+// surface and only tint the primary action to our blue — forcing a dark
+// `colorBackground` here made the modal text and the "Continue with Google"
+// button invisible (Clerk's `dark` base theme did not apply in this version).
+const clerkAppearance = {
+  variables: {
+    colorPrimary: "#3b82f6",
+    borderRadius: "8px",
+  },
+} as const;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -18,8 +29,18 @@ export default function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       {clerkPublishableKey ? (
-        <ClerkProvider publishableKey={clerkPublishableKey}>{body}</ClerkProvider>
+        <ClerkProvider publishableKey={clerkPublishableKey} appearance={clerkAppearance}>
+          {body}
+        </ClerkProvider>
       ) : (
         body
       )}
