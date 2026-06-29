@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from signalloop_api.ai import router as ai_router
 from signalloop_api.admin import router as admin_router
+from signalloop_api.adaptive import router as adaptive_router
 from signalloop_api.attempts import router as attempts_router
 from signalloop_api.config import settings
 from signalloop_api.proctoring import router as proctoring_router
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(attempts_router)
+    app.include_router(adaptive_router)
     app.include_router(ai_router)
     app.include_router(submissions_router)
     app.include_router(reports_router)

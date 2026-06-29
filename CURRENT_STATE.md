@@ -2,11 +2,15 @@
 
 ## Project status
 
-**All phases are complete.** MVP phases 1–12 and the post-MVP enhancement workstreams —
-Phase 2 (Assessment System), Phase 3 (Proctoring), and Phase 4 (Super Admin Portal) — are
-implemented, validated, and merged to `main`. Local and hosted pilot are working: Render
-web/API, Supabase persistence, Clerk employer/admin auth, and candidate execution
-(`direct` on the hosted pilot; Docker worker locally; ECS/Fargate scaffold for production).
+MVP phases 1–12 and the post-MVP enhancement workstreams — Phase 2 (Assessment System),
+Phase 3 (Proctoring), and Phase 4 (Super Admin Portal) — are implemented, validated, and
+merged to `main`. Local and hosted pilot are working: Render web/API, Supabase persistence,
+Clerk employer/admin auth, and candidate execution (`direct` on the hosted pilot; Docker
+worker locally; ECS/Fargate scaffold for production).
+
+**Phase 5 (Role-Adaptive Assessment System) MVP is implemented locally.**
+Implementation docs live under
+`docs/enhancements/phase-5-role-adaptive-assessment/`.
 
 The AI collaborator was substantially redesigned post-MVP into a two-component architecture
 with progressive disclosure — see `docs/retrospectives/ai-collaborator-journey.md` for the
@@ -14,9 +18,50 @@ full design history, and `docs/prompts/ai-collaborator-policy.md` for the curren
 
 ## Current phase
 
-**No active phase — all complete.** Open follow-ups: production execution isolation
-(`ecs_fargate`, see `docs/deployment/production-isolation-plan.md`) and optional local S3 for
-snapshots. Earlier phase notes follow as historical record.
+**Last completed implementation workstream:** Phase 5 — Role-Adaptive Assessment System MVP.
+
+The Phase 5 MVP adds an adaptive planning layer before invite creation:
+
+- employer pastes or uploads role/JD requirements and optional candidate resume text,
+- system maps both into a versioned skill taxonomy,
+- system recommends a reviewable assessment blueprint,
+- employer approves the blueprint before sending an invite,
+- the existing candidate assessment flow remains unchanged,
+- blueprint-backed reports show role context, skill coverage, caveats, and follow-up probes.
+
+Core Phase 5 boundary: for v1, the role/JD determines the comparable core assessment. Resume
+data influences rationale, caveats, and follow-up probes, but does not automatically give
+different candidates for the same role different scored coding tasks. Current executable
+support remains limited to Standard FastAPI v2 and Advanced FastAPI v1; unsupported skills are
+shown explicitly as caveats/follow-up areas, not scored evidence.
+
+Phase 5 implemented:
+
+- static skill taxonomy in `apps/api/signalloop_api/assessment_taxonomy/skills.json`,
+- current module coverage in `apps/api/signalloop_api/assessment_taxonomy/module_coverage.json`,
+- strict taxonomy loader/validator,
+- deterministic skill extraction and matching,
+- role profiles, candidate profiles, and assessment blueprints,
+- approved blueprint -> invite creation,
+- nullable attempt blueprint link,
+- adaptive report context for blueprint-backed reports,
+- optional adaptive builder in the employer Assessments view.
+- adaptive builder document text extraction for TXT/MD, DOCX, and best-effort
+  text-based PDF uploads. Scanned PDFs are not OCR-supported.
+
+Validation:
+
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> 288 passed, 51 skipped.
+- `DATABASE_URL=sqlite:////tmp/signalloop_phase5_adaptive_migration_2.db UV_CACHE_DIR=.uv-cache uv run alembic upgrade head` -> passed.
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_assessment_taxonomy.py tests/test_adaptive_assessment.py -q` -> 27 passed.
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/web && npm run lint` -> passed with 4 known warnings.
+- `cd apps/web && npm run build` -> passed.
+- `cd apps/web && npm run test:e2e -- --workers=1` -> 33 passed, 2 skipped.
+
+Open follow-ups outside Phase 5: production execution isolation (`ecs_fargate`, see
+`docs/deployment/production-isolation-plan.md`) and optional local S3 for snapshots. Earlier
+phase notes follow as historical record.
 
 **Phase 4 is implemented.** The super admin portal is built and validated:
 recruitment list, per-employer operational summary, and drill-through to any

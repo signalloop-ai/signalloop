@@ -96,6 +96,23 @@ async function mockClerkSignedIn(page: Page): Promise<void> {
   });
 }
 
+function watchForDuplicateKeyWarnings(page: Page): string[] {
+  const duplicateKeyWarnings: string[] = [];
+  page.on("console", (message) => {
+    const text = message.text();
+    if (text.includes("Encountered two children with the same key")) {
+      duplicateKeyWarnings.push(text);
+    }
+  });
+  page.on("pageerror", (error) => {
+    const text = error.message;
+    if (text.includes("Encountered two children with the same key")) {
+      duplicateKeyWarnings.push(text);
+    }
+  });
+  return duplicateKeyWarnings;
+}
+
 const attempt = {
   attempt_id: 42,
   candidate_email: "candidate@example.com",
@@ -118,6 +135,90 @@ const attempt = {
   report_id: 9,
   recommendation: "advance",
   score_total: 82,
+};
+
+const adaptiveBlueprintWithDuplicateUnsupportedSkill = {
+  id: 501,
+  role_profile_id: 301,
+  candidate_profile_id: 401,
+  title: "Senior Backend Engineer Adaptive Backend Assessment",
+  assessment_pack_slug: "fastapi_task_api_advanced_v1",
+  assessment_level: "advanced",
+  timing_mode: "timed",
+  duration_minutes: 120,
+  evaluator_feedback_mode: "strict",
+  skill_mapping: {
+    role_skill_ids: ["backend.python", "backend.fastapi", "infra.kubernetes"],
+    candidate_skill_ids: ["backend.python", "backend.fastapi", "infra.kubernetes"],
+    required_overlap: ["backend.python", "backend.fastapi"],
+    required_gap: ["infra.kubernetes"],
+    extra_claimed: [],
+    unsupported_required: ["infra.kubernetes"],
+    unsupported_claimed: ["infra.kubernetes"],
+    unmapped_terms: [],
+  },
+  coverage: {
+    module_id: "fastapi_task_api_advanced_v1",
+    assessment_pack_slug: "fastapi_task_api_advanced_v1",
+    label: "Strong backend/API coverage with explicit unsupported caveats",
+    directly_tested: ["backend.fastapi", "backend.authorization", "backend.multi_tenancy"],
+    partially_tested: ["backend.reliability"],
+    not_tested: ["infra.kubernetes"],
+  },
+  rationale: [
+    "Advanced FastAPI is the strongest currently supported executable assessment for the matched backend/API skills.",
+  ],
+  follow_up_probes: [
+    {
+      source: "unsupported_required",
+      skill_id: "infra.kubernetes",
+      question: "Ask the candidate to walk through a real Kubernetes rollout or failure scenario.",
+    },
+  ],
+  caveats: ["Not directly assessed by the selected coding task: Kubernetes."],
+  status: "draft",
+  approved_at: null,
+  used_at: null,
+  created_at: "2026-06-29T10:00:00+00:00",
+};
+
+const futureFrontendBlueprint = {
+  ...adaptiveBlueprintWithDuplicateUnsupportedSkill,
+  id: 777,
+  title: "Frontend Platform Engineer Frontend Platform Assessment Blueprint",
+  assessment_pack_slug: "future_frontend_platform_v1",
+  assessment_level: "future_frontend",
+  duration_minutes: 90,
+  coverage: {
+    module_id: "future_frontend_platform_v1",
+    assessment_pack_slug: "future_frontend_platform_v1",
+    label: "Future Frontend Platform Assessment - planned, not invite-ready",
+    directly_tested: [],
+    partially_tested: [],
+    not_tested: ["frontend.react", "frontend.typescript", "frontend.accessibility"],
+  },
+  skill_mapping: {
+    role_skill_ids: ["frontend.react", "frontend.typescript", "frontend.accessibility"],
+    candidate_skill_ids: ["frontend.react", "frontend.typescript", "frontend.accessibility"],
+    required_overlap: ["frontend.react", "frontend.typescript", "frontend.accessibility"],
+    required_gap: [],
+    candidate_extra: [],
+    unsupported_required: ["frontend.react", "frontend.typescript", "frontend.accessibility"],
+    unsupported_claimed: ["frontend.react", "frontend.typescript", "frontend.accessibility"],
+    unmapped_terms: [],
+  },
+  rationale: [
+    "The JD maps primarily to a frontend platform assessment.",
+    "This is a valid assessment blueprint, but the executable module is on the roadmap.",
+  ],
+  follow_up_probes: [
+    {
+      source: "future_assessment_scope",
+      skill_id: "frontend.react",
+      question: "The future assessment should test React with a realistic UI work sample.",
+    },
+  ],
+  caveats: ["Future assessment planned: Future Frontend Platform Assessment."],
 };
 
 const report = {
@@ -371,6 +472,143 @@ test("employer can sign in with Clerk, create an invite, and view a report", asy
   await expect(page.getByText("How did you choose the authorization response behavior?")).toBeVisible();
 });
 
+test("adaptive builder renders overlapping unsupported skills without duplicate-key warnings", async ({ page }) => {
+  const duplicateKeyWarnings = watchForDuplicateKeyWarnings(page);
+  let attempts: Array<Record<string, unknown>> = [attempt];
+
+  await page.route("**/assessment-attempts", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(attempts) });
+  });
+  await page.route("**/employer/adaptive/role-profiles", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      status: 201,
+      body: JSON.stringify({ id: adaptiveBlueprintWithDuplicateUnsupportedSkill.role_profile_id }),
+    });
+  });
+  await page.route("**/employer/adaptive/candidate-profiles", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      status: 201,
+      body: JSON.stringify({ id: adaptiveBlueprintWithDuplicateUnsupportedSkill.candidate_profile_id }),
+    });
+  });
+  await page.route("**/employer/adaptive/blueprints", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+      return;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      status: 201,
+      body: JSON.stringify(adaptiveBlueprintWithDuplicateUnsupportedSkill),
+    });
+  });
+  await page.route("**/employer/adaptive/blueprints/*/approve", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ ...adaptiveBlueprintWithDuplicateUnsupportedSkill, status: "approved" }),
+    });
+  });
+  await page.route("**/employer/adaptive/blueprints/*/invites", async (route) => {
+    attempts = [
+      {
+        ...attempt,
+        attempt_id: 88,
+        candidate_email: "candidate.phase5@example.com",
+        status: "created",
+        invite_token: "adaptive-token",
+        invite_url: "http://127.0.0.1:3000/invite/adaptive-token",
+        report_id: null,
+        recommendation: null,
+        score_total: null,
+      },
+      ...attempts,
+    ];
+    await route.fulfill({
+      contentType: "application/json",
+      status: 201,
+      body: JSON.stringify({
+        attempt_id: 88,
+        invite_token: "adaptive-token",
+        invite_url: "http://127.0.0.1:3000/invite/adaptive-token",
+        status: "created",
+      }),
+    });
+  });
+  await page.route("**/employer/adaptive/extract-document-text", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        filename: route.request().headers()["x-filename"] ?? "jd.txt",
+        text: "We need Python, FastAPI, authorization, multi-tenant APIs, Kubernetes basics, and reliability.",
+      }),
+    });
+  });
+
+  await mockClerkSignedIn(page);
+  await page.goto("/employer");
+  await page.getByRole("button", { name: "Assessments" }).click();
+  await expect(page.getByRole("group", { name: "Assessment creation path" }).getByRole("button", { name: "Direct coding challenge" })).toHaveClass(/active/);
+  await expect(page.getByRole("button", { name: "Send invite" })).toBeVisible();
+
+  await page.getByRole("group", { name: "Assessment creation path" }).getByRole("button", { name: "Adaptive builder" }).click();
+  await expect(page.getByRole("button", { name: "Send invite" })).not.toBeVisible();
+  const adaptiveBuilder = page.locator(".mod-card").filter({ hasText: "Adaptive builder" });
+  await adaptiveBuilder.getByPlaceholder("candidate@company.com").fill("candidate.phase5@example.com");
+  await adaptiveBuilder.getByLabel("Upload JD").setInputFiles({
+    name: "jd.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("backend role"),
+  });
+  await expect(adaptiveBuilder.getByPlaceholder("Paste the job description or role requirements.")).toHaveValue(/Kubernetes basics/);
+  await adaptiveBuilder.getByPlaceholder("Optional for blueprint generation; recommended for follow-up probes.").fill(
+    "Backend engineer with Python, FastAPI, and Kubernetes collaboration experience.",
+  );
+  await adaptiveBuilder.getByRole("button", { name: "Generate adaptive blueprint" }).click();
+
+  const notDirectlyTested = page.locator(".assessment-section").filter({ hasText: "Not directly tested" });
+  await expect(notDirectlyTested.getByText("infra / kubernetes")).toHaveCount(1);
+  await expect(page.getByText("Ask the candidate to walk through a real Kubernetes rollout or failure scenario.")).toBeVisible();
+  expect(duplicateKeyWarnings).toEqual([]);
+
+  await page.getByRole("button", { name: "Approve and send invite" }).click();
+  await expect(page.getByLabel("Adaptive invite URL")).toHaveValue("http://127.0.0.1:3000/invite/adaptive-token");
+});
+
+test("adaptive builder shows future assessment blueprint without invite-ready actions", async ({ page }) => {
+  await page.route("**/assessment-attempts", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify([attempt]) });
+  });
+  await page.route("**/employer/adaptive/role-profiles", async (route) => {
+    await route.fulfill({ contentType: "application/json", status: 201, body: JSON.stringify({ id: 701 }) });
+  });
+  await page.route("**/employer/adaptive/candidate-profiles", async (route) => {
+    await route.fulfill({ contentType: "application/json", status: 201, body: JSON.stringify({ id: 702 }) });
+  });
+  await page.route("**/employer/adaptive/blueprints", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify([futureFrontendBlueprint]) });
+      return;
+    }
+    await route.fulfill({ contentType: "application/json", status: 201, body: JSON.stringify(futureFrontendBlueprint) });
+  });
+
+  await mockClerkSignedIn(page);
+  await page.goto("/employer");
+  await page.getByRole("button", { name: "Assessments" }).click();
+  await page.getByRole("group", { name: "Assessment creation path" }).getByRole("button", { name: "Adaptive builder" }).click();
+  await page.getByRole("button", { name: /Frontend Platform Engineer Frontend Platform Assessment Blueprint/ }).click();
+
+  await expect(page.getByText("Future Frontend Platform Assessment - planned, not invite-ready")).toBeVisible();
+  await expect(page.getByText("Planned assessment", { exact: true })).toBeVisible();
+  await expect(page.getByText("Invite sending is disabled because this assessment is planned for a future module.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve and send invite" })).toBeDisabled();
+});
+
 test("evidence report renders all Phase 2 sections", async ({ page }) => {
   await page.route("**/assessment-attempts/42/evidence-report", async (route) => {
     await route.fulfill({
@@ -509,6 +747,46 @@ test("evidence report renders all Phase 2 sections", async ({ page }) => {
   await expect(page.getByText("attempt_submitted")).toBeVisible();
   await expect(page.getByText("Candidate opened invite")).toBeVisible();
   await expect(page.getByText("Candidate submitted final solution")).toBeVisible();
+});
+
+test("adaptive evidence report renders overlapping unsupported skills without duplicate-key warnings", async ({ page }) => {
+  const duplicateKeyWarnings = watchForDuplicateKeyWarnings(page);
+  const adaptiveReport = {
+    ...report,
+    report: {
+      ...report.report,
+      adaptive_context: {
+        blueprint_id: adaptiveBlueprintWithDuplicateUnsupportedSkill.id,
+        role: {
+          title: "Senior Backend Engineer",
+          seniority: "senior",
+          role_family: "backend",
+        },
+        selected_assessment: {
+          assessment_pack_slug: "fastapi_task_api_advanced_v1",
+          assessment_level: "advanced",
+          duration_minutes: 120,
+          evaluator_feedback_mode: "strict",
+        },
+        skill_mapping: adaptiveBlueprintWithDuplicateUnsupportedSkill.skill_mapping,
+        coverage: adaptiveBlueprintWithDuplicateUnsupportedSkill.coverage,
+        rationale: adaptiveBlueprintWithDuplicateUnsupportedSkill.rationale,
+        caveats: adaptiveBlueprintWithDuplicateUnsupportedSkill.caveats,
+      },
+    },
+  };
+
+  await page.route("**/assessment-attempts/42/evidence-report", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(adaptiveReport) });
+  });
+
+  await mockClerkSignedIn(page);
+  await page.goto("/employer/reports/42");
+
+  await expect(page.getByRole("heading", { name: "Role-adaptive context" })).toBeVisible();
+  const notDirectlyTested = page.locator(".report-grid").filter({ hasText: "Not directly tested" });
+  await expect(notDirectlyTested.getByText("infra / kubernetes")).toHaveCount(1);
+  expect(duplicateKeyWarnings).toEqual([]);
 });
 
 test("evidence report with AI integrity risk medium shows warning style", async ({ page }) => {

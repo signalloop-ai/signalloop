@@ -27,6 +27,9 @@ class Employer(TimestampMixin, Base):
     role: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     attempts: Mapped[list["AssessmentAttempt"]] = relationship(back_populates="employer")
+    role_profiles: Mapped[list["RoleProfile"]] = relationship(back_populates="employer")
+    candidate_profiles: Mapped[list["CandidateProfile"]] = relationship(back_populates="employer")
+    assessment_blueprints: Mapped[list["AssessmentBlueprint"]] = relationship(back_populates="employer")
 
 
 class AssessmentPack(TimestampMixin, Base):
@@ -49,6 +52,7 @@ class AssessmentAttempt(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     employer_id: Mapped[Optional[int]] = mapped_column(ForeignKey("employers.id"))
     assessment_pack_id: Mapped[int] = mapped_column(ForeignKey("assessment_packs.id"))
+    blueprint_id: Mapped[Optional[int]] = mapped_column(ForeignKey("assessment_blueprints.id"), nullable=True)
     assessment_level: Mapped[str] = mapped_column(String(50), default="standard")
     timing_mode: Mapped[str] = mapped_column(String(50), default="untimed")
     duration_minutes: Mapped[int] = mapped_column(Integer, default=90)
@@ -62,6 +66,7 @@ class AssessmentAttempt(TimestampMixin, Base):
     submission_mode: Mapped[Optional[str]] = mapped_column(String(50))
 
     employer: Mapped[Optional[Employer]] = relationship(back_populates="attempts")
+    blueprint: Mapped[Optional["AssessmentBlueprint"]] = relationship(back_populates="attempts")
     assessment_pack: Mapped[AssessmentPack] = relationship(back_populates="attempts")
     code_snapshots: Mapped[list["CodeSnapshot"]] = relationship(back_populates="attempt")
     test_runs: Mapped[list["TestRun"]] = relationship(back_populates="attempt")
@@ -70,6 +75,67 @@ class AssessmentAttempt(TimestampMixin, Base):
     webcam_consent: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     evidence_report: Mapped[Optional["EvidenceReport"]] = relationship(back_populates="attempt")
     proctoring_events: Mapped[list["ProctoringEvent"]] = relationship(back_populates="attempt")
+
+
+class RoleProfile(TimestampMixin, Base):
+    __tablename__ = "role_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    employer_id: Mapped[int] = mapped_column(ForeignKey("employers.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    role_family: Mapped[str] = mapped_column(String(80))
+    seniority: Mapped[str] = mapped_column(String(80))
+    jd_text: Mapped[str] = mapped_column(Text)
+    team_context: Mapped[Optional[str]] = mapped_column(Text)
+    expected_ai_usage: Mapped[int] = mapped_column(Integer, default=50)
+    required_skills: Mapped[Optional[list]] = mapped_column(JSON)
+    nice_to_have_skills: Mapped[Optional[list]] = mapped_column(JSON)
+    extracted_skills: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    employer: Mapped[Employer] = relationship(back_populates="role_profiles")
+    blueprints: Mapped[list["AssessmentBlueprint"]] = relationship(back_populates="role_profile")
+
+
+class CandidateProfile(TimestampMixin, Base):
+    __tablename__ = "candidate_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    employer_id: Mapped[int] = mapped_column(ForeignKey("employers.id"), index=True)
+    candidate_email: Mapped[Optional[str]] = mapped_column(String(320))
+    resume_text: Mapped[str] = mapped_column(Text)
+    extracted_skills: Mapped[dict] = mapped_column(JSON, default=dict)
+    extracted_experience: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    employer: Mapped[Employer] = relationship(back_populates="candidate_profiles")
+    blueprints: Mapped[list["AssessmentBlueprint"]] = relationship(back_populates="candidate_profile")
+
+
+class AssessmentBlueprint(TimestampMixin, Base):
+    __tablename__ = "assessment_blueprints"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    employer_id: Mapped[int] = mapped_column(ForeignKey("employers.id"), index=True)
+    role_profile_id: Mapped[int] = mapped_column(ForeignKey("role_profiles.id"))
+    candidate_profile_id: Mapped[Optional[int]] = mapped_column(ForeignKey("candidate_profiles.id"), nullable=True)
+    title: Mapped[str] = mapped_column(String(255))
+    assessment_pack_slug: Mapped[str] = mapped_column(String(120))
+    assessment_level: Mapped[str] = mapped_column(String(50))
+    timing_mode: Mapped[str] = mapped_column(String(50))
+    duration_minutes: Mapped[int] = mapped_column(Integer)
+    evaluator_feedback_mode: Mapped[str] = mapped_column(String(50))
+    skill_mapping: Mapped[dict] = mapped_column(JSON)
+    coverage: Mapped[dict] = mapped_column(JSON)
+    rationale: Mapped[list] = mapped_column(JSON)
+    follow_up_probes: Mapped[list] = mapped_column(JSON)
+    caveats: Mapped[list] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(50), default="draft", server_default="draft")
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    employer: Mapped[Employer] = relationship(back_populates="assessment_blueprints")
+    role_profile: Mapped[RoleProfile] = relationship(back_populates="blueprints")
+    candidate_profile: Mapped[Optional[CandidateProfile]] = relationship(back_populates="blueprints")
+    attempts: Mapped[list[AssessmentAttempt]] = relationship(back_populates="blueprint")
 
 
 class CodeSnapshot(TimestampMixin, Base):

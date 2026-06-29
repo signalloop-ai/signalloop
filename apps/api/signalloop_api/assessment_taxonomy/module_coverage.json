@@ -1,0 +1,88 @@
+{
+  "version": "2026-06-29",
+  "modules": [
+    {
+      "module_id": "fastapi_task_api_standard_v2",
+      "assessment_pack_slug": "fastapi_task_api_standard_v2",
+      "label": "Standard FastAPI Backend Debugging Assessment",
+      "directly_tested": [
+        "backend.python",
+        "backend.fastapi",
+        "backend.api_design",
+        "backend.validation",
+        "backend.authorization",
+        "backend.ownership_isolation",
+        "backend.state_transitions",
+        "backend.error_handling",
+        "eng.debugging",
+        "eng.test_design",
+        "eng.tradeoff_reasoning",
+        "eng.product_judgment",
+        "eng.ai_collaboration",
+        "eng.ownership"
+      ],
+      "partially_tested": [
+        "backend.security_judgment",
+        "backend.multi_tenancy",
+        "backend.reliability",
+        "fullstack.product_tradeoffs",
+        "ai.ai_safety",
+        "eng.security_awareness",
+        "eng.communication"
+      ],
+      "not_tested": [
+        "backend.postgresql",
+        "backend.transactions",
+        "backend.caching",
+        "backend.background_jobs",
+        "backend.observability",
+        "backend.distributed_systems",
+        "infra.kubernetes",
+        "ai.rag",
+        "frontend.react"
+      ]
+    },
+    {
+      "module_id": "fastapi_task_api_advanced_v1",
+      "assessment_pack_slug": "fastapi_task_api_advanced_v1",
+      "label": "Advanced FastAPI Team Task API Assessment",
+      "directly_tested": [
+        "backend.python",
+        "backend.fastapi",
+        "backend.api_design",
+        "backend.validation",
+        "backend.authorization",
+        "backend.ownership_isolation",
+        "backend.state_transitions",
+        "backend.error_handling",
+        "backend.multi_tenancy",
+        "backend.reliability",
+        "backend.security_judgment",
+        "eng.debugging",
+        "eng.test_design",
+        "eng.tradeoff_reasoning",
+        "eng.product_judgment",
+        "eng.security_awareness",
+        "eng.ai_collaboration",
+        "eng.ownership",
+        "eng.communication"
+      ],
+      "partially_tested": [
+        "backend.distributed_systems",
+        "backend.observability",
+        "backend.postgresql",
+        "fullstack.product_tradeoffs",
+        "ai.ai_safety"
+      ],
+      "not_tested": [
+        "backend.transactions",
+        "backend.caching",
+        "backend.background_jobs",
+        "infra.kubernetes",
+        "infra.deployment",
+        "ai.rag",
+        "frontend.react"
+      ]
+    }
+  ]
+}

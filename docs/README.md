@@ -3,8 +3,9 @@
 This directory is the source-of-truth documentation set for SignalLoop.
 
 The original MVP Phase 1-12 plan is complete and remains under `execution/` as
-historical implementation context. The active post-MVP workstream is Phase 2:
-Assessment System Enhancement under `enhancements/phase-2-assessment-system/`.
+historical implementation context. The latest completed post-MVP workstream is
+Phase 5: Role-Adaptive Assessment System under
+`enhancements/phase-5-role-adaptive-assessment/`.
 
 ## Reading order for coding agents
 

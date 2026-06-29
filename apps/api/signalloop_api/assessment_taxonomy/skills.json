@@ -1,0 +1,585 @@
+{
+  "version": "2026-06-29",
+  "skills": [
+    {
+      "id": "backend.python",
+      "label": "Python",
+      "family": "backend",
+      "aliases": ["Python", "Python 3", "pytest"],
+      "description": "Writing and reasoning about production Python code.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["coding", "debugging", "tests"]
+    },
+    {
+      "id": "backend.fastapi",
+      "label": "FastAPI",
+      "family": "backend",
+      "aliases": ["FastAPI", "Python API service", "Pydantic routes"],
+      "description": "Building and debugging FastAPI endpoints and request/response behavior.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["coding", "debugging", "tests"]
+    },
+    {
+      "id": "backend.api_design",
+      "label": "API design",
+      "family": "backend",
+      "aliases": ["REST API", "HTTP API", "endpoint design", "API contracts"],
+      "description": "Designing safe, predictable API behavior and contracts.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["coding", "debugging", "design_explanation"]
+    },
+    {
+      "id": "backend.validation",
+      "label": "Input validation",
+      "family": "backend",
+      "aliases": ["validation", "schema validation", "input sanitization", "Pydantic validation"],
+      "description": "Handling malformed, blank, invalid, or ambiguous input safely.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["coding", "debugging", "tests"]
+    },
+    {
+      "id": "backend.authorization",
+      "label": "Authorization",
+      "family": "backend",
+      "aliases": ["authorization", "access control", "permissions", "authz"],
+      "description": "Enforcing who may read, mutate, or delete resources.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["coding", "debugging", "tests"]
+    },
+    {
+      "id": "backend.ownership_isolation",
+      "label": "Ownership isolation",
+      "family": "backend",
+      "aliases": ["tenant isolation", "owner isolation", "resource ownership", "multi-user safety"],
+      "description": "Preventing users or tenants from accessing resources they do not own.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["coding", "debugging", "tests"]
+    },
+    {
+      "id": "backend.state_transitions",
+      "label": "State transitions",
+      "family": "backend",
+      "aliases": ["workflow state", "status transitions", "state machine", "lifecycle rules"],
+      "description": "Implementing consistent resource lifecycle and status rules.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["coding", "debugging", "tests", "design_explanation"]
+    },
+    {
+      "id": "backend.error_handling",
+      "label": "Error handling",
+      "family": "backend",
+      "aliases": ["error handling", "HTTP errors", "exceptions", "failure behavior"],
+      "description": "Returning explicit and consistent errors for invalid or unsafe behavior.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["coding", "debugging", "tests"]
+    },
+    {
+      "id": "backend.database_modeling",
+      "label": "Database modeling",
+      "family": "backend",
+      "aliases": ["data modeling", "schema design", "database schema", "ORM modeling"],
+      "description": "Designing durable data models, constraints, and relationships.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "backend.transactions",
+      "label": "Transactions",
+      "family": "backend",
+      "aliases": ["transactions", "ACID", "concurrency control", "locking"],
+      "description": "Reasoning about atomic writes, isolation, and concurrent updates.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "backend.postgresql",
+      "label": "PostgreSQL",
+      "family": "backend",
+      "aliases": ["Postgres", "PostgreSQL", "SQL database", "relational database"],
+      "description": "Using PostgreSQL features, constraints, indexes, and query behavior.",
+      "assessability": "partial",
+      "supported_modules": ["fastapi_task_api_advanced_v1"],
+      "evidence_types": ["design_explanation", "follow_up"]
+    },
+    {
+      "id": "backend.caching",
+      "label": "Caching",
+      "family": "backend",
+      "aliases": ["Redis", "cache", "caching", "cache invalidation"],
+      "description": "Using caches safely without breaking correctness or consistency.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "backend.background_jobs",
+      "label": "Background jobs",
+      "family": "backend",
+      "aliases": ["background jobs", "async jobs", "task queue", "Celery"],
+      "description": "Designing async work, retries, and job lifecycle behavior.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "backend.observability",
+      "label": "Observability",
+      "family": "backend",
+      "aliases": ["observability", "logging", "metrics", "tracing", "monitoring"],
+      "description": "Making production behavior observable through logs, metrics, and traces.",
+      "assessability": "partial",
+      "supported_modules": ["fastapi_task_api_advanced_v1"],
+      "evidence_types": ["design_explanation", "follow_up"]
+    },
+    {
+      "id": "backend.multi_tenancy",
+      "label": "Multi-tenancy",
+      "family": "backend",
+      "aliases": ["multi-tenancy", "tenant isolation", "team-scoped data", "organization isolation"],
+      "description": "Keeping tenant or organization data isolated in shared systems.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["coding", "debugging", "tests", "design_explanation"]
+    },
+    {
+      "id": "backend.reliability",
+      "label": "Reliability",
+      "family": "backend",
+      "aliases": ["reliability", "production hardening", "edge cases", "safe behavior"],
+      "description": "Handling edge cases and failure paths without regressions.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["coding", "debugging", "tests", "design_explanation"]
+    },
+    {
+      "id": "backend.distributed_systems",
+      "label": "Distributed systems",
+      "family": "backend",
+      "aliases": ["distributed systems", "distributed architecture", "scale", "consistency"],
+      "description": "Reasoning about services, consistency, latency, and failure across boundaries.",
+      "assessability": "partial",
+      "supported_modules": ["fastapi_task_api_advanced_v1"],
+      "evidence_types": ["design_explanation", "follow_up"]
+    },
+    {
+      "id": "backend.security_judgment",
+      "label": "Backend security judgment",
+      "family": "backend",
+      "aliases": ["security judgment", "secure API", "data leakage", "least privilege"],
+      "description": "Making safe backend decisions around access, leakage, and abuse cases.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["coding", "debugging", "tests", "design_explanation"]
+    },
+    {
+      "id": "frontend.react",
+      "label": "React",
+      "family": "frontend",
+      "aliases": ["React", "React.js", "Next.js UI"],
+      "description": "Building and debugging React user interfaces.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "frontend.typescript",
+      "label": "TypeScript",
+      "family": "frontend",
+      "aliases": ["TypeScript", "TS", "typed JavaScript"],
+      "description": "Using TypeScript types to build maintainable frontend code.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "frontend.component_design",
+      "label": "Component design",
+      "family": "frontend",
+      "aliases": ["component design", "UI components", "design system"],
+      "description": "Structuring reusable, state-aware UI components.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "frontend.state_management",
+      "label": "Frontend state management",
+      "family": "frontend",
+      "aliases": ["state management", "Redux", "React state", "client state"],
+      "description": "Managing local, server, and derived UI state.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "frontend.forms",
+      "label": "Frontend forms",
+      "family": "frontend",
+      "aliases": ["forms", "form validation", "controlled inputs"],
+      "description": "Building usable forms with validation and error handling.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "frontend.accessibility",
+      "label": "Accessibility",
+      "family": "frontend",
+      "aliases": ["accessibility", "a11y", "ARIA", "keyboard navigation"],
+      "description": "Making interfaces usable with assistive technologies and keyboard flows.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "frontend.performance",
+      "label": "Frontend performance",
+      "family": "frontend",
+      "aliases": ["frontend performance", "Core Web Vitals", "render performance"],
+      "description": "Improving perceived and measured frontend responsiveness.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "frontend.api_integration",
+      "label": "Frontend API integration",
+      "family": "frontend",
+      "aliases": ["API integration", "data fetching", "client-server integration"],
+      "description": "Connecting UI state and user flows to backend APIs.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "frontend.testing",
+      "label": "Frontend testing",
+      "family": "frontend",
+      "aliases": ["React Testing Library", "frontend tests", "E2E tests", "Playwright"],
+      "description": "Testing user-facing frontend behavior and regressions.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "fullstack.end_to_end_feature",
+      "label": "End-to-end feature delivery",
+      "family": "fullstack",
+      "aliases": ["end-to-end feature", "full-stack feature", "feature delivery"],
+      "description": "Delivering a feature across API, UI, state, and verification.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "fullstack.api_ui_integration",
+      "label": "API/UI integration",
+      "family": "fullstack",
+      "aliases": ["API UI integration", "frontend backend integration", "contract integration"],
+      "description": "Connecting backend contracts to frontend behavior.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "fullstack.data_flow",
+      "label": "Full-stack data flow",
+      "family": "fullstack",
+      "aliases": ["data flow", "state flow", "request lifecycle"],
+      "description": "Tracing data across frontend, backend, and persistence boundaries.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "fullstack.product_tradeoffs",
+      "label": "Full-stack product tradeoffs",
+      "family": "fullstack",
+      "aliases": ["product tradeoffs", "UX backend tradeoffs", "full-stack decisions"],
+      "description": "Balancing product behavior, implementation cost, and reliability.",
+      "assessability": "partial",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["design_explanation", "follow_up"]
+    },
+    {
+      "id": "infra.docker",
+      "label": "Docker",
+      "family": "infra",
+      "aliases": ["Docker", "containers", "containerization"],
+      "description": "Packaging and running software in containers.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "infra.kubernetes",
+      "label": "Kubernetes",
+      "family": "infra",
+      "aliases": ["Kubernetes", "K8s", "cluster operations", "pods"],
+      "description": "Deploying, scaling, and operating services on Kubernetes.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "infra.ci_cd",
+      "label": "CI/CD",
+      "family": "infra",
+      "aliases": ["CI/CD", "continuous integration", "deployment pipeline", "GitHub Actions"],
+      "description": "Automating build, test, and deployment workflows.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "infra.cloud_basics",
+      "label": "Cloud basics",
+      "family": "infra",
+      "aliases": ["AWS", "GCP", "Azure", "cloud infrastructure"],
+      "description": "Understanding managed cloud services and deployment primitives.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "infra.deployment",
+      "label": "Deployment",
+      "family": "infra",
+      "aliases": ["deployment", "release", "rollback", "rollout"],
+      "description": "Safely releasing and rolling back production services.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "infra.incident_response",
+      "label": "Incident response",
+      "family": "infra",
+      "aliases": ["incident response", "on-call", "production incident", "mitigation"],
+      "description": "Diagnosing and mitigating production failures under uncertainty.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "infra.monitoring",
+      "label": "Monitoring",
+      "family": "infra",
+      "aliases": ["monitoring", "alerts", "dashboards", "SLOs"],
+      "description": "Tracking system health and alerting on user-impacting failures.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "data.sql",
+      "label": "SQL",
+      "family": "data",
+      "aliases": ["SQL", "queries", "joins", "relational queries"],
+      "description": "Writing and reasoning about SQL queries.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "data.etl_pipelines",
+      "label": "ETL pipelines",
+      "family": "data",
+      "aliases": ["ETL", "data pipelines", "ELT", "batch pipelines"],
+      "description": "Moving and transforming data between systems reliably.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "data.data_modeling",
+      "label": "Data modeling",
+      "family": "data",
+      "aliases": ["data modeling", "warehouse modeling", "dimensional modeling"],
+      "description": "Structuring analytical data for accurate use.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "data.warehouse_concepts",
+      "label": "Warehouse concepts",
+      "family": "data",
+      "aliases": ["warehouse", "Snowflake", "BigQuery", "lakehouse"],
+      "description": "Understanding analytical warehouse behavior and tradeoffs.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "data.data_quality",
+      "label": "Data quality",
+      "family": "data",
+      "aliases": ["data quality", "data validation", "data correctness"],
+      "description": "Detecting, explaining, and preventing bad analytical data.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "ai.llm_api_integration",
+      "label": "LLM API integration",
+      "family": "ai",
+      "aliases": ["LLM API", "OpenAI API", "Anthropic API", "model API"],
+      "description": "Calling LLM APIs safely and handling responses in product flows.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "ai.prompt_design",
+      "label": "Prompt design",
+      "family": "ai",
+      "aliases": ["prompting", "prompt engineering", "prompt design"],
+      "description": "Designing prompts and constraints for useful model behavior.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "ai.rag",
+      "label": "Retrieval-augmented generation",
+      "family": "ai",
+      "aliases": ["RAG", "retrieval augmented generation", "vector search"],
+      "description": "Grounding model responses with retrieval and source context.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "ai.evaluation",
+      "label": "AI evaluation",
+      "family": "ai",
+      "aliases": ["AI evals", "model evaluation", "LLM evaluation", "eval harness"],
+      "description": "Measuring model behavior, quality, and regressions.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "ai.inference_serving",
+      "label": "Inference serving",
+      "family": "ai",
+      "aliases": ["inference serving", "vLLM", "model serving", "GPU serving"],
+      "description": "Serving model inference workloads reliably and efficiently.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "ai.model_monitoring",
+      "label": "Model monitoring",
+      "family": "ai",
+      "aliases": ["model monitoring", "drift", "LLM monitoring", "quality monitoring"],
+      "description": "Monitoring model quality, failures, latency, and regressions.",
+      "assessability": "unsupported",
+      "supported_modules": [],
+      "evidence_types": ["follow_up"]
+    },
+    {
+      "id": "ai.ai_safety",
+      "label": "AI safety",
+      "family": "ai",
+      "aliases": ["AI safety", "guardrails", "hallucination handling", "model risk"],
+      "description": "Recognizing and reducing unsafe or unreliable AI behavior.",
+      "assessability": "partial",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["design_explanation", "follow_up"]
+    },
+    {
+      "id": "eng.debugging",
+      "label": "Debugging",
+      "family": "engineering_judgment",
+      "aliases": ["debugging", "diagnosis", "bug fixing", "root cause"],
+      "description": "Narrowing observed failures into correct fixes.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["coding", "debugging", "tests"]
+    },
+    {
+      "id": "eng.test_design",
+      "label": "Test design",
+      "family": "engineering_judgment",
+      "aliases": ["test design", "unit tests", "pytest", "coverage"],
+      "description": "Writing useful tests for changed behavior and edge cases.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["tests", "design_explanation"]
+    },
+    {
+      "id": "eng.tradeoff_reasoning",
+      "label": "Tradeoff reasoning",
+      "family": "engineering_judgment",
+      "aliases": ["tradeoffs", "judgment", "decision making", "constraints"],
+      "description": "Explaining decisions under ambiguity and constraints.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["design_explanation", "follow_up"]
+    },
+    {
+      "id": "eng.product_judgment",
+      "label": "Product judgment",
+      "family": "engineering_judgment",
+      "aliases": ["product judgment", "requirements ambiguity", "product tradeoff"],
+      "description": "Making implementation choices that fit product constraints.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["coding", "design_explanation"]
+    },
+    {
+      "id": "eng.security_awareness",
+      "label": "Security awareness",
+      "family": "engineering_judgment",
+      "aliases": ["security awareness", "secure coding", "privacy", "data exposure"],
+      "description": "Recognizing and avoiding security or privacy risks.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["coding", "debugging", "design_explanation"]
+    },
+    {
+      "id": "eng.ai_collaboration",
+      "label": "AI collaboration",
+      "family": "engineering_judgment",
+      "aliases": ["AI collaboration", "ChatGPT", "Copilot", "AI-assisted engineering"],
+      "description": "Using AI help while retaining understanding, verification, and ownership.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["design_explanation", "follow_up"]
+    },
+    {
+      "id": "eng.ownership",
+      "label": "Ownership",
+      "family": "engineering_judgment",
+      "aliases": ["ownership", "accountability", "final explanation", "decision log"],
+      "description": "Taking responsibility for final behavior, tradeoffs, and verification.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["design_explanation"]
+    },
+    {
+      "id": "eng.communication",
+      "label": "Communication",
+      "family": "engineering_judgment",
+      "aliases": ["communication", "explanation", "clarity", "written reasoning"],
+      "description": "Explaining technical choices and evidence clearly.",
+      "assessability": "supported",
+      "supported_modules": ["fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"],
+      "evidence_types": ["design_explanation", "follow_up"]
+    }
+  ]
+}

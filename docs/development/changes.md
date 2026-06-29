@@ -5,6 +5,75 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-06-29 — Phase 5 MVP implementation: role-adaptive assessment system
+
+- Implemented adaptive persistence:
+  `RoleProfile`, `CandidateProfile`, `AssessmentBlueprint`, and nullable
+  `AssessmentAttempt.blueprint_id`.
+- Added Alembic migration `0009_add_adaptive_assessment_blueprints`.
+- Added deterministic JD/resume skill extraction and classification using the static taxonomy.
+- Added blueprint generation for Standard/Advanced FastAPI selection, skill coverage,
+  rationale, caveats, and follow-up probes.
+- Added employer adaptive API endpoints under `/employer/adaptive/*`.
+- Added an optional adaptive builder in the employer Assessments view; the existing quick
+  invite path remains available.
+- Added adaptive report context for blueprint-backed attempts only.
+- Added realistic JD/resume API e2e coverage in `apps/api/tests/test_adaptive_assessment.py`.
+- Added manual QA fixtures in
+  `docs/enhancements/phase-5-role-adaptive-assessment/manual-test-fixtures.md`.
+- Fixed the employer page lint error by deferring the initial refresh call from `useEffect`.
+- Validation:
+  - `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> 272 passed, 51 skipped.
+  - `DATABASE_URL=sqlite:////tmp/signalloop_phase5_adaptive_migration_2.db UV_CACHE_DIR=.uv-cache uv run alembic upgrade head` -> passed.
+  - `cd apps/web && npm run typecheck` -> passed.
+  - `cd apps/web && npm run lint` -> passed with 4 known warnings.
+  - `cd apps/web && npm run build` -> passed.
+  - `cd apps/web && npm run test:e2e -- --workers=1` -> 30 passed, 2 skipped.
+- Follow-up: manual product review of adaptive builder UX with real employer copy, then hosted
+  smoke after migration is applied.
+
+---
+
+## 2026-06-29 — Phase 5 Task 1: taxonomy and module coverage
+
+- Implemented the first Phase 5 backend foundation: static skill taxonomy and assessment
+  module coverage under `apps/api/signalloop_api/assessment_taxonomy/`.
+- Added `skills.json` with current backend/FastAPI coverage plus roadmap skills across
+  frontend, full-stack, infra, data, ML/AI, and engineering judgment.
+- Added `module_coverage.json` for Standard FastAPI v2 and Advanced FastAPI v1, separating
+  directly tested, partially tested, and not-tested skills.
+- Added `loader.py` validation for duplicate IDs, invalid assessability/evidence values,
+  unknown coverage skill references, unsupported skills that claim modules, and supported
+  module claims not backed by module coverage.
+- Added `apps/api/tests/test_assessment_taxonomy.py`.
+- Validation:
+  - `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_assessment_taxonomy.py`
+    -> 6 passed.
+  - `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> 267 passed, 51 skipped.
+- Follow-up: Phase 5 Task 2 should add adaptive persistence (`RoleProfile`,
+  `CandidateProfile`, `AssessmentBlueprint`, and nullable attempt blueprint link).
+
+---
+
+## 2026-06-29 — Phase 5 planning: role-adaptive assessment system
+
+- Added the planning workstream under `docs/enhancements/phase-5-role-adaptive-assessment/`.
+- Defined the Phase 5 MVP boundary: pasted JD/resume intake, versioned skill taxonomy,
+  skill matching, reviewable assessment blueprints, employer approval, and adaptive report
+  context.
+- Captured the product decision that, for v1, the role/JD determines the comparable core
+  assessment while resume data drives rationale, caveats, and follow-up probes. Resume data
+  should not automatically give different candidates for the same role different scored tasks.
+- Documented that current executable assessment support remains Standard FastAPI v2 and
+  Advanced FastAPI v1; unsupported skills must be shown as caveats/follow-up areas rather than
+  scored evidence.
+- Updated `CURRENT_STATE.md`, `docs/README.md`, `docs/enhancements/README.md`, and the
+  architecture spec to mark Phase 5 as the active planning workstream. Also corrected the
+  stale architecture-spec status that said Phase 3 proctoring was not implemented.
+- No code changes in this entry — documentation/planning only.
+
+---
+
 ## 2026-06-24 — Documentation pass: AI collaborator retrospective + phases complete
 
 - Wrote `docs/retrospectives/ai-collaborator-journey.md` — the full design history of the AI
@@ -2227,3 +2296,237 @@ Phase 3 migrations `0006`/`0007` are on `proctoring_events` /
 - Consider extracting the shared evidence-report rendering into a single
   component to avoid duplication between the employer and admin report pages
   (post-Phase 4 cleanup).
+
+## 2026-06-29 — Phase 5 Adaptive Blueprint Duplicate Skill Keys
+
+**Symptom:** Generating an adaptive blueprint could show React's duplicate
+key warning for skills such as `infra.kubernetes`.
+
+**Root cause:** The adaptive UI merged unsupported required skills and
+unsupported claimed skills. A skill can legitimately appear in both buckets,
+but the renderer used the skill ID directly as the React child key.
+
+**Files changed:**
+- `apps/web/src/app/employer/page.tsx` — deduplicates rendered skill pills in
+  the adaptive builder preview.
+- `apps/web/src/app/_components/EvidenceReportView.tsx` — deduplicates
+  rendered skill pills in the evidence report adaptive context.
+- `apps/web/tests/e2e/employer-portal.spec.ts` — adds duplicate-key regression
+  coverage for adaptive builder and adaptive report rendering.
+- `apps/api/tests/test_adaptive_assessment.py` — adds an eight-fixture Phase 5
+  JD/resume sweep covering supported backend, frontend, weak-overlap backend,
+  data, infra, AI/LLM, and candidate-extra-skill cases.
+- `docs/development/changes.md` — recorded the bug fix for handoff.
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_assessment_taxonomy.py tests/test_adaptive_assessment.py -q`
+  passed, 19 tests.
+- `cd apps/web && npm run typecheck` passed.
+- `cd apps/web && npm run test:e2e -- --workers=1` passed, 32 tests and 2
+  skipped live tests.
+
+**Follow-up items:** None.
+
+## 2026-06-29 — Phase 5 JD/Resume Upload Text Extraction
+
+**Symptom:** Adaptive Builder required employers to paste JD and resume text,
+which made testing with real documents awkward.
+
+**Root cause:** Phase 5 originally scoped intake to pasted text only.
+
+**Files changed:**
+- `apps/api/signalloop_api/document_text.py` — added text extraction for
+  `.txt`, `.md`, `.docx`, and best-effort text-based `.pdf`.
+- `apps/api/signalloop_api/adaptive.py` — added authenticated
+  `POST /employer/adaptive/extract-document-text` raw-byte upload endpoint with
+  2 MB limit.
+- `apps/api/signalloop_api/schemas.py` — added document extraction response
+  schema.
+- `apps/api/tests/test_adaptive_assessment.py` — added TXT, DOCX, and rejected
+  extension extraction coverage.
+- `apps/web/src/app/employer/api.ts` — added document extraction client.
+- `apps/web/src/app/employer/page.tsx` — added JD and resume file inputs in
+  Adaptive Builder; extracted text fills the existing textareas.
+- `apps/web/tests/e2e/employer-portal.spec.ts` — added JD upload coverage in
+  the adaptive builder E2E.
+- `CURRENT_STATE.md`, `docs/enhancements/phase-5-role-adaptive-assessment/phase-5-execution-plan.md`,
+  and `docs/enhancements/phase-5-role-adaptive-assessment/manual-test-fixtures.md`
+  — documented upload support and PDF limitations.
+- `docs/development/changes.md` — recorded the upload change.
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_adaptive_assessment.py -q`
+  passed, 21 tests.
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_assessment_taxonomy.py tests/test_adaptive_assessment.py -q`
+  passed, 27 tests.
+- `cd apps/web && npm run typecheck` passed.
+- `cd apps/web && npm run test:e2e -- tests/e2e/employer-portal.spec.ts --workers=1`
+  passed, 8 tests.
+
+**Follow-up items:** Add OCR or a stronger PDF parser if scanned/complex PDFs
+become important for pilot usage.
+
+## 2026-06-29 — Phase 5 Saved Blueprint List and Adaptive Invite Result
+
+**Symptom:** Saved blueprints listed too many rows, status dots were unexplained,
+future assessment blueprints did not visually stand apart enough, and after
+approving an adaptive blueprint the invite link was not shown in the adaptive
+flow.
+
+**Root cause:** The adaptive builder reused parent invite state intended for the
+direct coding form, which is hidden in adaptive mode. Saved blueprint rows also
+used raw status color dots without a legend or text status.
+
+**Files changed:**
+- `apps/web/src/app/employer/page.tsx` — limits saved blueprints to the latest
+  five, adds status labels and color meaning, uses amber for future modules, and
+  shows an adaptive invite result panel with copy/open actions after approval.
+- `apps/web/tests/e2e/employer-portal.spec.ts` — extends adaptive builder E2E
+  coverage to approve a blueprint and assert the adaptive invite URL is visible.
+- `docs/development/changes.md` — recorded the UX fix.
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_assessment_taxonomy.py tests/test_adaptive_assessment.py -q`
+  passed, 24 tests.
+- `cd apps/web && npm run typecheck` passed.
+- `cd apps/web && npm run test:e2e -- tests/e2e/employer-portal.spec.ts --workers=1`
+  passed, 8 tests.
+
+**Follow-up items:** None.
+
+## 2026-06-29 — Phase 5 Future vs Out-of-Scope Blueprint Classification
+
+**Symptom:** Frontend/data/infra JDs could be routed to a backend FastAPI
+adaptive assessment, while non-roadmap roles needed a clearer distinction from
+planned future assessment families.
+
+**Root cause:** Blueprint selection only distinguished current FastAPI packs from
+unsupported skills. It did not model planned-but-not-invite-ready assessment
+families separately from out-of-scope roles.
+
+**Files changed:**
+- `apps/api/signalloop_api/adaptive_blueprint.py` — added future blueprint
+  generation for planned frontend, data, infra/platform, and AI assessment
+  families; added out-of-scope handling for unmapped/non-roadmap roles.
+- `apps/api/signalloop_api/adaptive.py` — returns 422 only for out-of-scope
+  JDs; future assessment blueprints are saved normally.
+- `apps/api/tests/test_adaptive_assessment.py` — expanded manual fixture sweep
+  to cover future frontend/data/infra, invite-ready backend/API, non-technical
+  out-of-scope, and mobile-not-on-roadmap cases.
+- `apps/web/src/app/employer/page.tsx` — future blueprints are shown as planned
+  assessments and cannot send invites.
+- `apps/web/src/app/employer/types.ts` — allows future assessment levels in
+  blueprint responses.
+- `apps/web/tests/e2e/employer-portal.spec.ts` — added UI coverage for future
+  blueprints and disabled invite actions.
+- `docs/enhancements/phase-5-role-adaptive-assessment/manual-test-fixtures.md`
+  — added out-of-scope fixtures and updated future-assessment expectations.
+- `docs/development/changes.md` — recorded the classification change.
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_assessment_taxonomy.py tests/test_adaptive_assessment.py -q`
+  passed, 23 tests.
+- `cd apps/web && npm run typecheck` passed.
+- `cd apps/web && npm run test:e2e -- tests/e2e/employer-portal.spec.ts --workers=1`
+  passed, 8 tests.
+
+**Follow-up items:** If mobile/native or security assessments enter the roadmap,
+add explicit taxonomy families and future blueprint mappings for them.
+
+## 2026-06-29 — Phase 5 Frontend JD Overrides Default Backend Controls
+
+**Symptom:** A frontend-dominant JD/resume could still select the backend FastAPI
+assessment when the employer left the adaptive builder's role title/family
+controls at their default backend values.
+
+**Root cause:** Blueprint selection trusted the selected/default role family too
+early. A single backend-ish term such as API contracts could satisfy FastAPI fit
+before considering that extracted frontend skills dominated the JD.
+
+**Files changed:**
+- `apps/api/signalloop_api/adaptive_blueprint.py` — family-dominance check now
+  routes frontend/data/infra-dominant JDs to future blueprints even when stale
+  role controls are backend.
+- `apps/api/tests/test_adaptive_assessment.py` — added regression fixture for a
+  frontend JD/resume with default backend role controls.
+- `docs/enhancements/phase-5-role-adaptive-assessment/manual-test-fixtures.md`
+  — added the same manual fixture as Fixture 4B.
+- `docs/development/changes.md` — recorded the regression fix.
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_adaptive_assessment.py -q`
+  passed, 18 tests.
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_assessment_taxonomy.py tests/test_adaptive_assessment.py -q`
+  passed, 24 tests.
+- `cd apps/web && npm run typecheck` passed.
+- `cd apps/web && npm run test:e2e -- tests/e2e/employer-portal.spec.ts --workers=1`
+  passed, 8 tests.
+
+**Follow-up items:** None.
+
+## 2026-06-29 — Phase 5 Adaptive Builder UX Clarification and Saved Blueprints
+
+**Symptom:** The adaptive builder did not clearly explain team context, made the
+adaptive path feel mandatory, did not let employers inspect the selected
+assessment from the generated blueprint, and did not show previously generated
+blueprints when returning to the Assessments screen.
+
+**Root cause:** Blueprint persistence existed in the backend, but the employer
+UI only held the generated blueprint in local component state. The generated
+blueprint card also summarized coverage without linking back to the existing
+Standard/Advanced assessment detail modal.
+
+**Files changed:**
+- `apps/api/signalloop_api/adaptive.py` — added employer-scoped
+  `GET /employer/adaptive/blueprints` for recent saved blueprints.
+- `apps/web/src/app/employer/api.ts` — added adaptive blueprint list client.
+- `apps/web/src/app/employer/page.tsx` — clarified adaptive builder copy,
+  renamed team context to optional product/team context, added saved-blueprint
+  selection, added assessment detail access from blueprint cards, and disabled
+  invite creation for already-used blueprints.
+- `apps/api/tests/test_adaptive_assessment.py` — added saved-blueprint list
+  employer-isolation coverage.
+- `apps/web/tests/e2e/employer-portal.spec.ts` — adjusted adaptive blueprint
+  mocks for the new list request.
+- `docs/enhancements/phase-5-role-adaptive-assessment/manual-test-fixtures.md`
+  — documented team context meaning for manual QA.
+- `docs/development/changes.md` — recorded the UX/API change for handoff.
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_adaptive_assessment.py -q`
+  passed, 14 tests.
+- `cd apps/web && npm run typecheck` passed.
+- `cd apps/web && npm run test:e2e -- tests/e2e/employer-portal.spec.ts --workers=1`
+  passed, 7 tests.
+
+**Follow-up items:** Consider adding a dedicated blueprint detail page if saved
+blueprints need deeper review, editing, or deletion.
+
+## 2026-06-29 — Phase 5 Mutually Exclusive Assessment Creation Paths
+
+**Symptom:** The Assessments screen showed Adaptive Builder and the direct
+Coding Challenge form at the same time, making it unclear whether an invite was
+coming from a generated blueprint or from manual employer selection.
+
+**Root cause:** Phase 5 added the adaptive builder beside the existing quick
+invite form without a mode selector. Both paths were active in one screen.
+
+**Files changed:**
+- `apps/web/src/app/employer/page.tsx` — added a Creation path selector with
+  Direct coding challenge and Adaptive builder modes. The direct coding form is
+  hidden in adaptive mode, and the adaptive builder is hidden in direct mode.
+- `apps/web/tests/e2e/employer-portal.spec.ts` — updated adaptive E2E coverage
+  to switch modes and verify the direct Send invite button is hidden in
+  adaptive mode.
+- `docs/enhancements/phase-5-role-adaptive-assessment/manual-test-fixtures.md`
+  — documented Direct vs Adaptive as alternate creation paths.
+- `docs/development/changes.md` — recorded the UX change.
+
+**Validation:**
+- `cd apps/web && npm run typecheck` passed.
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_adaptive_assessment.py -q`
+  passed, 14 tests.
+- `cd apps/web && npm run test:e2e -- tests/e2e/employer-portal.spec.ts --workers=1`
+  passed, 7 tests.
+
+**Follow-up items:** None.

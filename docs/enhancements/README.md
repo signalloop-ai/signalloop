@@ -8,7 +8,15 @@ treated as historical implementation context. New work should start from
 
 ## Active Workstream
 
+No active enhancement workstream. The latest completed workstream is
+`phase-5-role-adaptive-assessment/` - Role-Adaptive Assessment System.
+
+Completed historical enhancement workstreams:
+
 - `phase-2-assessment-system/` - Assessment System Enhancement.
+- `phase-3-proctoring/` - Evidence-Based Proctoring.
+- `phase-4-super-admin-portal/` - Super Admin Portal.
+- `phase-5-role-adaptive-assessment/` - Role-Adaptive Assessment System.
 
 ## Rules
 

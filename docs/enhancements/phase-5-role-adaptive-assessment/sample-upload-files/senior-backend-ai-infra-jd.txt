@@ -1,0 +1,36 @@
+Senior Backend Engineer - AI Infrastructure
+
+Company: SignalLoop SampleCo
+Location: Remote / Hybrid
+Employment Type: Full-time
+
+Role Overview
+We are hiring a Senior Backend Engineer for an AI infrastructure team. The role requires Python, FastAPI, API design, authorization, multi-tenant APIs, reliability, observability, PostgreSQL, Kubernetes basics, and strong AI collaboration.
+
+The team builds internal control-plane APIs for provisioning model-serving workloads. We need engineers who can debug production behavior, protect tenant boundaries, write useful tests, and make safe product tradeoffs under ambiguity.
+
+Responsibilities
+- Build and maintain Python FastAPI services for internal platform workflows.
+- Design predictable REST APIs with clear validation, error handling, and authorization behavior.
+- Protect tenant boundaries across teams and organizations.
+- Write meaningful pytest coverage for public behavior, edge cases, and regressions.
+- Collaborate with platform engineers on deployments, monitoring, and Kubernetes-operated services.
+- Use AI tools responsibly for debugging, test design, and implementation support while verifying outputs.
+
+Required Skills
+- Python 3 and FastAPI
+- REST API design and API contracts
+- Authorization, ownership isolation, and multi-tenant data safety
+- Input validation, state transitions, and error handling
+- PostgreSQL-backed workflows
+- Reliability, observability, and production debugging
+- Pytest and regression test design
+- Responsible AI-assisted engineering practices
+
+Nice To Have
+- Kubernetes basics and deployment workflows
+- Redis caching or background jobs
+- Experience with model-serving or AI infrastructure control planes
+
+Assessment Expectation
+This JD should generate an invite-ready Advanced FastAPI adaptive blueprint. Kubernetes and deeper infrastructure ownership should appear as caveats or follow-up probes rather than directly tested skills.

@@ -24,6 +24,43 @@ export type EmployerAttemptSummary = {
   score_total: number | null;
 };
 
+export type AssessmentBlueprint = {
+  id: number;
+  role_profile_id: number;
+  candidate_profile_id: number | null;
+  title: string;
+  assessment_pack_slug: string;
+  assessment_level: string;
+  timing_mode: "untimed" | "timed";
+  duration_minutes: number;
+  evaluator_feedback_mode: "strict" | "guided";
+  skill_mapping: {
+    required_overlap?: string[];
+    required_gap?: string[];
+    candidate_extra?: string[];
+    unsupported_required?: string[];
+    unsupported_claimed?: string[];
+    role_skill_ids?: string[];
+    candidate_skill_ids?: string[];
+    unmapped_terms?: { role?: string[]; candidate?: string[] };
+  };
+  coverage: {
+    module_id: string;
+    assessment_pack_slug: string;
+    label: string;
+    directly_tested: string[];
+    partially_tested: string[];
+    not_tested: string[];
+  };
+  rationale: string[];
+  follow_up_probes: Array<{ source: string; skill_id: string; question: string }>;
+  caveats: string[];
+  status: string;
+  approved_at: string | null;
+  used_at: string | null;
+  created_at: string;
+};
+
 type TestSummary = {
   collected: number;
   passed: number;
@@ -153,6 +190,32 @@ export type EvidenceReportResponse = {
       reason: string;
       provider_configured: boolean;
     };
+    adaptive_context?: {
+      blueprint_id: number;
+      title: string;
+      status: string;
+      role: {
+        id: number;
+        title: string;
+        role_family: string;
+        seniority: string;
+        expected_ai_usage: number;
+        team_context: string | null;
+      };
+      candidate_profile: { id: number; candidate_email: string | null } | null;
+      selected_assessment: {
+        assessment_pack_slug: string;
+        assessment_level: string;
+        timing_mode: string;
+        duration_minutes: number;
+        evaluator_feedback_mode: string;
+      };
+      skill_mapping: AssessmentBlueprint["skill_mapping"];
+      coverage: AssessmentBlueprint["coverage"];
+      rationale: string[];
+      follow_up_probes: AssessmentBlueprint["follow_up_probes"];
+      caveats: string[];
+    } | null;
     process_evidence: {
       snapshot_count: number;
       test_run_count: number;

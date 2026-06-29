@@ -10,9 +10,19 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { createInvite, fetchAttempts, type AuthTokenProvider, type InviteConfiguration } from "./api";
+import {
+  approveAndInviteFromBlueprint,
+  createInvite,
+  extractDocumentText,
+  fetchAdaptiveBlueprints,
+  fetchAttempts,
+  generateAdaptiveBlueprint,
+  type AdaptiveBuilderInput,
+  type AuthTokenProvider,
+  type InviteConfiguration,
+} from "./api";
 import { fetchEmployerMe } from "../admin/api";
-import type { EmployerAttemptSummary } from "./types";
+import type { AssessmentBlueprint, EmployerAttemptSummary } from "./types";
 
 // ── Static assessment pack details sourced from evaluator rubrics ──────────────
 
@@ -318,10 +328,413 @@ function HowItWorks() {
   );
 }
 
+function skillLabel(skillId: string): string {
+  return skillId.replaceAll("_", " ").replaceAll(".", " / ");
+}
+
+function uniqueSkills(skills: Array<string | undefined>): string[] {
+  return Array.from(new Set(skills.filter((skill): skill is string => Boolean(skill))));
+}
+
+function SkillPills({ title, skills, tone = "default" }: { title: string; skills?: string[]; tone?: "default" | "warn" | "ready" }) {
+  const visibleSkills = uniqueSkills(skills ?? []);
+  if (!visibleSkills.length) return null;
+  return (
+    <div className="assessment-section" style={{ marginTop: 12 }}>
+      <div className="assessment-section-header">{title}</div>
+      <div className="mod-tags">
+        {visibleSkills.slice(0, 12).map((skill) => (
+          <span className={`mod-tag ${tone === "warn" ? "warn" : tone === "ready" ? "ready" : ""}`} key={skill}>
+            {skillLabel(skill)}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function blueprintStatusMeta(blueprint: AssessmentBlueprint, selected: boolean) {
+  if (blueprint.assessment_pack_slug.startsWith("future_")) {
+    return {
+      dot: "var(--amber)",
+      label: "Future",
+      pillClass: "warn",
+      action: selected ? "Selected" : "Select",
+    };
+  }
+  if (blueprint.status === "used") {
+    return {
+      dot: "var(--green)",
+      label: "Invite sent",
+      pillClass: "ready",
+      action: selected ? "Selected" : "Review",
+    };
+  }
+  return {
+    dot: "var(--blue)",
+    label: "Draft",
+    pillClass: "",
+    action: selected ? "Selected" : "Select",
+  };
+}
+
+function AdaptiveBuilder({
+  getAuthToken,
+  onCreated,
+}: {
+  getAuthToken: AuthTokenProvider;
+  onCreated: (attempts: EmployerAttemptSummary[], inviteUrl: string | null) => void;
+}) {
+  const [roleTitle, setRoleTitle] = useState("Senior Backend Engineer");
+  const [roleFamily, setRoleFamily] = useState<AdaptiveBuilderInput["roleFamily"]>("backend");
+  const [seniority, setSeniority] = useState<AdaptiveBuilderInput["seniority"]>("senior");
+  const [expectedAiUsage, setExpectedAiUsage] = useState(70);
+  const [candidateEmail, setCandidateEmail] = useState("");
+  const [jdText, setJdText] = useState("");
+  const [teamContext, setTeamContext] = useState("");
+  const [resumeText, setResumeText] = useState("");
+  const [timingMode, setTimingMode] = useState<InviteConfiguration["timingMode"]>("timed");
+  const [evaluatorFeedbackMode, setEvaluatorFeedbackMode] = useState<InviteConfiguration["evaluatorFeedbackMode"]>("strict");
+  const [blueprint, setBlueprint] = useState<AssessmentBlueprint | null>(null);
+  const [savedBlueprints, setSavedBlueprints] = useState<AssessmentBlueprint[]>([]);
+  const [adaptiveInviteUrl, setAdaptiveInviteUrl] = useState<string | null>(null);
+  const [showBlueprintAssessmentDetail, setShowBlueprintAssessmentDetail] = useState<"standard" | "advanced" | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [uploadingField, setUploadingField] = useState<"jd" | "resume" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const emailValid = useMemo(() => (
+    candidateEmail.trim().length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidateEmail.trim())
+  ), [candidateEmail]);
+  const canGenerate = roleTitle.trim().length >= 2 && jdText.trim().length >= 20 && !busy;
+  const isFutureBlueprint = !!blueprint && blueprint.assessment_pack_slug.startsWith("future_");
+  const canInvite = !!blueprint && !isFutureBlueprint && blueprint.status !== "used" && emailValid && !busy;
+
+  const loadSavedBlueprints = useCallback(async () => {
+    try {
+      setSavedBlueprints(await fetchAdaptiveBlueprints(getAuthToken));
+    } catch {
+      // Saved blueprints are helpful context, not a blocker for creating a new one.
+    }
+  }, [getAuthToken]);
+
+  useEffect(() => {
+    void loadSavedBlueprints();
+  }, [loadSavedBlueprints]);
+
+  async function generate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const generated = await generateAdaptiveBlueprint({
+        roleTitle: roleTitle.trim(),
+        roleFamily,
+        seniority,
+        jdText: jdText.trim(),
+        teamContext: teamContext.trim(),
+        expectedAiUsage,
+        candidateEmail: candidateEmail.trim(),
+        resumeText: resumeText.trim(),
+        timingMode,
+        evaluatorFeedbackMode,
+      }, getAuthToken);
+      setBlueprint(generated);
+      setSavedBlueprints((current) => [generated, ...current.filter((item) => item.id !== generated.id)].slice(0, 20));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Adaptive blueprint generation failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function approveAndSend() {
+    if (!blueprint) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await approveAndInviteFromBlueprint(blueprint.id, candidateEmail.trim(), getAuthToken);
+      onCreated(result.attempts, result.inviteUrl);
+      setAdaptiveInviteUrl(result.inviteUrl);
+      setBlueprint(null);
+      setCandidateEmail("");
+      setResumeText("");
+      await loadSavedBlueprints();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Adaptive invite creation failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function copyAdaptiveInviteUrl() {
+    if (!adaptiveInviteUrl) return;
+    void navigator.clipboard?.writeText(adaptiveInviteUrl);
+  }
+
+  async function uploadDocumentText(file: File | null, target: "jd" | "resume") {
+    if (!file) return;
+    setUploadingField(target);
+    setError(null);
+    try {
+      const extracted = await extractDocumentText(file, getAuthToken);
+      if (target === "jd") {
+        setJdText(extracted.text);
+      } else {
+        setResumeText(extracted.text);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Document text extraction failed");
+    } finally {
+      setUploadingField(null);
+    }
+  }
+
+  return (
+    <section className="mod-card" style={{ marginBottom: 18 }}>
+      <div className="mod-card-head">
+        <span className="mod-icon">
+          <Brain size={18} aria-hidden="true" />
+        </span>
+        <div>
+          <p className="mod-title">Adaptive builder <span className="status-pill">Optional</span></p>
+          <p className="mod-sub">Paste JD and resume text · review saved blueprint · send invite</p>
+        </div>
+      </div>
+      <p className="mod-desc">
+        Use this when you want the system to map a JD and resume to the closest supported coding assessment. You can also skip this and use the Coding challenge form below directly.
+      </p>
+
+      <form onSubmit={generate} className="report-grid" style={{ marginTop: 14 }}>
+        <div>
+          <div className="summary-field">
+            <span className="summary-field-label">Role title</span>
+            <input className="text-input" value={roleTitle} onChange={(e) => setRoleTitle(e.target.value)} />
+          </div>
+          <div className="summary-field">
+            <span className="summary-field-label">Candidate email</span>
+            <input className="text-input" type="email" value={candidateEmail} onChange={(e) => setCandidateEmail(e.target.value)} placeholder="candidate@company.com" />
+          </div>
+          <div className="summary-field">
+            <span className="summary-field-label">Role family / seniority</span>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <select value={roleFamily} onChange={(e) => setRoleFamily(e.target.value as AdaptiveBuilderInput["roleFamily"])}>
+                <option value="backend">Backend</option>
+                <option value="fullstack">Full-stack</option>
+                <option value="frontend">Frontend</option>
+                <option value="infra">Infra</option>
+                <option value="data">Data</option>
+                <option value="ai">AI / ML</option>
+              </select>
+              <select value={seniority} onChange={(e) => setSeniority(e.target.value as AdaptiveBuilderInput["seniority"])}>
+                <option value="junior">Junior</option>
+                <option value="mid">Mid</option>
+                <option value="senior">Senior</option>
+                <option value="staff">Staff</option>
+              </select>
+            </div>
+          </div>
+          <div className="summary-field">
+            <span className="summary-field-label">Expected AI usage: {expectedAiUsage}%</span>
+            <input type="range" min={0} max={100} step={10} value={expectedAiUsage} onChange={(e) => setExpectedAiUsage(Number(e.target.value))} />
+          </div>
+        </div>
+
+        <div>
+          <div className="summary-field">
+            <span className="summary-field-label">JD / role requirements</span>
+            <input
+              className="text-input"
+              type="file"
+              accept=".txt,.md,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              aria-label="Upload JD"
+              onChange={(event) => {
+                void uploadDocumentText(event.target.files?.[0] ?? null, "jd");
+                event.currentTarget.value = "";
+              }}
+            />
+            {uploadingField === "jd" ? <p className="hint">Extracting JD text…</p> : null}
+            <textarea className="text-input" style={{ minHeight: 120 }} value={jdText} onChange={(e) => setJdText(e.target.value)} placeholder="Paste the job description or role requirements." />
+          </div>
+          <div className="summary-field">
+            <span className="summary-field-label">Candidate resume text</span>
+            <input
+              className="text-input"
+              type="file"
+              accept=".txt,.md,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              aria-label="Upload resume"
+              onChange={(event) => {
+                void uploadDocumentText(event.target.files?.[0] ?? null, "resume");
+                event.currentTarget.value = "";
+              }}
+            />
+            {uploadingField === "resume" ? <p className="hint">Extracting resume text…</p> : null}
+            <textarea className="text-input" style={{ minHeight: 96 }} value={resumeText} onChange={(e) => setResumeText(e.target.value)} placeholder="Optional for blueprint generation; recommended for follow-up probes." />
+            <p className="hint">Upload TXT, DOCX, or text-based PDF. Scanned PDFs are not supported yet.</p>
+          </div>
+          <div className="summary-field">
+            <span className="summary-field-label">Product/team context optional</span>
+            <input className="text-input" value={teamContext} onChange={(e) => setTeamContext(e.target.value)} placeholder="e.g. internal workflow APIs, fintech payments, AI infrastructure" />
+            <p className="hint">Extra domain or team context that may not be obvious from the JD. Leave blank if the JD is enough.</p>
+          </div>
+        </div>
+
+        <div>
+          <div className="summary-field">
+            <span className="summary-field-label">Timing</span>
+            <div className="seg full" role="group" aria-label="Adaptive timing">
+              {(["timed", "untimed"] as const).map((value) => (
+                <button key={value} type="button" className={timingMode === value ? "active" : undefined} onClick={() => setTimingMode(value)}>
+                  {value === "timed" ? "Strict" : "Untimed"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="summary-field">
+            <span className="summary-field-label">Feedback</span>
+            <div className="seg full" role="group" aria-label="Adaptive feedback">
+              {(["strict", "guided"] as const).map((value) => (
+                <button key={value} type="button" className={evaluatorFeedbackMode === value ? "active" : undefined} onClick={() => setEvaluatorFeedbackMode(value)}>
+                  {value}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button className="command-button primary" type="submit" disabled={!canGenerate}>
+            {busy ? <><Loader2 size={15} className="spin" aria-hidden="true" /> Working…</> : <><Brain size={16} aria-hidden="true" /> Generate adaptive blueprint</>}
+          </button>
+          <p className="hint">This creates a saved draft plan. It does not send an invite until you approve it.</p>
+          {error ? <p className="submission-error">{error}</p> : null}
+        </div>
+      </form>
+
+      {savedBlueprints.length ? (
+        <div className="assessment-section" style={{ marginTop: 16 }}>
+          <div className="assessment-section-header">Saved blueprints</div>
+          <p className="assessment-section-note">Showing the latest five. Blue = draft, green = invite sent, amber = future module.</p>
+          <div className="activity-list">
+            {savedBlueprints.slice(0, 5).map((item) => {
+              const meta = blueprintStatusMeta(item, blueprint?.id === item.id);
+              return (
+                <button
+                  className={`activity-row blueprint-row${blueprint?.id === item.id ? " active" : ""}`}
+                  key={item.id}
+                  type="button"
+                  onClick={() => setBlueprint(item)}
+                  style={{ width: "100%", textAlign: "left" }}
+                >
+                  <span className="activity-dot" style={{ background: meta.dot }} />
+                  <span className="activity-text">
+                    <strong>{item.title}</strong> — {item.assessment_level} · {item.duration_minutes} min
+                  </span>
+                  <span className={`status-pill ${meta.pillClass}`}>{meta.label}</span>
+                  <span className="activity-time">{timeAgo(item.created_at)}</span>
+                  <span className="status-pill">{meta.action}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {adaptiveInviteUrl ? (
+        <div className="invite-result" style={{ marginTop: 16 }}>
+          <div className="assessment-section-header">Invite created from adaptive blueprint</div>
+          <input
+            className="invite-url-input"
+            readOnly
+            value={adaptiveInviteUrl}
+            aria-label="Adaptive invite URL"
+            onFocus={(event) => event.currentTarget.select()}
+          />
+          <div className="invite-result-actions">
+            <button type="button" className="command-button secondary" onClick={copyAdaptiveInviteUrl}>
+              <ClipboardCopy size={16} aria-hidden="true" />
+              Copy link
+            </button>
+            <a className="command-button secondary" href={adaptiveInviteUrl} target="_blank" rel="noreferrer">
+              <ExternalLink size={16} aria-hidden="true" />
+              Open assessment
+            </a>
+          </div>
+        </div>
+      ) : null}
+
+      {blueprint ? (
+        <div className="icard show" style={{ display: "block", marginTop: 16 }}>
+          <div className="ihead">
+            <div className="ilogo">{isFutureBlueprint ? "F" : blueprint.assessment_level === "advanced" ? "A" : "S"}</div>
+            <div>
+              <div className="iname">{blueprint.title}</div>
+              <div className="iurl">{blueprint.coverage.label} · {blueprint.duration_minutes} min</div>
+            </div>
+          </div>
+          <div className="ibody">
+            <div className="assessment-section">
+              <div className="assessment-section-header">What happens next</div>
+              <p className="assessment-section-note">
+                {isFutureBlueprint
+                  ? "This blueprint maps the JD/resume to a planned assessment module. It is saved for review, but cannot create a candidate invite until that module is available."
+                  : `This blueprint recommends the ${blueprint.assessment_level === "advanced" ? "Advanced FastAPI" : "Standard FastAPI"} coding challenge. The candidate sees the normal coding workspace after you approve and send the invite.`}
+              </p>
+              {isFutureBlueprint ? (
+                <span className="status-pill warn">Planned assessment</span>
+              ) : (
+                <button
+                  className="command-button secondary"
+                  type="button"
+                  onClick={() => setShowBlueprintAssessmentDetail(blueprint.assessment_level as "standard" | "advanced")}
+                >
+                  <Info size={16} aria-hidden="true" /> View assessment details
+                </button>
+              )}
+            </div>
+            <SkillPills title="Directly tested" skills={blueprint.coverage.directly_tested} tone="ready" />
+            <SkillPills title="Partially tested" skills={blueprint.coverage.partially_tested} />
+            <SkillPills
+              title="Not directly tested"
+              skills={uniqueSkills([
+                ...(blueprint.skill_mapping.unsupported_required ?? []),
+                ...(blueprint.skill_mapping.unsupported_claimed ?? []),
+              ])}
+              tone="warn"
+            />
+            <div className="assessment-section">
+              <div className="assessment-section-header">Rationale</div>
+              <ul className="assessment-list">
+                {blueprint.rationale.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </div>
+            <div className="assessment-section">
+              <div className="assessment-section-header">Follow-up probes</div>
+              <ul className="assessment-list">
+                {blueprint.follow_up_probes.slice(0, 4).map((probe) => <li key={`${probe.source}-${probe.skill_id}`}>{probe.question}</li>)}
+              </ul>
+            </div>
+            <button className="command-button primary" type="button" disabled={!canInvite} onClick={approveAndSend}>
+              {busy ? <><Loader2 size={15} className="spin" aria-hidden="true" /> Sending…</> : <><Plus size={16} aria-hidden="true" /> Approve and send invite</>}
+            </button>
+            {isFutureBlueprint ? <p className="hint">Invite sending is disabled because this assessment is planned for a future module.</p> : null}
+            {blueprint.status === "used" ? <p className="hint">This blueprint already created an invite. Generate a new blueprint or select another saved draft to send a new invite.</p> : null}
+            {!emailValid ? <p className="hint">Enter a valid candidate email before sending.</p> : null}
+          </div>
+        </div>
+      ) : null}
+      {showBlueprintAssessmentDetail ? (
+        <AssessmentDetailModal
+          level={showBlueprintAssessmentDetail}
+          onClose={() => setShowBlueprintAssessmentDetail(null)}
+        />
+      ) : null}
+    </section>
+  );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: AuthTokenProvider; isClerkLoaded: boolean }) {
   const [attempts, setAttempts] = useState<EmployerAttemptSummary[]>([]);
+  const [creationMode, setCreationMode] = useState<"direct" | "adaptive">("direct");
   const [candidateEmail, setCandidateEmail] = useState("");
   const [assessmentLevel, setAssessmentLevel] = useState<InviteConfiguration["assessmentLevel"]>("standard");
   const [timingMode, setTimingMode] = useState<InviteConfiguration["timingMode"]>("untimed");
@@ -399,9 +812,12 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
 
   useEffect(() => {
     if (!isClerkLoaded) return;
-    void refreshAttempts();
+    const initialLoad = window.setTimeout(() => void refreshAttempts(), 0);
     const interval = window.setInterval(() => void refreshAttempts(), 30_000);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearTimeout(initialLoad);
+      window.clearInterval(interval);
+    };
   }, [refreshAttempts, isClerkLoaded]);
 
   function copyInviteUrl() {
@@ -575,8 +991,45 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
               <>
                 <div className="view-head">
                   <h2>Build assessment</h2>
-                  <p>Coding is the only live module today. Pick a level and timing, then send an invite.</p>
+                  <p>Choose one creation path. Direct uses your manual coding challenge selection; Adaptive generates the selection from a JD/resume blueprint.</p>
                 </div>
+
+                <div className="summary-field" style={{ marginBottom: 18 }}>
+                  <span className="summary-field-label">Creation path</span>
+                  <div className="seg full" role="group" aria-label="Assessment creation path">
+                    <button
+                      type="button"
+                      className={creationMode === "direct" ? "active" : undefined}
+                      onClick={() => setCreationMode("direct")}
+                    >
+                      Direct coding challenge
+                    </button>
+                    <button
+                      type="button"
+                      className={creationMode === "adaptive" ? "active" : undefined}
+                      onClick={() => setCreationMode("adaptive")}
+                    >
+                      Adaptive builder
+                    </button>
+                  </div>
+                  <p className="hint">
+                    {creationMode === "adaptive"
+                      ? "Adaptive mode hides the manual coding form. The approved blueprint decides Basic vs Advanced and sends the invite."
+                      : "Direct mode skips blueprint generation. You manually choose Basic or Advanced and send the invite."}
+                  </p>
+                </div>
+
+                {creationMode === "adaptive" ? (
+                  <AdaptiveBuilder
+                    getAuthToken={getAuthToken}
+                    onCreated={(updatedAttempts, inviteUrl) => {
+                      setAttempts(updatedAttempts);
+                      setCreatedInviteUrl(inviteUrl);
+                    }}
+                  />
+                ) : null}
+
+                {creationMode === "direct" ? (
         <form className="build-grid" onSubmit={submitInvite}>
           <div className="build-left">
           {/* Left: the single supported module — Python coding challenge */}
@@ -796,6 +1249,7 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
             ) : null}
           </div>
         </form>
+                ) : null}
               </>
             ) : null}
 

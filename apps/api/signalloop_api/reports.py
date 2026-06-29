@@ -764,6 +764,43 @@ def llm_assisted_review_status() -> dict:
     }
 
 
+def build_adaptive_context(attempt: AssessmentAttempt) -> dict | None:
+    blueprint = attempt.blueprint
+    if blueprint is None:
+        return None
+    role = blueprint.role_profile
+    candidate = blueprint.candidate_profile
+    return {
+        "blueprint_id": blueprint.id,
+        "title": blueprint.title,
+        "status": blueprint.status,
+        "role": {
+            "id": role.id,
+            "title": role.title,
+            "role_family": role.role_family,
+            "seniority": role.seniority,
+            "expected_ai_usage": role.expected_ai_usage,
+            "team_context": role.team_context,
+        },
+        "candidate_profile": {
+            "id": candidate.id,
+            "candidate_email": candidate.candidate_email,
+        } if candidate else None,
+        "selected_assessment": {
+            "assessment_pack_slug": blueprint.assessment_pack_slug,
+            "assessment_level": blueprint.assessment_level,
+            "timing_mode": blueprint.timing_mode,
+            "duration_minutes": blueprint.duration_minutes,
+            "evaluator_feedback_mode": blueprint.evaluator_feedback_mode,
+        },
+        "skill_mapping": blueprint.skill_mapping,
+        "coverage": blueprint.coverage,
+        "rationale": blueprint.rationale,
+        "follow_up_probes": blueprint.follow_up_probes,
+        "caveats": blueprint.caveats,
+    }
+
+
 def build_timeline(
     attempt: AssessmentAttempt,
     snapshots: list[CodeSnapshot],
@@ -928,6 +965,12 @@ def build_report(
         public_run_count=len(public_runs),
         hidden_summary=hidden_summary,
     )
+    adaptive_context = build_adaptive_context(attempt)
+    adaptive_followups = [
+        probe.get("question", "")
+        for probe in (adaptive_context or {}).get("follow_up_probes", [])
+        if probe.get("question")
+    ]
 
     return {
         "metadata": {
@@ -1010,6 +1053,7 @@ def build_report(
         "proctoring_signals": proctoring_signals,
         "favo": favo,
         "llm_assisted_review": llm_assisted_review_status(),
+        "adaptive_context": adaptive_context,
         "process_evidence": {
             "snapshot_count": len(snapshots),
             "test_run_count": len(test_runs),
@@ -1048,7 +1092,7 @@ def build_report(
             final_explanation=final_submission.final_explanation,
             decision_log=final_submission.decision_log,
             scores=scores,
-        ),
+        ) + adaptive_followups,
     }
 
 

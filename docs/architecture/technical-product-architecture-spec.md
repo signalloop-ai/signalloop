@@ -1,7 +1,7 @@
 # SignalLoop Technical Product & Architecture Specification
 
-Version: 3.0
-Status: Phase 3 planning complete — updated 2026-06-22
+Version: 3.1
+Status: Phase 5 MVP implemented locally — updated 2026-06-29
 
 ## 1. Purpose
 
@@ -612,7 +612,7 @@ This is pilot-only; switch to `ecs_fargate` for production to restore isolation.
 
 ## 21. Phase 3: Evidence-Based Proctoring
 
-Status: planning complete, implementation not started.
+Status: implemented.
 Full detail: `docs/enhancements/phase-3-proctoring/`.
 
 ### What Phase 3 adds
@@ -652,3 +652,43 @@ page unload, and before final submission. Stored in new `proctoring_events` tabl
 - Record audio, continuous video, or screen content.
 - Perform face detection or biometric analysis.
 - Make webcam mandatory.
+
+## 22. Phase 5: Role-Adaptive Assessment System
+
+Status: MVP implemented locally.
+Full detail: `docs/enhancements/phase-5-role-adaptive-assessment/`.
+
+Phase 5 adds an adaptive planning layer before invite creation:
+
+```text
+pasted JD/resume -> skill map -> assessment blueprint -> employer approval -> invite
+```
+
+The MVP boundary is deliberately narrow:
+
+- The employer can paste role/JD requirements and optional candidate resume text.
+- SignalLoop maps both inputs into a versioned skill taxonomy.
+- The system recommends a reviewable assessment blueprint.
+- The employer approves the blueprint before creating an invite.
+- Current executable support remains Standard FastAPI v2 and Advanced FastAPI v1.
+- Unsupported skills are shown as caveats and follow-up areas, not scored evidence.
+- The existing candidate workspace, AI collaborator boundaries, hidden-test handling, and
+  scoring rubrics remain unchanged.
+
+For v1, the role/JD determines the comparable core assessment. Resume data may influence
+blueprint rationale, resume claims to validate, caveats, report interpretation, and follow-up
+probes, but should not automatically give different candidates for the same role different
+scored coding tasks.
+
+Implemented additive concepts:
+
+- `RoleProfile` for employer JD/team-context intake.
+- `CandidateProfile` for optional pasted resume context.
+- `AssessmentBlueprint` for the reviewable recommendation.
+- Nullable `assessment_attempts.blueprint_id` to connect completed attempts back to the
+  approved blueprint.
+- Static taxonomy and module-coverage files under the API package.
+- Optional adaptive builder in the employer Assessments view.
+- `adaptive_context` section in blueprint-backed evidence reports.
+
+Regular quick assessment invites remain supported and should not show adaptive report sections.

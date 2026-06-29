@@ -2397,6 +2397,18 @@ button:disabled {
   padding: 2px 8px;
 }
 
+.mod-tag.ready {
+  background: var(--green-bg);
+  border-color: rgba(16, 185, 129, 0.28);
+  color: var(--green);
+}
+
+.mod-tag.warn {
+  background: var(--amber-bg);
+  border-color: rgba(245, 158, 11, 0.28);
+  color: var(--amber);
+}
+
 .mod-desc {
   color: var(--t1);
   font-size: 12px;
@@ -2537,6 +2549,56 @@ button:disabled {
   color: var(--t2);
   font-size: 11px;
   font-weight: 500;
+}
+
+.icard {
+  background: var(--bg2);
+  border: 1px solid var(--b1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ihead {
+  align-items: center;
+  border-bottom: 1px solid var(--b0);
+  display: flex;
+  gap: 10px;
+  padding: 13px 15px;
+}
+
+.ilogo {
+  align-items: center;
+  background: var(--blue-bg);
+  border: 1px solid var(--b2);
+  border-radius: 7px;
+  color: var(--blue);
+  display: flex;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.iname {
+  color: var(--t0);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.iurl {
+  color: var(--t2);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  margin-top: 1px;
+}
+
+.ibody {
+  display: grid;
+  gap: 12px;
+  padding: 14px 15px;
 }
 
 /* ── Employer portal app shell (Calibr) ─────────────────────────────────── */
@@ -2756,6 +2818,17 @@ button:disabled {
   display: flex;
   gap: 12px;
   padding: 11px 14px;
+}
+
+.activity-row.blueprint-row {
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.activity-row.blueprint-row:hover,
+.activity-row.blueprint-row.active {
+  background: var(--bg3);
+  border-color: var(--blue);
 }
 
 .activity-dot {

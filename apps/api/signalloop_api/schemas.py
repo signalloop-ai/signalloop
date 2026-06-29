@@ -149,3 +149,92 @@ class EmployerInfoResponse(BaseModel):
     id: int
     email: str
     role: Optional[str]
+
+
+class RoleProfileCreateRequest(BaseModel):
+    title: str = Field(min_length=2, max_length=255)
+    role_family: Literal["backend", "frontend", "fullstack", "infra", "data", "ai", "security", "support"] = "backend"
+    seniority: Literal["junior", "mid", "senior", "staff"] = "mid"
+    jd_text: str = Field(min_length=20, max_length=20000)
+    team_context: Optional[str] = Field(default=None, max_length=5000)
+    expected_ai_usage: int = Field(default=50, ge=0, le=100)
+    required_skills: Optional[list[str]] = None
+    nice_to_have_skills: Optional[list[str]] = None
+
+
+class RoleProfileResponse(BaseModel):
+    id: int
+    title: str
+    role_family: str
+    seniority: str
+    jd_text: str
+    team_context: Optional[str]
+    expected_ai_usage: int
+    required_skills: Optional[list[str]]
+    nice_to_have_skills: Optional[list[str]]
+    extracted_skills: dict
+    created_at: str
+
+
+class CandidateProfileCreateRequest(BaseModel):
+    candidate_email: Optional[EmailStr] = None
+    resume_text: str = Field(min_length=20, max_length=20000)
+
+
+class CandidateProfileResponse(BaseModel):
+    id: int
+    candidate_email: Optional[str]
+    resume_text: str
+    extracted_skills: dict
+    extracted_experience: dict
+    created_at: str
+
+
+class BlueprintCreateRequest(BaseModel):
+    role_profile_id: int
+    candidate_profile_id: Optional[int] = None
+    timing_mode: Literal["untimed", "timed"] = "timed"
+    evaluator_feedback_mode: Literal["strict", "guided"] = "strict"
+    duration_minutes: Optional[int] = None
+
+    @model_validator(mode="after")
+    def validate_duration(self) -> "BlueprintCreateRequest":
+        if self.duration_minutes is not None and self.duration_minutes not in VALID_DURATIONS:
+            raise ValueError("duration_minutes must be one of 60, 90, 120, or 150")
+        return self
+
+
+class AssessmentBlueprintResponse(BaseModel):
+    id: int
+    role_profile_id: int
+    candidate_profile_id: Optional[int]
+    title: str
+    assessment_pack_slug: str
+    assessment_level: str
+    timing_mode: str
+    duration_minutes: int
+    evaluator_feedback_mode: str
+    skill_mapping: dict
+    coverage: dict
+    rationale: list
+    follow_up_probes: list
+    caveats: list
+    status: str
+    approved_at: Optional[str]
+    used_at: Optional[str]
+    created_at: str
+
+
+class BlueprintInviteCreateRequest(BaseModel):
+    candidate_email: Optional[EmailStr] = None
+
+
+class AdaptiveSkillMatchPreviewResponse(BaseModel):
+    role_skills: dict
+    candidate_skills: Optional[dict]
+    skill_mapping: dict
+
+
+class DocumentTextExtractResponse(BaseModel):
+    filename: str
+    text: str

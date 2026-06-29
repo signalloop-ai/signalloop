@@ -1,0 +1,93 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 1815 >>
+stream
+BT
+/F1 11 Tf
+50 760 Td
+14 TL
+(Senior Backend Engineer - AI Infrastructure) Tj
+T*
+(Company: SignalLoop SampleCo) Tj
+T*
+(Location: Remote / Hybrid) Tj
+T*
+(Employment Type: Full-time) Tj
+T*
+(Role Overview) Tj
+T*
+(We are hiring a Senior Backend Engineer for an AI infrastructure team. The role requires Python, FastAPI,) Tj
+T*
+(The team builds internal control-plane APIs for provisioning model-serving workloads. We need engineers w) Tj
+T*
+(Responsibilities) Tj
+T*
+(- Build and maintain Python FastAPI services for internal platform workflows.) Tj
+T*
+(- Design predictable REST APIs with clear validation, error handling, and authorization behavior.) Tj
+T*
+(- Protect tenant boundaries across teams and organizations.) Tj
+T*
+(- Write meaningful pytest coverage for public behavior, edge cases, and regressions.) Tj
+T*
+(- Collaborate with platform engineers on deployments, monitoring, and Kubernetes-operated services.) Tj
+T*
+(- Use AI tools responsibly for debugging, test design, and implementation support while verifying outputs) Tj
+T*
+(Required Skills) Tj
+T*
+(- Python 3 and FastAPI) Tj
+T*
+(- REST API design and API contracts) Tj
+T*
+(- Authorization, ownership isolation, and multi-tenant data safety) Tj
+T*
+(- Input validation, state transitions, and error handling) Tj
+T*
+(- PostgreSQL-backed workflows) Tj
+T*
+(- Reliability, observability, and production debugging) Tj
+T*
+(- Pytest and regression test design) Tj
+T*
+(- Responsible AI-assisted engineering practices) Tj
+T*
+(Nice To Have) Tj
+T*
+(- Kubernetes basics and deployment workflows) Tj
+T*
+(- Redis caching or background jobs) Tj
+T*
+(- Experience with model-serving or AI infrastructure control planes) Tj
+T*
+(Assessment Expectation) Tj
+T*
+(This JD should generate an invite-ready Advanced FastAPI adaptive blueprint. Kubernetes and deeper infras) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+2178
+%%EOF

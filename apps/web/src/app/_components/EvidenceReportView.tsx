@@ -152,6 +152,29 @@ function formatTimingValue(value: unknown): string {
   return String(value);
 }
 
+function skillLabel(skillId: string): string {
+  return skillId.replaceAll("_", " ").replaceAll(".", " / ");
+}
+
+function uniqueSkills(skills: Array<string | undefined>): string[] {
+  return Array.from(new Set(skills.filter((skill): skill is string => Boolean(skill))));
+}
+
+function SkillList({ label, skills }: { label: string; skills?: string[] }) {
+  const visibleSkills = uniqueSkills(skills ?? []);
+  if (!visibleSkills.length) return null;
+  return (
+    <div>
+      <p className="report-label">{label}</p>
+      <div className="mod-tags">
+        {visibleSkills.slice(0, 12).map((skill) => (
+          <span className="mod-tag" key={skill}>{skillLabel(skill)}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function formatDuration(totalSeconds: number): string {
   if (totalSeconds <= 0) return "0s";
   const m = Math.floor(totalSeconds / 60);
@@ -365,6 +388,58 @@ export function EvidenceReportView({ report }: { report: EvidenceReportResponse 
           </Disclosure>
         ) : null}
       </section>
+
+      {r.adaptive_context ? (
+        <section className="employer-section">
+          <SectionTitle
+            title="Role-adaptive context"
+            subtitle="How the JD/resume blueprint maps to the selected assessment"
+          />
+          <div className="report-grid">
+            <article>
+              <p className="report-label">Role</p>
+              <p className="report-copy">
+                {r.adaptive_context.role.title} · {r.adaptive_context.role.seniority} · {r.adaptive_context.role.role_family}
+              </p>
+            </article>
+            <article>
+              <p className="report-label">Selected assessment</p>
+              <p className="report-copy">
+                {r.adaptive_context.selected_assessment.assessment_level}
+                {" · "}
+                {r.adaptive_context.selected_assessment.duration_minutes} min
+                {" · "}
+                {r.adaptive_context.selected_assessment.evaluator_feedback_mode}
+              </p>
+            </article>
+          </div>
+          <div className="report-grid" style={{ marginTop: 12 }}>
+            <SkillList label="Directly tested" skills={r.adaptive_context.coverage.directly_tested} />
+            <SkillList label="Partially tested" skills={r.adaptive_context.coverage.partially_tested} />
+            <SkillList
+              label="Not directly tested"
+              skills={uniqueSkills([
+                ...(r.adaptive_context.skill_mapping.unsupported_required ?? []),
+                ...(r.adaptive_context.skill_mapping.unsupported_claimed ?? []),
+              ])}
+            />
+          </div>
+          {r.adaptive_context.rationale?.length ? (
+            <Disclosure label="Blueprint rationale">
+              <ul className="report-list">
+                {r.adaptive_context.rationale.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </Disclosure>
+          ) : null}
+          {r.adaptive_context.caveats?.length ? (
+            <Disclosure label="Coverage caveats">
+              <ul className="report-list">
+                {r.adaptive_context.caveats.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </Disclosure>
+          ) : null}
+        </section>
+      ) : null}
 
       {/* Follow-up questions — right after exec summary */}
       {r.follow_up_questions?.length ? (
