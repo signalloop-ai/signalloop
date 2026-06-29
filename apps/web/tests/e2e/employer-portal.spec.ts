@@ -438,6 +438,9 @@ test("employer can sign in with Clerk, create an invite, and view a report", asy
 
   await expect(page.getByRole("heading", { name: "SignalLoop" })).toBeVisible({ timeout: 10_000 });
   // Overview is the landing view; recent activity lists the existing candidate.
+  await expect(page.getByRole("heading", { name: "Assessment creation paths" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Direct coding challenge" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Adaptive builder" })).toBeVisible();
   await expect(page.getByText("candidate@example.com")).toBeVisible();
 
   // Candidates view shows the attempt table with the recommendation.

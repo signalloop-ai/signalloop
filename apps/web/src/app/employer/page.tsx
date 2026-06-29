@@ -265,6 +265,32 @@ function AssessmentDetailModal({
 
 // ── How it works ──────────────────────────────────────────────────────────────
 
+function CreationPathsOverview() {
+  return (
+    <section className="creation-paths-overview" aria-labelledby="creation-paths-heading">
+      <div className="section-title">
+        <h2 id="creation-paths-heading" style={{ fontSize: 15 }}>Assessment creation paths</h2>
+      </div>
+      <div className="creation-path-grid">
+        <div className="creation-path-card">
+          <span className="creation-path-icon"><Code2 size={18} aria-hidden="true" /></span>
+          <div>
+            <h3>Direct coding challenge</h3>
+            <p>Manually choose Standard or Advanced FastAPI, set timing and feedback, then send the candidate invite.</p>
+          </div>
+        </div>
+        <div className="creation-path-card adaptive">
+          <span className="creation-path-icon"><Brain size={18} aria-hidden="true" /></span>
+          <div>
+            <h3>Adaptive builder</h3>
+            <p>Paste or upload the JD and resume. SignalLoop recommends a blueprint, shows future coverage, and creates the invite after approval.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function HowItWorks() {
   const [open, setOpen] = useState(false);
   return (
@@ -286,12 +312,12 @@ function HowItWorks() {
           <div className="how-it-works-steps">
             <div className="hiw-step">
               <span className="hiw-step-num">1</span>
-              <h3>Create an invite</h3>
-              <p>Enter the candidate&apos;s email and pick the assessment settings:</p>
+              <h3>Choose a creation path</h3>
+              <p>Start from the Assessments view with either direct setup or adaptive blueprint generation:</p>
               <ul>
-                <li><strong>Assessment</strong> — Standard (90 min) or Advanced (120 min)</li>
-                <li><strong>Timing</strong> — Untimed (recommended) or hard cutoff with auto-submit</li>
-                <li><strong>Evaluator feedback</strong> — Strict (results visible to you only) or Guided (candidate sees aggregate pass/fail counts)</li>
+                <li><strong>Direct coding challenge</strong> — manually choose Standard or Advanced FastAPI</li>
+                <li><strong>Adaptive builder</strong> — paste or upload the JD/resume, review the generated blueprint, then approve the invite</li>
+                <li><strong>Settings</strong> — timing and evaluator feedback still apply to either path</li>
               </ul>
               <p>Copy the generated invite link and share it directly with the candidate.</p>
             </div>
@@ -315,6 +341,7 @@ function HowItWorks() {
               <p>Once submitted, click <strong>Generate</strong> next to their attempt. The report includes:</p>
               <ul>
                 <li>Overall score and a hire / no-hire recommendation</li>
+                <li>Role-adaptive context for blueprint-backed attempts</li>
                 <li>Hidden test results they couldn&apos;t see during the attempt</li>
                 <li>AI collaboration log — what they asked and how they used responses</li>
                 <li>Proctoring signals — fullscreen exits, focus loss, webcam snapshots</li>
@@ -962,6 +989,7 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
                   <div className="metric"><span>In progress</span><strong style={{ color: "var(--amber)" }}>{inProgressCount}</strong></div>
                   <div className="metric"><span>Invited</span><strong style={{ color: "var(--purple)" }}>{invitedCount}</strong></div>
                 </section>
+                <CreationPathsOverview />
                 <HowItWorks />
                 <div className="section-title" style={{ margin: "24px 0 12px" }}>
                   <h2 style={{ fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
@@ -982,7 +1010,7 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
                     })}
                   </div>
                 ) : (
-                  <p className="empty-state">No activity yet — create an invite on the Assessments page.</p>
+                  <p className="empty-state">No activity yet — use Direct coding challenge or Adaptive builder on the Assessments page.</p>
                 )}
               </>
             ) : null}

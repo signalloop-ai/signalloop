@@ -5,6 +5,27 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-06-29 — Employer Overview explains adaptive builder path
+
+**Symptom:** The employer Overview still described assessment creation as a
+direct invite flow, so the Adaptive builder relationship to the Coding challenge
+path was not visible until entering the Assessments view.
+
+**Root cause:** Phase 5 added the adaptive creation path to Assessments, but the
+Overview help text and empty state were still written around the earlier direct
+invite model.
+
+**Files changed:**
+- `apps/web/src/app/employer/page.tsx`
+- `apps/web/src/app/globals.css`
+- `apps/web/tests/e2e/employer-portal.spec.ts`
+- `CURRENT_STATE.md`
+
+**Follow-up:** Keep Overview copy aligned when future assessment types move from
+planned/future coverage into executable assessment packs.
+
+---
+
 ## 2026-06-29 — Phase 5 MVP implementation: role-adaptive assessment system
 
 - Implemented adaptive persistence:

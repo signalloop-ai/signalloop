@@ -1319,6 +1319,64 @@ button:disabled {
   padding: 18px;
 }
 
+.creation-paths-overview {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.creation-path-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.creation-path-card {
+  align-items: flex-start;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--blue);
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.04);
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.creation-path-card.adaptive {
+  border-left-color: var(--purple);
+}
+
+.creation-path-icon {
+  align-items: center;
+  background: var(--blue-bg);
+  border-radius: 8px;
+  color: var(--blue);
+  display: flex;
+  flex-shrink: 0;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.creation-path-card.adaptive .creation-path-icon {
+  background: rgb(124 58 237 / 0.1);
+  color: var(--purple);
+}
+
+.creation-path-card h3 {
+  font-size: 14px;
+  line-height: 1.2;
+  margin: 0 0 4px;
+}
+
+.creation-path-card p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
 /* ── How it works guide ─────────────────────────────────────────────────────── */
 
 .how-it-works {

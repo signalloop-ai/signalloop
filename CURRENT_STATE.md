@@ -105,8 +105,9 @@ also switched hosted execution to `DirectExecutionProvider` (`EXECUTION_BACKEND=
   sidebar with a Workspace nav (Overview, Assessments, Candidates, Reports) and an Account
   section (Settings, Help & docs — placeholders). Client-side view switching via `nav`
   state, no routing change.
-  - **Overview**: four colored stat tiles (total/submitted/in-progress/invited) + How-it-works
-    + recent-activity feed.
+  - **Overview**: four colored stat tiles (total/submitted/in-progress/invited), explicit
+    Direct coding challenge vs Adaptive builder creation-path guidance, How-it-works, and
+    recent-activity feed.
   - **Assessments**: the live "Coding challenge" card (Basic/Advanced) + send panel, plus a
     "More assessment types — Coming soon" roadmap grid (Debugging, System design, AI & LLM,
     SQL, Logical reasoning, Psychometric, Communication) shown as non-selectable preview
