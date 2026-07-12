@@ -8,8 +8,12 @@ treated as historical implementation context. New work should start from
 
 ## Active Workstream
 
-No active enhancement workstream. The latest completed workstream is
-`phase-5-role-adaptive-assessment/` - Role-Adaptive Assessment System.
+Project closeout and open-source release preparation. No product enhancement phase is active.
+
+Latest completed foundations:
+
+- `phase-6-question-bank-assessment-builder/` - Phase 6A question-bank governance foundation.
+- `phase-5-role-adaptive-assessment/` - guided role-to-assessment matching.
 
 Completed historical enhancement workstreams:
 

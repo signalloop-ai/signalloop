@@ -8,13 +8,9 @@ The MVP evaluates whether candidates can solve a realistic backend engineering t
 
 Phases 1 through 12 of the original MVP plan are complete and should be treated as historical implementation context.
 
-The active workstream is:
-
-```text
-docs/enhancements/phase-2-assessment-system/
-```
-
-Phase 2 is currently documentation/planning first. Do not implement scoring, timer, assessment-pack, or UI changes until the relevant Phase 2 task is explicitly started.
+Post-MVP Phases 2-5 are implemented. Phase 6A question-bank governance is complete as an
+experimental foundation. The current workstream is project closeout and open-source release
+preparation; question-level adaptive assessment composition is deferred future work.
 
 Current capabilities:
 
@@ -27,8 +23,15 @@ Current capabilities:
 - Employer portal with Clerk login.
 - Pilot hardening: audit events, validation/fallback error responses, retry-bounded hidden worker calls, basic rate limiting, and deployment env templates.
 - Hosted Render/Supabase/Clerk deployment with AWS ECS/Fargate public/hidden execution validated for pilot use.
+- Guided role matching from role/JD requirements to the closest registered Standard or Advanced
+  FastAPI assessment, with explicit unsupported-coverage results.
+- Super-admin question-bank provenance, draft import/generation, review, and approval workflows.
 
-Next product direction: assessment system enhancement, including a stronger standard assessment, optional timed assessments, LLM-assisted report scoring, and a planned advanced FastAPI assessment.
+Guided role matching does not assemble new questions. Phase 6A questions are not connected to
+employer blueprint composition, mixed-question candidate delivery, or report scoring.
+
+Future problem: compose comparable role-level assessments from an approved, calibrated question
+bank without resume-driven scored-question selection or unreviewed AI-generated content.
 
 ## Coding Agent Reading Order
 

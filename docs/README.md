@@ -7,6 +7,10 @@ historical implementation context. The latest completed post-MVP workstream is
 Phase 5: Role-Adaptive Assessment System under
 `enhancements/phase-5-role-adaptive-assessment/`.
 
+Phase 6A question-bank governance is complete under
+`enhancements/phase-6-question-bank-assessment-builder/`. Question-level adaptive composition
+is deferred; the current workstream is project closeout and open-source release preparation.
+
 ## Reading order for coding agents
 
 Before making implementation changes, read:

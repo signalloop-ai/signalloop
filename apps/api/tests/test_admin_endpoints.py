@@ -25,6 +25,7 @@ from signalloop_api.models import (
     EvidenceReport,
     TestRun,
 )
+from signalloop_api import admin as admin_module
 from tests.conftest import session_factory as make_session_factory
 
 
@@ -274,6 +275,137 @@ class TestAdminReport:
         client = TestClient(app)
         response = client.get("/admin/attempts/99999/report")
         assert response.status_code == 404
+
+
+class TestAdminQuestionBank:
+    def test_admin_can_seed_list_and_approve_question_bank_draft(self, session_factory, cleanup_overrides):
+        admin = _make_employer(session_factory, email="admin@example.com", role="super_admin")
+        app.dependency_overrides[get_current_super_admin] = lambda: admin
+        app.dependency_overrides[get_session] = _session_override(session_factory)
+        client = TestClient(app)
+
+        seed_response = client.post("/admin/question-bank/seed-drafts")
+        assert seed_response.status_code == 200
+        seed_body = seed_response.json()
+        assert seed_body["created_sources"] >= 1
+        assert seed_body["created_questions"] >= 1
+
+        questions_response = client.get("/admin/question-bank/questions?status_filter=needs_review")
+        assert questions_response.status_code == 200
+        questions = questions_response.json()
+        assert questions
+        assert {q["status"] for q in questions} == {"needs_review"}
+        first = questions[0]
+        assert first["role_tags"]
+        assert first["cognitive_tags"]
+        assert first["rubric"]["dimensions"]
+
+        update_response = client.patch(
+            f"/admin/question-bank/questions/{first['id']}",
+            json={"difficulty": "hard", "review_notes": "Looks relevant after metadata adjustment."},
+        )
+        assert update_response.status_code == 200
+        assert update_response.json()["difficulty"] == "hard"
+
+        approve_response = client.post(
+            f"/admin/question-bank/questions/{first['id']}/approve",
+            json={"review_notes": "Approved for first question bank review set."},
+        )
+        assert approve_response.status_code == 200
+        approved = approve_response.json()
+        assert approved["status"] == "approved"
+        assert approved["reviewed_by_id"] == admin.id
+        assert approved["reviewed_at"] is not None
+
+        edit_after_approval = client.patch(
+            f"/admin/question-bank/questions/{first['id']}",
+            json={"title": "Should not edit approved questions"},
+        )
+        assert edit_after_approval.status_code == 409
+
+        delete_after_approval = client.delete(f"/admin/question-bank/questions/{first['id']}")
+        assert delete_after_approval.status_code == 204
+
+    def test_admin_can_approve_coding_package_separately(self, session_factory, cleanup_overrides):
+        admin = _make_employer(session_factory, email="admin@example.com", role="super_admin")
+        app.dependency_overrides[get_current_super_admin] = lambda: admin
+        app.dependency_overrides[get_session] = _session_override(session_factory)
+        client = TestClient(app)
+
+        client.post("/admin/question-bank/seed-drafts")
+        questions = client.get("/admin/question-bank/questions?status_filter=needs_review").json()
+        coding_question = next(q for q in questions if q["question_type"] == "coding")
+
+        package_response = client.patch(
+            f"/admin/question-bank/questions/{coding_question['id']}",
+            json={
+                "package_status": "ready_for_review",
+                "coding_package_kind": "existing_assessment_pack",
+                "coding_package_ref": "fastapi_task_api_standard_v2",
+                "coding_package_notes": "Validated existing FastAPI package.",
+            },
+        )
+        assert package_response.status_code == 200
+
+        approve_content = client.post(
+            f"/admin/question-bank/questions/{coding_question['id']}/approve",
+            json={"review_notes": "Content approved."},
+        )
+        assert approve_content.status_code == 200
+
+        approve_package = client.post(
+            f"/admin/question-bank/questions/{coding_question['id']}/package/approve",
+            json={"review_notes": "Package approved."},
+        )
+        assert approve_package.status_code == 200
+        body = approve_package.json()
+        assert body["package_status"] == "package_approved"
+        assert body["assessment_ready"] is True
+
+    def test_regular_employer_cannot_access_question_bank(self, session_factory, cleanup_overrides):
+        app.dependency_overrides[get_current_super_admin] = _raise_403
+        app.dependency_overrides[get_session] = _session_override(session_factory)
+        client = TestClient(app)
+
+        response = client.get("/admin/question-bank/questions")
+        assert response.status_code == 403
+
+    def test_admin_can_import_source_questions_into_review_queue(self, session_factory, cleanup_overrides, monkeypatch):
+        admin = _make_employer(session_factory, email="admin@example.com", role="super_admin")
+        app.dependency_overrides[get_current_super_admin] = lambda: admin
+        app.dependency_overrides[get_session] = _session_override(session_factory)
+        client = TestClient(app)
+
+        def fake_import(session):
+            from signalloop_api.models import QuestionBankQuestion, QuestionSource
+
+            source = session.query(QuestionSource).filter_by(source_id="h5bp_frontend_questions").one()
+            session.add(QuestionBankQuestion(
+                source_id=source.id,
+                status="needs_review",
+                title="Imported frontend question",
+                question_type="communication",
+                prompt="Explain event delegation in a realistic frontend debugging context.",
+                role_tags=["frontend"],
+                skill_tags=["javascript"],
+                cognitive_tags=["communication_quality"],
+                difficulty="medium",
+                seniority="mid",
+                estimated_minutes=10,
+                rubric={"dimensions": ["technical_accuracy"]},
+                expected_evidence=["clear explanation"],
+                provenance={"source_id": source.source_id},
+                generated_by="source_import",
+            ))
+            session.commit()
+            return {"fetched_sources": 1, "created_questions": 1, "errors": []}
+
+        monkeypatch.setattr(admin_module, "import_approved_source_questions", fake_import)
+        response = client.post("/admin/question-bank/import-source-questions")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["created_questions"] == 1
+        assert body["question_count"] == 1
 
 
 class TestRoleAssignment:

@@ -238,3 +238,82 @@ class AdaptiveSkillMatchPreviewResponse(BaseModel):
 class DocumentTextExtractResponse(BaseModel):
     filename: str
     text: str
+
+
+class QuestionSourceResponse(BaseModel):
+    id: int
+    source_id: str
+    name: str
+    url: str
+    license: str
+    recommended_use: str
+    attribution_required: bool
+    notes: Optional[str]
+    status: str
+    created_at: str
+
+
+class QuestionBankQuestionResponse(BaseModel):
+    id: int
+    source: Optional[QuestionSourceResponse]
+    version: int
+    status: str
+    title: str
+    question_type: str
+    prompt: str
+    role_tags: list[str]
+    skill_tags: list[str]
+    cognitive_tags: list[str]
+    difficulty: str
+    seniority: str
+    estimated_minutes: int
+    rubric: dict
+    expected_evidence: list[str]
+    provenance: dict
+    generated_by: str
+    package_status: str
+    coding_package_kind: Optional[str]
+    coding_package_ref: Optional[str]
+    coding_package_notes: Optional[str]
+    assessment_ready: bool
+    reviewed_by_id: Optional[int]
+    reviewed_at: Optional[str]
+    review_notes: Optional[str]
+    created_at: str
+
+
+class QuestionBankQuestionUpdateRequest(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=3, max_length=255)
+    question_type: Optional[str] = Field(default=None, max_length=80)
+    prompt: Optional[str] = Field(default=None, min_length=20, max_length=20000)
+    role_tags: Optional[list[str]] = None
+    skill_tags: Optional[list[str]] = None
+    cognitive_tags: Optional[list[str]] = None
+    difficulty: Optional[Literal["easy", "medium", "hard"]] = None
+    seniority: Optional[str] = Field(default=None, max_length=80)
+    estimated_minutes: Optional[int] = Field(default=None, ge=1, le=240)
+    rubric: Optional[dict] = None
+    expected_evidence: Optional[list[str]] = None
+    package_status: Optional[Literal["not_required", "missing", "draft", "ready_for_review", "package_approved", "rejected"]] = None
+    coding_package_kind: Optional[str] = Field(default=None, max_length=80)
+    coding_package_ref: Optional[str] = Field(default=None, max_length=255)
+    coding_package_notes: Optional[str] = Field(default=None, max_length=5000)
+    review_notes: Optional[str] = Field(default=None, max_length=5000)
+
+
+class QuestionBankReviewRequest(BaseModel):
+    review_notes: Optional[str] = Field(default=None, max_length=5000)
+
+
+class QuestionBankSeedResponse(BaseModel):
+    source_count: int
+    question_count: int
+    created_sources: int
+    created_questions: int
+
+
+class QuestionBankImportResponse(BaseModel):
+    fetched_sources: int
+    created_questions: int
+    errors: list[dict]
+    question_count: int

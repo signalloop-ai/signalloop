@@ -14,9 +14,21 @@ from signalloop_api.models import (
     AssessmentPack,
     Employer,
     EvidenceReport,
+    QuestionBankQuestion,
+    QuestionSource,
     TestRun,
 )
-from signalloop_api.schemas import EmployerInfoResponse
+from signalloop_api.question_bank_seed import APPROVED_SOURCES, SEED_QUESTIONS
+from signalloop_api.question_bank_ingestion import import_approved_source_questions
+from signalloop_api.schemas import (
+    EmployerInfoResponse,
+    QuestionBankImportResponse,
+    QuestionBankQuestionResponse,
+    QuestionBankQuestionUpdateRequest,
+    QuestionBankReviewRequest,
+    QuestionBankSeedResponse,
+    QuestionSourceResponse,
+)
 
 
 router = APIRouter(prefix="/admin")
@@ -28,6 +40,59 @@ def _utc_iso(dt: Optional[datetime]) -> Optional[str]:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.isoformat()
+
+
+def _source_response(source: QuestionSource) -> QuestionSourceResponse:
+    return QuestionSourceResponse(
+        id=source.id,
+        source_id=source.source_id,
+        name=source.name,
+        url=source.url,
+        license=source.license,
+        recommended_use=source.recommended_use,
+        attribution_required=source.attribution_required,
+        notes=source.notes,
+        status=source.status,
+        created_at=_utc_iso(source.created_at) or "",
+    )
+
+
+def _question_response(question: QuestionBankQuestion) -> QuestionBankQuestionResponse:
+    assessment_ready = (
+        question.status == "approved"
+        and (
+            question.question_type != "coding"
+            or question.package_status == "package_approved"
+        )
+    )
+    return QuestionBankQuestionResponse(
+        id=question.id,
+        source=_source_response(question.source) if question.source else None,
+        version=question.version,
+        status=question.status,
+        title=question.title,
+        question_type=question.question_type,
+        prompt=question.prompt,
+        role_tags=question.role_tags or [],
+        skill_tags=question.skill_tags or [],
+        cognitive_tags=question.cognitive_tags or [],
+        difficulty=question.difficulty,
+        seniority=question.seniority,
+        estimated_minutes=question.estimated_minutes,
+        rubric=question.rubric or {},
+        expected_evidence=question.expected_evidence or [],
+        provenance=question.provenance or {},
+        generated_by=question.generated_by,
+        package_status=question.package_status,
+        coding_package_kind=question.coding_package_kind,
+        coding_package_ref=question.coding_package_ref,
+        coding_package_notes=question.coding_package_notes,
+        assessment_ready=assessment_ready,
+        reviewed_by_id=question.reviewed_by_id,
+        reviewed_at=_utc_iso(question.reviewed_at),
+        review_notes=question.review_notes,
+        created_at=_utc_iso(question.created_at) or "",
+    )
 
 
 def _employer_summary_row(
@@ -269,3 +334,281 @@ def get_admin_evidence_report(
         "score_total": evidence_report.score_total,
         "report": evidence_report.report,
     }
+
+
+def _upsert_question_sources(session: Session) -> tuple[dict[str, QuestionSource], int]:
+    existing = {
+        source.source_id: source
+        for source in session.scalars(select(QuestionSource)).all()
+    }
+    created = 0
+    for item in APPROVED_SOURCES:
+        source = existing.get(item["source_id"])
+        if source is None:
+            source = QuestionSource(**item)
+            session.add(source)
+            existing[item["source_id"]] = source
+            created += 1
+        else:
+            for field, value in item.items():
+                setattr(source, field, value)
+
+    internal = existing.get("internal_signal_loop")
+    if internal is None:
+        internal = QuestionSource(
+            source_id="internal_signal_loop",
+            name="SignalLoop internal authored",
+            url="internal://signalloop/question-bank",
+            license="Proprietary",
+            recommended_use="internal_authored",
+            attribution_required=False,
+            notes="SignalLoop-authored or reviewed AI-draft questions.",
+            status="approved_for_drafts",
+        )
+        session.add(internal)
+        existing["internal_signal_loop"] = internal
+        created += 1
+    return existing, created
+
+
+@router.post("/question-bank/seed-drafts", response_model=QuestionBankSeedResponse)
+def seed_question_bank_drafts(
+    session: Session = Depends(get_session),
+    _admin: Employer = Depends(get_current_super_admin),
+) -> QuestionBankSeedResponse:
+    sources, created_sources = _upsert_question_sources(session)
+    session.flush()
+
+    existing_titles = set(session.scalars(select(QuestionBankQuestion.title)).all())
+    created_questions = 0
+    for seed in SEED_QUESTIONS:
+        if seed["title"] in existing_titles:
+            continue
+        source = sources[seed["source_source_id"]]
+        provenance = {
+            "source_id": source.source_id,
+            "source_url": source.url,
+            "license": source.license,
+            "attribution_required": source.attribution_required,
+            "notes": source.notes,
+        }
+        question = QuestionBankQuestion(
+            source_id=source.id,
+            status="needs_review",
+            title=seed["title"],
+            question_type=seed["question_type"],
+            prompt=seed["prompt"],
+            role_tags=seed["role_tags"],
+            skill_tags=seed["skill_tags"],
+            cognitive_tags=seed["cognitive_tags"],
+            difficulty=seed["difficulty"],
+            seniority=seed["seniority"],
+            estimated_minutes=seed["estimated_minutes"],
+            rubric=seed["rubric"],
+            expected_evidence=seed["expected_evidence"],
+            provenance=provenance,
+            generated_by=seed["generated_by"],
+            package_status=seed.get("package_status") or ("missing" if seed["question_type"] == "coding" else "not_required"),
+            coding_package_kind=seed.get("coding_package_kind"),
+            coding_package_ref=seed.get("coding_package_ref"),
+            coding_package_notes=seed.get("coding_package_notes"),
+        )
+        session.add(question)
+        created_questions += 1
+    session.commit()
+
+    source_count = session.scalar(select(func.count(QuestionSource.id))) or 0
+    question_count = session.scalar(select(func.count(QuestionBankQuestion.id))) or 0
+    return QuestionBankSeedResponse(
+        source_count=int(source_count),
+        question_count=int(question_count),
+        created_sources=created_sources,
+        created_questions=created_questions,
+    )
+
+
+@router.post("/question-bank/import-source-questions", response_model=QuestionBankImportResponse)
+def import_question_bank_source_questions(
+    session: Session = Depends(get_session),
+    _admin: Employer = Depends(get_current_super_admin),
+) -> QuestionBankImportResponse:
+    _upsert_question_sources(session)
+    session.flush()
+    result = import_approved_source_questions(session)
+    question_count = session.scalar(select(func.count(QuestionBankQuestion.id))) or 0
+    return QuestionBankImportResponse(
+        fetched_sources=result["fetched_sources"],
+        created_questions=result["created_questions"],
+        errors=result["errors"],
+        question_count=int(question_count),
+    )
+
+
+@router.get("/question-bank/sources", response_model=list[QuestionSourceResponse])
+def list_question_sources(
+    session: Session = Depends(get_session),
+    _admin: Employer = Depends(get_current_super_admin),
+) -> list[QuestionSourceResponse]:
+    sources = session.scalars(select(QuestionSource).order_by(QuestionSource.source_id)).all()
+    return [_source_response(source) for source in sources]
+
+
+@router.get("/question-bank/questions", response_model=list[QuestionBankQuestionResponse])
+def list_question_bank_questions(
+    status_filter: Optional[str] = None,
+    session: Session = Depends(get_session),
+    _admin: Employer = Depends(get_current_super_admin),
+) -> list[QuestionBankQuestionResponse]:
+    stmt = select(QuestionBankQuestion).order_by(QuestionBankQuestion.created_at.desc(), QuestionBankQuestion.id.desc())
+    if status_filter:
+        stmt = stmt.where(QuestionBankQuestion.status == status_filter)
+    questions = session.scalars(stmt).all()
+    return [_question_response(question) for question in questions]
+
+
+@router.patch("/question-bank/questions/{question_id}", response_model=QuestionBankQuestionResponse)
+def update_question_bank_question(
+    question_id: int,
+    payload: QuestionBankQuestionUpdateRequest,
+    session: Session = Depends(get_session),
+    _admin: Employer = Depends(get_current_super_admin),
+) -> QuestionBankQuestionResponse:
+    question = session.get(QuestionBankQuestion, question_id)
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+    content_fields = {
+        "title",
+        "question_type",
+        "prompt",
+        "role_tags",
+        "skill_tags",
+        "cognitive_tags",
+        "difficulty",
+        "seniority",
+        "estimated_minutes",
+        "rubric",
+        "expected_evidence",
+    }
+    incoming = payload.model_dump(exclude_unset=True)
+    if question.status == "approved" and any(field in incoming for field in content_fields):
+        raise HTTPException(status_code=409, detail="Approved question content cannot be edited in place")
+
+    effective_question_type = incoming.get("question_type", question.question_type)
+    if effective_question_type != "coding" and incoming.get("package_status") not in (None, "not_required"):
+        raise HTTPException(status_code=400, detail="Only coding questions can require coding package review")
+
+    for field, value in incoming.items():
+        setattr(question, field, value)
+    if "question_type" in incoming and question.question_type != "coding":
+        question.package_status = "not_required"
+        question.coding_package_kind = None
+        question.coding_package_ref = None
+        question.coding_package_notes = None
+    elif "question_type" in incoming and question.question_type == "coding" and question.package_status == "not_required":
+        question.package_status = "missing"
+    session.commit()
+    session.refresh(question)
+    return _question_response(question)
+
+
+@router.post("/question-bank/questions/{question_id}/approve", response_model=QuestionBankQuestionResponse)
+def approve_question_bank_question(
+    question_id: int,
+    payload: QuestionBankReviewRequest,
+    session: Session = Depends(get_session),
+    admin: Employer = Depends(get_current_super_admin),
+) -> QuestionBankQuestionResponse:
+    question = session.get(QuestionBankQuestion, question_id)
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+    if question.status == "deprecated":
+        raise HTTPException(status_code=409, detail="Deprecated questions cannot be approved")
+
+    question.status = "approved"
+    question.reviewed_by_id = admin.id
+    question.reviewed_at = datetime.now(timezone.utc)
+    question.review_notes = payload.review_notes
+    session.commit()
+    session.refresh(question)
+    return _question_response(question)
+
+
+@router.post("/question-bank/questions/{question_id}/package/approve", response_model=QuestionBankQuestionResponse)
+def approve_question_bank_question_package(
+    question_id: int,
+    payload: QuestionBankReviewRequest,
+    session: Session = Depends(get_session),
+    admin: Employer = Depends(get_current_super_admin),
+) -> QuestionBankQuestionResponse:
+    question = session.get(QuestionBankQuestion, question_id)
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+    if question.question_type != "coding":
+        raise HTTPException(status_code=400, detail="Only coding questions have package approval")
+    if not question.coding_package_kind or not question.coding_package_ref:
+        raise HTTPException(status_code=409, detail="Coding package kind and reference are required before approval")
+
+    question.package_status = "package_approved"
+    question.reviewed_by_id = admin.id
+    question.reviewed_at = datetime.now(timezone.utc)
+    question.coding_package_notes = payload.review_notes or question.coding_package_notes
+    session.commit()
+    session.refresh(question)
+    return _question_response(question)
+
+
+@router.post("/question-bank/questions/{question_id}/package/reject", response_model=QuestionBankQuestionResponse)
+def reject_question_bank_question_package(
+    question_id: int,
+    payload: QuestionBankReviewRequest,
+    session: Session = Depends(get_session),
+    admin: Employer = Depends(get_current_super_admin),
+) -> QuestionBankQuestionResponse:
+    question = session.get(QuestionBankQuestion, question_id)
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+    if question.question_type != "coding":
+        raise HTTPException(status_code=400, detail="Only coding questions have package review")
+
+    question.package_status = "rejected"
+    question.reviewed_by_id = admin.id
+    question.reviewed_at = datetime.now(timezone.utc)
+    question.coding_package_notes = payload.review_notes or question.coding_package_notes
+    session.commit()
+    session.refresh(question)
+    return _question_response(question)
+
+
+@router.post("/question-bank/questions/{question_id}/reject", response_model=QuestionBankQuestionResponse)
+def reject_question_bank_question(
+    question_id: int,
+    payload: QuestionBankReviewRequest,
+    session: Session = Depends(get_session),
+    admin: Employer = Depends(get_current_super_admin),
+) -> QuestionBankQuestionResponse:
+    question = session.get(QuestionBankQuestion, question_id)
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+    if question.status == "approved":
+        raise HTTPException(status_code=409, detail="Approved questions should be deprecated, not rejected")
+
+    question.status = "rejected"
+    question.reviewed_by_id = admin.id
+    question.reviewed_at = datetime.now(timezone.utc)
+    question.review_notes = payload.review_notes
+    session.commit()
+    session.refresh(question)
+    return _question_response(question)
+
+
+@router.delete("/question-bank/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_question_bank_question(
+    question_id: int,
+    session: Session = Depends(get_session),
+    _admin: Employer = Depends(get_current_super_admin),
+) -> None:
+    question = session.get(QuestionBankQuestion, question_id)
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+    session.delete(question)
+    session.commit()

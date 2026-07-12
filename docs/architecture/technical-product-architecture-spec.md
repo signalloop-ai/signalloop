@@ -1,7 +1,7 @@
 # SignalLoop Technical Product & Architecture Specification
 
-Version: 3.1
-Status: Phase 5 MVP implemented locally — updated 2026-06-29
+Version: 3.3
+Status: Project closeout; Phase 6A governance complete and question-level composition deferred — updated 2026-07-12
 
 ## 1. Purpose
 
@@ -692,3 +692,62 @@ Implemented additive concepts:
 - `adaptive_context` section in blueprint-backed evidence reports.
 
 Regular quick assessment invites remain supported and should not show adaptive report sections.
+
+## 23. Phase 6: Question Bank Assessment Builder
+
+Status: Phase 6A governance foundation complete; builder/candidate/scoring composition deferred.
+Full detail: `docs/enhancements/phase-6-question-bank-assessment-builder/`.
+
+Deferred Phase 6 work describes a possible evolution from guided role matching to question-level
+assessment composition:
+
+```text
+role/company/JD/cognitive areas/duration
+-> approved question bank
+-> role-level assessment blueprint
+-> employer review and same-slot swaps
+-> candidate assessment
+-> AI-assisted evidence report
+```
+
+Core architecture principles:
+
+- The approved question is the assessment-content primitive.
+- A question can be small, such as a communication prompt, or large, such as a coding task with
+  starter files and public tests.
+- Only approved question versions can be selected for scored assessments.
+- The scored assessment is role-adaptive, not candidate-resume-adaptive.
+- Candidate resume context may drive gaps, probes, and report context, but must not select
+  scored questions for individual candidates.
+- Super admin can generate AI draft questions, edit metadata/rubric, and approve them.
+- Public-source ingestion is controlled through curated reusable sources and review, not
+  employer-facing arbitrary scraping.
+- Employers can swap questions within required slots; they cannot silently remove required
+  coverage in the Phase 6 MVP.
+- The constrained AI collaborator policy applies across all question types.
+- AI scoring should be rubric-based evaluator assistance with evidence citations and reviewer
+  override support.
+
+Phase 6A implemented concepts:
+
+- `QuestionSource` stores curated source allowlist metadata and license/provenance status.
+- `QuestionBankQuestion` stores reviewable questions, tags, difficulty, time, rubric,
+  expected evidence, provenance, content review status, and coding-package review status.
+- Super Admin can seed initial draft questions, edit review metadata, approve drafts, and reject
+  unsuitable drafts.
+- Super Admin can review approved questions and delete inventory items during Phase 6A. Once
+  questions are referenced by employer blueprints or attempts, deletion should become
+  deprecation/archive.
+- Approved questions are not editable in place through the admin API; later changes should create
+  new versions.
+
+Release boundary:
+
+- Phase 5 guided role matching compares role/JD requirements with registered assessment-pack
+  coverage and recommends Standard or Advanced FastAPI, or reports insufficient coverage.
+- It does not assemble a new assessment from individual questions.
+- Phase 6A questions are not connected to employer blueprint composition, candidate delivery, or
+  evidence-report scoring.
+- Question-level composition must be resumed as a new bounded enhancement with calibrated content,
+  comparability rules, mixed-question delivery, AI-helper policy coverage, and reviewer-aware
+  scoring.

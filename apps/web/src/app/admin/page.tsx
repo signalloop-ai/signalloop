@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { Loader2 } from "lucide-react";
+import { Database, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -68,7 +68,13 @@ export default function AdminRosterPage() {
       <section className="employer-section">
         <div className="section-title">
           <h2>Employers</h2>
-          {loading ? <span className="autosave-chip">Refreshing…</span> : null}
+          <div className="action-row">
+            <Link href="/admin/question-bank" className="command-button secondary">
+              <Database size={16} aria-hidden="true" />
+              Question Bank
+            </Link>
+            {loading ? <span className="autosave-chip">Refreshing…</span> : null}
+          </div>
         </div>
 
         <input

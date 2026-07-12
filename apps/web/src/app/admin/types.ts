@@ -59,6 +59,82 @@ export type AdminEmployerDetail = {
   attempts: AdminAttemptSummary[];
 };
 
+export type QuestionSource = {
+  id: number;
+  source_id: string;
+  name: string;
+  url: string;
+  license: string;
+  recommended_use: string;
+  attribution_required: boolean;
+  notes: string | null;
+  status: string;
+  created_at: string;
+};
+
+export type QuestionBankQuestion = {
+  id: number;
+  source: QuestionSource | null;
+  version: number;
+  status: string;
+  title: string;
+  question_type: string;
+  prompt: string;
+  role_tags: string[];
+  skill_tags: string[];
+  cognitive_tags: string[];
+  difficulty: "easy" | "medium" | "hard" | string;
+  seniority: string;
+  estimated_minutes: number;
+  rubric: { dimensions?: string[]; scale?: string; [key: string]: unknown };
+  expected_evidence: string[];
+  provenance: Record<string, unknown>;
+  generated_by: string;
+  package_status: string;
+  coding_package_kind: string | null;
+  coding_package_ref: string | null;
+  coding_package_notes: string | null;
+  assessment_ready: boolean;
+  reviewed_by_id: number | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+  created_at: string;
+};
+
+export type QuestionBankSeedResult = {
+  source_count: number;
+  question_count: number;
+  created_sources: number;
+  created_questions: number;
+};
+
+export type QuestionBankImportResult = {
+  fetched_sources: number;
+  created_questions: number;
+  errors: Array<Record<string, unknown>>;
+  question_count: number;
+};
+
+export type QuestionBankQuestionUpdate = Partial<Pick<
+  QuestionBankQuestion,
+  | "title"
+  | "question_type"
+  | "prompt"
+  | "role_tags"
+  | "skill_tags"
+  | "cognitive_tags"
+  | "difficulty"
+  | "seniority"
+  | "estimated_minutes"
+  | "rubric"
+  | "expected_evidence"
+  | "package_status"
+  | "coding_package_kind"
+  | "coding_package_ref"
+  | "coding_package_notes"
+  | "review_notes"
+>>;
+
 // The admin report endpoint returns the same shape as the employer one, so reuse the typed
 // response — the shared EvidenceReportView renders both.
 export type { EvidenceReportResponse as AdminEvidenceReport } from "../employer/types";

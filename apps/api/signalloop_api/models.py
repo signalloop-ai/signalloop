@@ -30,6 +30,7 @@ class Employer(TimestampMixin, Base):
     role_profiles: Mapped[list["RoleProfile"]] = relationship(back_populates="employer")
     candidate_profiles: Mapped[list["CandidateProfile"]] = relationship(back_populates="employer")
     assessment_blueprints: Mapped[list["AssessmentBlueprint"]] = relationship(back_populates="employer")
+    reviewed_questions: Mapped[list["QuestionBankQuestion"]] = relationship(back_populates="reviewer")
 
 
 class AssessmentPack(TimestampMixin, Base):
@@ -136,6 +137,54 @@ class AssessmentBlueprint(TimestampMixin, Base):
     role_profile: Mapped[RoleProfile] = relationship(back_populates="blueprints")
     candidate_profile: Mapped[Optional[CandidateProfile]] = relationship(back_populates="blueprints")
     attempts: Mapped[list[AssessmentAttempt]] = relationship(back_populates="blueprint")
+
+
+class QuestionSource(TimestampMixin, Base):
+    __tablename__ = "question_sources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[str] = mapped_column(String(120), unique=True)
+    name: Mapped[str] = mapped_column(String(255))
+    url: Mapped[str] = mapped_column(String(500))
+    license: Mapped[str] = mapped_column(String(120))
+    recommended_use: Mapped[str] = mapped_column(String(80))
+    attribution_required: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(50), default="approved_for_drafts", server_default="approved_for_drafts")
+
+    questions: Mapped[list["QuestionBankQuestion"]] = relationship(back_populates="source")
+
+
+class QuestionBankQuestion(TimestampMixin, Base):
+    __tablename__ = "question_bank_questions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[Optional[int]] = mapped_column(ForeignKey("question_sources.id"), nullable=True, index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    status: Mapped[str] = mapped_column(String(50), default="needs_review", server_default="needs_review", index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    question_type: Mapped[str] = mapped_column(String(80))
+    prompt: Mapped[str] = mapped_column(Text)
+    role_tags: Mapped[list] = mapped_column(JSON, default=list)
+    skill_tags: Mapped[list] = mapped_column(JSON, default=list)
+    cognitive_tags: Mapped[list] = mapped_column(JSON, default=list)
+    difficulty: Mapped[str] = mapped_column(String(50))
+    seniority: Mapped[str] = mapped_column(String(80))
+    estimated_minutes: Mapped[int] = mapped_column(Integer)
+    rubric: Mapped[dict] = mapped_column(JSON, default=dict)
+    expected_evidence: Mapped[list] = mapped_column(JSON, default=list)
+    provenance: Mapped[dict] = mapped_column(JSON, default=dict)
+    generated_by: Mapped[str] = mapped_column(String(80), default="seed", server_default="seed")
+    package_status: Mapped[str] = mapped_column(String(50), default="not_required", server_default="not_required")
+    coding_package_kind: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    coding_package_ref: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    coding_package_notes: Mapped[Optional[str]] = mapped_column(Text)
+    reviewed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("employers.id"), nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    review_notes: Mapped[Optional[str]] = mapped_column(Text)
+
+    source: Mapped[Optional[QuestionSource]] = relationship(back_populates="questions")
+    reviewer: Mapped[Optional[Employer]] = relationship(back_populates="reviewed_questions")
 
 
 class CodeSnapshot(TimestampMixin, Base):

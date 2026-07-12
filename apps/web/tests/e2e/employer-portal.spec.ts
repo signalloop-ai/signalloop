@@ -439,8 +439,8 @@ test("employer can sign in with Clerk, create an invite, and view a report", asy
   await expect(page.getByRole("heading", { name: "SignalLoop" })).toBeVisible({ timeout: 10_000 });
   // Overview is the landing view; recent activity lists the existing candidate.
   await expect(page.getByRole("heading", { name: "Assessment creation paths" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Direct coding challenge" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Adaptive builder" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Manual selection" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Guided role matching" })).toBeVisible();
   await expect(page.getByText("candidate@example.com")).toBeVisible();
 
   // Candidates view shows the attempt table with the recommendation.
@@ -555,12 +555,12 @@ test("adaptive builder renders overlapping unsupported skills without duplicate-
   await mockClerkSignedIn(page);
   await page.goto("/employer");
   await page.getByRole("button", { name: "Assessments" }).click();
-  await expect(page.getByRole("group", { name: "Assessment creation path" }).getByRole("button", { name: "Direct coding challenge" })).toHaveClass(/active/);
+  await expect(page.getByRole("group", { name: "Assessment creation path" }).getByRole("button", { name: "Manual selection" })).toHaveClass(/active/);
   await expect(page.getByRole("button", { name: "Send invite" })).toBeVisible();
 
-  await page.getByRole("group", { name: "Assessment creation path" }).getByRole("button", { name: "Adaptive builder" }).click();
+  await page.getByRole("group", { name: "Assessment creation path" }).getByRole("button", { name: "Guided role matching" }).click();
   await expect(page.getByRole("button", { name: "Send invite" })).not.toBeVisible();
-  const adaptiveBuilder = page.locator(".mod-card").filter({ hasText: "Adaptive builder" });
+  const adaptiveBuilder = page.locator(".mod-card").filter({ hasText: "Guided role matching" });
   await adaptiveBuilder.getByPlaceholder("candidate@company.com").fill("candidate.phase5@example.com");
   await adaptiveBuilder.getByLabel("Upload JD").setInputFiles({
     name: "jd.txt",
@@ -603,7 +603,7 @@ test("adaptive builder shows future assessment blueprint without invite-ready ac
   await mockClerkSignedIn(page);
   await page.goto("/employer");
   await page.getByRole("button", { name: "Assessments" }).click();
-  await page.getByRole("group", { name: "Assessment creation path" }).getByRole("button", { name: "Adaptive builder" }).click();
+  await page.getByRole("group", { name: "Assessment creation path" }).getByRole("button", { name: "Guided role matching" }).click();
   await page.getByRole("button", { name: /Frontend Platform Engineer Frontend Platform Assessment Blueprint/ }).click();
 
   await expect(page.getByText("Future Frontend Platform Assessment - planned, not invite-ready")).toBeVisible();

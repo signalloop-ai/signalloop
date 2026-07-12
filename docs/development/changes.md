@@ -5,6 +5,230 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-07-12 — Project closeout boundary and guided role matching language
+
+**Symptom:** The employer portal called the Phase 5 recommendation flow an Adaptive Builder even
+though it selects between the registered Standard and Advanced FastAPI packs rather than
+assembling a new assessment from Phase 6A questions. Project status also left the broader Phase 6
+workstream active after the decision to wrap the project at the governance foundation.
+
+**Root cause:** Phase 5 and Phase 6 planning language described the intended adaptive direction,
+while the shipped employer/candidate boundary remained role-to-assessment matching.
+
+**Files changed:**
+- `apps/web/src/app/employer/page.tsx`
+- `apps/web/src/app/admin/question-bank/page.tsx`
+- `apps/web/tests/e2e/employer-portal.spec.ts`
+- `README.md`
+- `CURRENT_STATE.md`
+- `docs/README.md`
+- `docs/development/known-limitations.md`
+- `docs/enhancements/README.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/README.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/phase-6-execution-plan.md`
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_admin_endpoints.py tests/test_question_bank_ingestion.py tests/test_adaptive_assessment.py tests/test_assessment_taxonomy.py -q` -> 45 passed.
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> 293 passed, 51 skipped.
+- `cd apps/worker && UV_CACHE_DIR=.uv-cache uv run pytest` -> 23 passed.
+- `cd apps/api && DATABASE_URL=sqlite:////tmp/signalloop_release_migration.db UV_CACHE_DIR=.uv-cache uv run alembic upgrade head` -> passed through `0012_concept_question_types`.
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/web && npm run lint` -> passed with 4 known warnings.
+- `cd apps/web && npm run build` -> passed.
+- `cd apps/web && npm run test:e2e -- --workers=1` -> 33 passed, 2 skipped.
+- `cd apps/web && npm run test:e2e -- tests/e2e/employer-portal.spec.ts --workers=1` -> 8 passed.
+
+**Follow-up items:** Question-level blueprint composition, mixed-question delivery, and scoring
+remain a future enhancement. The current question bank is governance infrastructure only.
+
+---
+
+## 2026-07-01 — Phase 6A question-bank type filter and readiness labels
+
+**Symptom:** The Super Admin question bank showed `content needs review` next to a generic
+`not ready` label, which made it unclear whether readiness referred to content approval or a
+coding package. There was also no top-level way to filter by question type.
+
+**Root cause:** Readiness and package status were shown as generic card labels, and filtering was
+only implemented by review status.
+
+**Files changed:**
+- `apps/web/src/app/admin/question-bank/page.tsx`
+
+**Validation:**
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_admin_endpoints.py tests/test_question_bank_ingestion.py -q`
+  -> 18 passed.
+
+**Follow-up:** If the question bank grows past review-page scale, move question-type filtering to
+the API query instead of client-side filtering inside the current status tab.
+
+---
+
+## 2026-07-01 — Phase 6A imported concept questions misclassified as communication
+
+**Symptom:** Source-imported React questions such as "What are synthetic events in React" appeared
+as `communication` questions in Super Admin.
+
+**Root cause:** The source-ingestion default `question_type` was `communication`, so React,
+JavaScript, and frontend concept-question sources inherited the wrong type unless explicitly
+overridden.
+
+**Files changed:**
+- `apps/api/signalloop_api/question_bank_ingestion.py`
+- `apps/api/alembic/versions/0012_reclassify_imported_concept_questions.py`
+- `apps/api/tests/test_question_bank_ingestion.py`
+- `apps/web/src/app/admin/question-bank/page.tsx`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/01-product-requirements.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/02-approved-question-bank.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/04-ai-helper-and-scoring.md`
+
+**Validation:**
+- `cd apps/api && DATABASE_URL=sqlite:////tmp/signalloop_phase6a_concept_reclassify_final.db UV_CACHE_DIR=.uv-cache uv run alembic upgrade head`
+  -> passed through `0012_concept_question_types`.
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_admin_endpoints.py tests/test_question_bank_ingestion.py -q`
+  -> 18 passed.
+- `cd apps/web && npm run typecheck` -> passed.
+- Local Postgres question bank reset completed: 74 old question rows cleared, including 11 approved
+  rows; 8 internal seed questions and 58 approved-source questions re-imported as 66
+  `needs_review` rows.
+
+**Follow-up:** As the question bank grows, keep concept questions separate from communication
+questions; communication remains for final explanation and stakeholder-facing written-response
+tasks.
+
+---
+
+## 2026-06-30 — Phase 6A implementation: Super Admin question bank foundation
+
+**Symptom:** Phase 6 planning identified source approval and question approval as the first
+required step before employer-side dynamic assessment assembly.
+
+**Root cause:** The product needs a reviewed inventory of approved questions before the builder
+can generate reliable role-level assessments.
+
+**Files changed:**
+- `apps/api/signalloop_api/models.py`
+- `apps/api/signalloop_api/schemas.py`
+- `apps/api/signalloop_api/admin.py`
+- `apps/api/signalloop_api/question_bank_seed.py`
+- `apps/api/signalloop_api/question_bank_ingestion.py`
+- `apps/api/alembic/versions/0010_add_question_bank.py`
+- `apps/api/tests/test_admin_endpoints.py`
+- `apps/api/tests/test_question_bank_ingestion.py`
+- `apps/web/src/app/admin/api.ts`
+- `apps/web/src/app/admin/types.ts`
+- `apps/web/src/app/admin/page.tsx`
+- `apps/web/src/app/admin/question-bank/page.tsx`
+- `CURRENT_STATE.md`
+- `docs/architecture/technical-product-architecture-spec.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/README.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/05-source-allowlist.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/phase-6-execution-plan.md`
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_admin_endpoints.py -q`
+  -> 15 passed.
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_admin_endpoints.py tests/test_question_bank_ingestion.py -q`
+  -> 17 passed.
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_admin_endpoints.py tests/test_adaptive_assessment.py tests/test_assessment_taxonomy.py -q`
+  -> 42 passed before source-ingestion endpoint rename; rerun focused admin/ingestion set after rename passed.
+- Local configured Postgres import completed: 58 source-imported questions plus 7 internal/AI-draft seed
+  questions, 65 total in `needs_review`.
+
+**Follow-up:** Review and approve/reject imported questions in Super Admin, then use approved
+questions for role-based blueprint assembly.
+
+---
+
+## 2026-07-01 — Phase 6A question package workflow and cleanup controls
+
+**Symptom:** Coding questions such as FastAPI API prompts could be content-approved without any
+clear indication of whether runnable code/tests were attached. Super Admin also needed a way to
+review approved questions and delete bad imports during the inventory-building stage.
+
+**Root cause:** The initial question-bank model tracked one review status for all question types,
+but coding questions need separate content and executable-package review states.
+
+**Files changed:**
+- `apps/api/signalloop_api/models.py`
+- `apps/api/signalloop_api/schemas.py`
+- `apps/api/signalloop_api/admin.py`
+- `apps/api/signalloop_api/question_bank_seed.py`
+- `apps/api/signalloop_api/question_bank_ingestion.py`
+- `apps/api/alembic/versions/0011_add_question_package_status.py`
+- `apps/api/tests/test_admin_endpoints.py`
+- `apps/web/src/app/admin/api.ts`
+- `apps/web/src/app/admin/types.ts`
+- `apps/web/src/app/admin/question-bank/page.tsx`
+- `docs/architecture/technical-product-architecture-spec.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/01-product-requirements.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/02-approved-question-bank.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/phase-6-execution-plan.md`
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_admin_endpoints.py tests/test_question_bank_ingestion.py -q`
+  -> 18 passed.
+- `cd apps/web && npm run typecheck` -> passed.
+- Local Postgres migrated through `0011_question_package_status`; existing question rows were
+  synced so FastAPI Standard/Advanced are package-approved, generic coding drafts are missing
+  package, and non-coding questions are package-not-required.
+
+**Follow-up:** Replace Phase 6A delete with deprecate/archive once approved questions can be
+referenced by employer blueprints or candidate attempts.
+
+---
+
+## 2026-06-30 — Phase 6 planning docs: question bank assessment builder
+
+**Symptom:** Phase 5 adaptive builder selected between current FastAPI packs, but the next
+product direction needed a documented plan for role-based assessment assembly from an approved
+question bank.
+
+**Root cause:** The question-bank model, public-source ingestion boundary, super-admin review
+flow, employer same-slot swap rules, resume boundary, and mixed-question AI/scoring rules were
+agreed in discussion but not yet captured as source-of-truth docs.
+
+**Files changed:**
+- `docs/enhancements/phase-6-question-bank-assessment-builder/README.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/01-product-requirements.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/02-approved-question-bank.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/03-role-based-assessment-builder.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/04-ai-helper-and-scoring.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/05-source-allowlist.md`
+- `docs/enhancements/phase-6-question-bank-assessment-builder/phase-6-execution-plan.md`
+- `CURRENT_STATE.md`
+- `docs/README.md`
+- `docs/enhancements/README.md`
+- `docs/architecture/technical-product-architecture-spec.md`
+
+**Follow-up:** Before implementation, select the first Phase 6 task boundary and decide whether
+the first build starts with question-bank schema/admin review or employer blueprint assembly.
+
+---
+
+## 2026-06-30 — Adaptive builder upload fixture expansion
+
+**Symptom:** Manual upload testing had a backend JD fixture but lacked frontend and data-role
+JD files in PDF/DOCX formats.
+
+**Root cause:** Earlier Phase 5 fixtures focused on the current invite-ready backend/FastAPI
+path rather than planned/future assessment routing examples.
+
+**Files changed:**
+- `docs/enhancements/phase-5-role-adaptive-assessment/sample-upload-files/frontend-platform-engineer-jd.docx`
+- `docs/enhancements/phase-5-role-adaptive-assessment/sample-upload-files/frontend-platform-engineer-jd.pdf`
+- `docs/enhancements/phase-5-role-adaptive-assessment/sample-upload-files/data-engineer-analytics-platform-jd.docx`
+- `docs/enhancements/phase-5-role-adaptive-assessment/sample-upload-files/data-engineer-analytics-platform-jd.pdf`
+- `docs/enhancements/phase-5-role-adaptive-assessment/sample-upload-files/README.md`
+
+**Validation:** `file` identifies the new files as Word 2007+ DOCX and PDF 1.4. `unzip -t`
+passes for both DOCX files. PDF render QA was skipped because `pdftoppm` is not installed in
+this environment.
+
+---
+
 ## 2026-06-29 — Employer Overview explains adaptive builder path
 
 **Symptom:** The employer Overview still described assessment creation as a

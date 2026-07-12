@@ -275,15 +275,15 @@ function CreationPathsOverview() {
         <div className="creation-path-card">
           <span className="creation-path-icon"><Code2 size={18} aria-hidden="true" /></span>
           <div>
-            <h3>Direct coding challenge</h3>
+            <h3>Manual selection</h3>
             <p>Manually choose Standard or Advanced FastAPI, set timing and feedback, then send the candidate invite.</p>
           </div>
         </div>
         <div className="creation-path-card adaptive">
           <span className="creation-path-icon"><Brain size={18} aria-hidden="true" /></span>
           <div>
-            <h3>Adaptive builder</h3>
-            <p>Paste or upload the JD and resume. SignalLoop recommends a blueprint, shows future coverage, and creates the invite after approval.</p>
+            <h3>Guided role matching</h3>
+            <p>Paste or upload the role requirements. SignalLoop recommends the closest supported assessment or explains why current coverage is insufficient.</p>
           </div>
         </div>
       </div>
@@ -313,10 +313,10 @@ function HowItWorks() {
             <div className="hiw-step">
               <span className="hiw-step-num">1</span>
               <h3>Choose a creation path</h3>
-              <p>Start from the Assessments view with either direct setup or adaptive blueprint generation:</p>
+              <p>Start from the Assessments view with either manual selection or guided role matching:</p>
               <ul>
-                <li><strong>Direct coding challenge</strong> — manually choose Standard or Advanced FastAPI</li>
-                <li><strong>Adaptive builder</strong> — paste or upload the JD/resume, review the generated blueprint, then approve the invite</li>
+                <li><strong>Manual selection</strong> — choose Standard or Advanced FastAPI directly</li>
+                <li><strong>Guided role matching</strong> — provide role requirements, review the closest supported assessment and coverage gaps, then approve the invite</li>
                 <li><strong>Settings</strong> — timing and evaluator feedback still apply to either path</li>
               </ul>
               <p>Copy the generated invite link and share it directly with the candidate.</p>
@@ -446,8 +446,18 @@ function AdaptiveBuilder({
   }, [getAuthToken]);
 
   useEffect(() => {
-    void loadSavedBlueprints();
-  }, [loadSavedBlueprints]);
+    let cancelled = false;
+    void fetchAdaptiveBlueprints(getAuthToken)
+      .then((items) => {
+        if (!cancelled) setSavedBlueprints(items);
+      })
+      .catch(() => {
+        // Saved blueprints are helpful context, not a blocker for creating a new one.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [getAuthToken]);
 
   async function generate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -524,12 +534,12 @@ function AdaptiveBuilder({
           <Brain size={18} aria-hidden="true" />
         </span>
         <div>
-          <p className="mod-title">Adaptive builder <span className="status-pill">Optional</span></p>
-          <p className="mod-sub">Paste JD and resume text · review saved blueprint · send invite</p>
+          <p className="mod-title">Guided role matching <span className="status-pill">Optional</span></p>
+          <p className="mod-sub">Provide role requirements · review the recommended assessment · send invite</p>
         </div>
       </div>
       <p className="mod-desc">
-        Use this when you want the system to map a JD and resume to the closest supported coding assessment. You can also skip this and use the Coding challenge form below directly.
+        Use this when you want SignalLoop to match role requirements to the closest currently supported coding assessment. It recommends Standard or Advanced FastAPI, or identifies unsupported coverage instead of assembling new questions.
       </p>
 
       <form onSubmit={generate} className="report-grid" style={{ marginTop: 14 }}>
@@ -1010,7 +1020,7 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
                     })}
                   </div>
                 ) : (
-                  <p className="empty-state">No activity yet — use Direct coding challenge or Adaptive builder on the Assessments page.</p>
+                  <p className="empty-state">No activity yet — use Manual selection or Guided role matching on the Assessments page.</p>
                 )}
               </>
             ) : null}
@@ -1019,7 +1029,7 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
               <>
                 <div className="view-head">
                   <h2>Build assessment</h2>
-                  <p>Choose one creation path. Direct uses your manual coding challenge selection; Adaptive generates the selection from a JD/resume blueprint.</p>
+                  <p>Choose one creation path. Select a supported assessment manually or let SignalLoop match the role requirements to the closest available assessment.</p>
                 </div>
 
                 <div className="summary-field" style={{ marginBottom: 18 }}>
@@ -1030,20 +1040,20 @@ function EmployerDashboard({ getAuthToken, isClerkLoaded }: { getAuthToken: Auth
                       className={creationMode === "direct" ? "active" : undefined}
                       onClick={() => setCreationMode("direct")}
                     >
-                      Direct coding challenge
+                      Manual selection
                     </button>
                     <button
                       type="button"
                       className={creationMode === "adaptive" ? "active" : undefined}
                       onClick={() => setCreationMode("adaptive")}
                     >
-                      Adaptive builder
+                      Guided role matching
                     </button>
                   </div>
                   <p className="hint">
                     {creationMode === "adaptive"
-                      ? "Adaptive mode hides the manual coding form. The approved blueprint decides Basic vs Advanced and sends the invite."
-                      : "Direct mode skips blueprint generation. You manually choose Basic or Advanced and send the invite."}
+                      ? "Guided matching recommends Standard or Advanced from current coverage; it does not assemble a new assessment from questions."
+                      : "Manual selection lets you choose Standard or Advanced directly and send the invite."}
                   </p>
                 </div>
 

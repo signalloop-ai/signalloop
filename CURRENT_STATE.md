@@ -12,11 +12,45 @@ worker locally; ECS/Fargate scaffold for production).
 Implementation docs live under
 `docs/enhancements/phase-5-role-adaptive-assessment/`.
 
+**Phase 6A (Question Bank Governance Foundation) is complete locally.**
+Docs live under
+`docs/enhancements/phase-6-question-bank-assessment-builder/`.
+
 The AI collaborator was substantially redesigned post-MVP into a two-component architecture
 with progressive disclosure — see `docs/retrospectives/ai-collaborator-journey.md` for the
 full design history, and `docs/prompts/ai-collaborator-policy.md` for the current policy.
 
 ## Current phase
+
+**Active workstream:** project closeout and open-source release preparation.
+
+Phase 6A question-bank foundation is implemented locally:
+
+- approved question bank as the unit of assessment content,
+- super admin AI draft generation, edit, review, and approval,
+- approved source allowlist captured for controlled public-source ingestion,
+- question bank database model and migration,
+- seeded draft-question queue across backend, frontend, system design, data, platform, and
+  critical AI usage,
+- Super Admin Question Bank page for metadata edit, approve, and reject,
+- super-admin-only question-bank APIs.
+
+Deferred question-level adaptive scope:
+
+- role-based assessment blueprint assembly from approved questions,
+- employer review with same-slot question swaps,
+- mixed coding and written-response candidate assessments,
+- AI-assisted draft scoring with reviewer override support,
+- shared constrained AI-helper policy across all question types.
+
+Phase 6A is governance infrastructure, not an employer/candidate assessment flow. Its approved
+questions are not yet assembled into employer blueprints, delivered to candidates, or scored in
+reports. Those capabilities remain a documented future problem.
+
+The usable Phase 5 flow is **guided role matching**: role/JD requirements are mapped to the
+closest currently registered assessment (Standard or Advanced FastAPI), or reported as
+unsupported. It does not compose a new assessment from individual questions. Candidate resume
+context is used for gaps, follow-up probes, and report context, not scored-question selection.
 
 **Last completed implementation workstream:** Phase 5 — Role-Adaptive Assessment System MVP.
 
@@ -45,8 +79,8 @@ Phase 5 implemented:
 - approved blueprint -> invite creation,
 - nullable attempt blueprint link,
 - adaptive report context for blueprint-backed reports,
-- optional adaptive builder in the employer Assessments view.
-- adaptive builder document text extraction for TXT/MD, DOCX, and best-effort
+- optional guided role matching in the employer Assessments view.
+- guided role matching document text extraction for TXT/MD, DOCX, and best-effort
   text-based PDF uploads. Scanned PDFs are not OCR-supported.
 
 Validation:
@@ -106,7 +140,7 @@ also switched hosted execution to `DirectExecutionProvider` (`EXECUTION_BACKEND=
   section (Settings, Help & docs — placeholders). Client-side view switching via `nav`
   state, no routing change.
   - **Overview**: four colored stat tiles (total/submitted/in-progress/invited), explicit
-    Direct coding challenge vs Adaptive builder creation-path guidance, How-it-works, and
+    Manual selection vs Guided role matching creation-path guidance, How-it-works, and
     recent-activity feed.
   - **Assessments**: the live "Coding challenge" card (Basic/Advanced) + send panel, plus a
     "More assessment types — Coming soon" roadmap grid (Debugging, System design, AI & LLM,
@@ -487,11 +521,11 @@ Phase 2 historical reference: see `docs/development/changes.md` for the full ses
 
 The original MVP phase plan is complete through Phase 12. Use it as historical context, not the active implementation plan.
 
-Current active workstream:
+Current closeout reference:
 
-`docs/enhancements/phase-2-assessment-system/`
+`docs/enhancements/phase-6-question-bank-assessment-builder/`
 
-First Phase 2 task was documentation/planning only. Future implementation must remain
-bounded to the specific Phase 2 task file.
+Phase 6A governance is complete. Question-level adaptive composition is deferred and must begin
+as a new explicitly bounded enhancement if work resumes.
 
 Deployment architecture note: use local Docker worker for development/testing. Production execution should target AWS ECS/Fargate per-run assessment runner tasks instead of Docker-in-Docker on Render or another managed web-service runtime. Render remains suitable for web/API, Supabase for Postgres, and Clerk for employer auth.

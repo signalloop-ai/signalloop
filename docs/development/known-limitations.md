@@ -20,7 +20,10 @@ These are intentional MVP boundaries or unresolved follow-up items.
 - Rate limiting is in-memory and suitable only for a small pilot. It resets on process restart and is not shared across service replicas.
 - Audit events are persisted for key lifecycle actions, but there is no admin audit viewer.
 - Candidate invite tokens are bearer links. Anyone with a valid link can open that candidate workspace.
-- No video proctoring, ATS integration, enterprise SSO, billing, marketplace, advanced plagiarism detection, or multi-assessment marketplace exists in the MVP.
+- Proctoring signal capture is implemented, including focus events and optional webcam snapshots,
+  but it is pilot evidence rather than proof of candidate misconduct and requires human review.
+- No ATS integration, enterprise SSO, billing, marketplace, advanced plagiarism detection, or
+  multi-assessment marketplace exists in the MVP.
 
 ## Assessment And Scoring
 
@@ -29,6 +32,11 @@ These are intentional MVP boundaries or unresolved follow-up items.
 - There are three FastAPI assessment packs: historical MVP `fastapi_task_api_v1`,
   Phase 2 standard `fastapi_task_api_standard_v2`, and Phase 2 advanced
   `fastapi_task_api_advanced_v1`.
+- Guided role matching recommends Standard or Advanced FastAPI from the currently registered
+  coverage. It does not assemble a new assessment from individual questions.
+- Phase 6A provides question-bank provenance, review, and approval infrastructure. The approved
+  question bank is not connected to employer blueprint composition, mixed-question candidate
+  delivery, or scoring.
 
 ## Product Workflow
 
