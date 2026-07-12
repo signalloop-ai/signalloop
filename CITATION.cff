@@ -5,7 +5,9 @@ type: software
 authors:
   - family-names: Makam
     given-names: Sreenivas
-  - name: Hrithesh
+  - family-names: Dhoot
+    given-names: Ritesh
+    alias: rdhoot
 abstract: "AI-native software engineering candidate evaluator with constrained AI collaboration, evidence capture, and role-guided assessment matching."
 license: Apache-2.0
 repository-code: "https://github.com/smakam/signalloop"

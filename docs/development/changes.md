@@ -37,9 +37,8 @@ open-source release metadata had not been added yet.
   beginning with `signalloop-fastapi...`; no API key, GitHub token, AWS key, Slack token, or
   private-key filename/content pattern was found in tracked files.
 
-**Follow-up items:** Confirm Hrithesh's preferred public name, update the final GitHub
-organization URL in `CITATION.cff`, run a secret/history scan, and sanitize demo/blog artifacts
-before making the repository public.
+**Follow-up items:** Update the final GitHub organization URL in `CITATION.cff`, run a
+secret/history scan, and sanitize demo/blog artifacts before making the repository public.
 
 ---
 

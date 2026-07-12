@@ -45,7 +45,7 @@ repository started in a personal account.
 
 ## Before Making The Repo Public
 
-- Confirm `AUTHORS.md` has the exact preferred public names for both authors.
+- Confirm `AUTHORS.md` and `CITATION.cff` still match both authors' preferred public names.
 - Confirm `CITATION.cff` uses the final organization repository URL.
 - Run a secret scan across git history and the current tree.
 - Remove or rewrite any generated artifacts, local pitch-deck outputs, personal

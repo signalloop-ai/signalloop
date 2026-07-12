@@ -3,7 +3,7 @@
 SignalLoop was created as joint work by:
 
 - Sreenivas Makam
-- Hrithesh
+- Ritesh Dhoot (`rdhoot`)
 
 For public release, prefer publishing the repository under a shared GitHub
 organization and giving both collaborators owner or maintainer access. That
