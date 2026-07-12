@@ -592,6 +592,7 @@ function AdaptiveBuilder({
             />
             {uploadingField === "jd" ? <p className="hint">Extracting JD text…</p> : null}
             <textarea className="text-input" style={{ minHeight: 120 }} value={jdText} onChange={(e) => setJdText(e.target.value)} placeholder="Paste the job description or role requirements." />
+            <p className="hint">Include the primary responsibilities and required skills. A short title alone may not provide enough evidence for a reliable match.</p>
           </div>
           <div className="summary-field">
             <span className="summary-field-label">Candidate resume text</span>

@@ -34,6 +34,39 @@ test design. No direct Kubernetes ownership, but collaborated with platform team
 
 MANUAL_FIXTURE_CASES = [
     {
+        "name": "backend_python_title_standard",
+        "title": "Backend Python Engineer",
+        "role_family": "backend",
+        "seniority": "mid",
+        "invite_ready": True,
+        "expected_pack_slug": "fastapi_task_api_standard_v2",
+        "team_context": "Backend services for internal operations.",
+        "jd": "Backend Python Engineer",
+        "resume": "Python engineer working on backend services and automated tests.",
+    },
+    {
+        "name": "fastapi_data_engineer_stays_data",
+        "title": "FastAPI Data Engineer",
+        "role_family": "data",
+        "seniority": "mid",
+        "invite_ready": False,
+        "expected_pack_slug": "future_data_engineering_v1",
+        "team_context": "Batch and streaming analytics pipelines.",
+        "jd": "FastAPI data engineer building ingestion pipelines, SQL models, and analytics workflows.",
+        "resume": "Data engineer with Python, SQL, orchestration, and API experience.",
+    },
+    {
+        "name": "python_ml_engineer_stays_ai",
+        "title": "Python ML Engineer",
+        "role_family": "ai",
+        "seniority": "senior",
+        "invite_ready": False,
+        "expected_pack_slug": "future_ai_product_engineering_v1",
+        "team_context": "Model evaluation and inference pipelines.",
+        "jd": "Python machine learning engineer building model evaluation and inference systems.",
+        "resume": "Machine learning engineer with Python and production model experience.",
+    },
+    {
         "name": "supported_advanced_backend",
         "title": "Senior Backend Engineer",
         "role_family": "backend",
@@ -443,6 +476,8 @@ def test_manual_phase5_fixture_blueprints_are_valid(adaptive_client: TestClient,
     if fixture["invite_ready"]:
         assert blueprint["assessment_pack_slug"] in {"fastapi_task_api_standard_v2", "fastapi_task_api_advanced_v1"}
         assert blueprint["assessment_level"] in {"standard", "advanced"}
+        if fixture.get("expected_pack_slug"):
+            assert blueprint["assessment_pack_slug"] == fixture["expected_pack_slug"]
     else:
         assert blueprint["assessment_pack_slug"].startswith("future_")
         assert blueprint["assessment_level"].startswith("future_")

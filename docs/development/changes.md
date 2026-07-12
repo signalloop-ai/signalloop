@@ -5,6 +5,37 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-07-12 — Guided role matching contextual family precedence
+
+**Symptom:** A short but explicit `Backend Python Engineer` role was rejected because Python was
+present in the taxonomy and current assessment coverage but absent from the narrow FastAPI-fit
+gate. Simply accepting Python or FastAPI globally could incorrectly route data, ML, frontend, or
+platform roles to a backend assessment.
+
+**Root cause:** Role titles were stored but excluded from taxonomy extraction, and eligibility
+used individual backend technology signals without a symmetric primary-family context rule.
+
+**Files changed:**
+- `apps/api/signalloop_api/adaptive.py`
+- `apps/api/signalloop_api/adaptive_blueprint.py`
+- `apps/api/tests/test_adaptive_assessment.py`
+- `apps/web/src/app/employer/page.tsx`
+- `docs/enhancements/phase-5-role-adaptive-assessment/03-blueprint-generation.md`
+- `CURRENT_STATE.md`
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_adaptive_assessment.py tests/test_assessment_taxonomy.py -q` -> 30 passed.
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> 296 passed, 51 skipped.
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/web && npm run lint` -> passed with 4 known warnings.
+- `cd apps/web && npm run test:e2e -- tests/e2e/employer-portal.spec.ts --workers=1` -> 8 passed.
+
+**Follow-up items:** Keep role interpretation deterministic for the closeout release. A hybrid LLM
+interpreter with deterministic final eligibility remains a possible future enhancement, not part
+of v0.1.
+
+---
+
 ## 2026-07-12 — Project closeout boundary and guided role matching language
 
 **Symptom:** The employer portal called the Phase 5 recommendation flow an Adaptive Builder even

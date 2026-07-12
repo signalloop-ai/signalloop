@@ -91,7 +91,9 @@ def generate_blueprint_payload(
             duration_minutes=duration_minutes,
             skill_mapping=skill_mapping,
         )
-    if not (role_skill_ids & SUPPORTED_FASTAPI_FIT_SIGNALS):
+    direct_fastapi_fit = bool(role_skill_ids & SUPPORTED_FASTAPI_FIT_SIGNALS)
+    contextual_python_fit = _has_contextual_backend_python_fit(role_title, role_family, role_skill_ids)
+    if not direct_fastapi_fit and not contextual_python_fit:
         raise UnsupportedAssessmentScopeError(
             "This JD maps to technical skills outside the current assessment roadmap."
         )
@@ -100,6 +102,13 @@ def generate_blueprint_payload(
     coverage = _coverage_payload(module_id)
     title = f"{role_title} Adaptive Backend Assessment"
     duration = duration_minutes or DEFAULT_DURATIONS[selected_level]
+
+    caveats = _caveats(skill_mapping, coverage)
+    if contextual_python_fit and not direct_fastapi_fit:
+        caveats.insert(
+            0,
+            "The role is clearly backend Python, but the JD does not explicitly name FastAPI or API ownership. Confirm that the FastAPI work sample is appropriate before sending the invite.",
+        )
 
     return {
         "title": title,
@@ -112,7 +121,7 @@ def generate_blueprint_payload(
         "coverage": coverage,
         "rationale": _rationale(role_title, role_family, seniority, module_id, skill_mapping, expected_ai_usage),
         "follow_up_probes": _follow_up_probes(skill_mapping),
-        "caveats": _caveats(skill_mapping, coverage),
+        "caveats": caveats,
     }
 
 
@@ -125,10 +134,12 @@ def _future_family(role_title: str, role_family: str, role_skill_ids: set[str]) 
     title = role_title.lower()
     if "frontend" in title or "front-end" in title:
         return "frontend"
-    if "data engineer" in title:
+    if any(term in title for term in ("data engineer", "data scientist", "analytics engineer")):
         return "data"
-    if "platform engineer" in title:
+    if any(term in title for term in ("platform engineer", "devops", "site reliability", "sre")):
         return "infra"
+    if any(term in title for term in ("machine learning", "ml engineer", "ai engineer")):
+        return "ai"
 
     backend_fit_count = len(role_skill_ids & SUPPORTED_FASTAPI_FIT_SIGNALS)
     family_counts = {
@@ -152,6 +163,17 @@ def _future_family(role_title: str, role_family: str, role_skill_ids: set[str]) 
     if any(skill_id.startswith("infra.") for skill_id in role_skill_ids) and not backend_fit_count:
         return "infra"
     return None
+
+
+def _has_contextual_backend_python_fit(
+    role_title: str,
+    role_family: str,
+    role_skill_ids: set[str],
+) -> bool:
+    if role_family not in {"backend", "fullstack"} or "backend.python" not in role_skill_ids:
+        return False
+    title = role_title.lower()
+    return any(term in title for term in ("backend", "back-end", "api", "server", "service"))
 
 
 def _future_blueprint_payload(

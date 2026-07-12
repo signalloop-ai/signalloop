@@ -75,6 +75,9 @@ Phase 5 implemented:
 - current module coverage in `apps/api/signalloop_api/assessment_taxonomy/module_coverage.json`,
 - strict taxonomy loader/validator,
 - deterministic skill extraction and matching,
+- title-aware contextual family precedence so backend Python roles can match current FastAPI
+  coverage without allowing Python/FastAPI keywords to override data, frontend, platform, or
+  explicit ML-engineering role families,
 - role profiles, candidate profiles, and assessment blueprints,
 - approved blueprint -> invite creation,
 - nullable attempt blueprint link,

@@ -126,6 +126,7 @@ def create_role_profile(
 ) -> RoleProfileResponse:
     extracted = extract_skills_from_text(
         "\n".join([
+            payload.title,
             payload.jd_text,
             payload.team_context or "",
             " ".join(payload.required_skills or []),

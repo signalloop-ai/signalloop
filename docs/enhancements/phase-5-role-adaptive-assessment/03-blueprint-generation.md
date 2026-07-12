@@ -59,6 +59,30 @@ Else:
 The system may still produce a blueprint when unsupported skills are present,
 but it must distinguish supported from unsupported coverage.
 
+### Deterministic contextual matching
+
+The Phase 5 matcher remains deterministic. It extracts taxonomy aliases from the role title,
+JD, team context, and explicit skill lists, then applies role-family precedence before checking
+assessment-pack coverage.
+
+- Explicit frontend, data, platform/SRE, and ML-engineering titles stay in their primary family
+  even when Python or FastAPI appears as a supporting technology.
+- A backend/full-stack role with Python and explicit backend/API/server/service title context may
+  receive the Standard FastAPI recommendation with a caveat when framework/API ownership is not
+  stated clearly.
+- FastAPI or Python alone must not override a data, frontend, platform, AI/ML, or mobile role.
+- Seniority and existing advanced backend signals continue to determine Standard versus Advanced.
+- Employer approval remains required, and Manual selection remains available.
+
+Examples:
+
+```text
+Backend Python Engineer -> Standard FastAPI with an applicability caveat
+FastAPI Data Engineer -> future Data Engineering assessment
+Python ML Engineer -> future AI Product Engineering assessment
+AI Product Engineer with explicit backend API ownership -> current FastAPI assessment may be valid
+```
+
 ## Candidate-specific boundary
 
 For v1:
@@ -214,4 +238,3 @@ candidate AI collaborator.
 - Employer approval is required before invite creation.
 - Tests cover standard selection, advanced selection, unsupported-role behavior,
   and resume-specific follow-up probes.
-
