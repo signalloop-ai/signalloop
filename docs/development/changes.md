@@ -5,6 +5,44 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-07-12 — Open-source release scaffold
+
+**Symptom:** The project was ready to move from implementation closeout into public-release
+preparation, but the repository did not yet contain license, notice, authorship, citation,
+contribution, security, or release-boundary files. Internal question-bank source metadata also
+still labeled SignalLoop-authored content as proprietary.
+
+**Root cause:** The project had been developed privately through MVP and post-MVP phases, so
+open-source release metadata had not been added yet.
+
+**Files changed:**
+- `LICENSE`
+- `NOTICE`
+- `AUTHORS.md`
+- `CITATION.cff`
+- `THIRD_PARTY_NOTICES.md`
+- `CONTRIBUTING.md`
+- `SECURITY.md`
+- `docs/release/open-source-release-plan.md`
+- `apps/api/signalloop_api/admin.py`
+- `README.md`
+- `CURRENT_STATE.md`
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_admin_endpoints.py -q`
+  -> 17 passed.
+- `git ls-files | rg '(^|/)\\.env($|\\.)|\\.pem$|\\.key$|secret|credential|token'`
+  -> only tracked env example templates matched.
+- Tracked-file credential pattern check found only false positives from SignalLoop package names
+  beginning with `signalloop-fastapi...`; no API key, GitHub token, AWS key, Slack token, or
+  private-key filename/content pattern was found in tracked files.
+
+**Follow-up items:** Confirm Hrithesh's preferred public name, update the final GitHub
+organization URL in `CITATION.cff`, run a secret/history scan, and sanitize demo/blog artifacts
+before making the repository public.
+
+---
+
 ## 2026-07-12 — Guided role matching contextual family precedence
 
 **Symptom:** A short but explicit `Backend Python Engineer` role was rejected because Python was

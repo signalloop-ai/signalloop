@@ -24,6 +24,16 @@ full design history, and `docs/prompts/ai-collaborator-policy.md` for the curren
 
 **Active workstream:** project closeout and open-source release preparation.
 
+Open-source release preparation started:
+
+- repository-level Apache-2.0 license file,
+- author and citation metadata for joint publication,
+- NOTICE and third-party assessment/question-bank source notes,
+- contribution and security guidance,
+- release checklist under `docs/release/open-source-release-plan.md`,
+- internally authored question-bank source metadata now uses `Apache-2.0` instead of
+  `Proprietary`.
+
 Phase 6A question-bank foundation is implemented locally:
 
 - approved question bank as the unit of assessment content,

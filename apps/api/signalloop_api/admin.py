@@ -359,10 +359,10 @@ def _upsert_question_sources(session: Session) -> tuple[dict[str, QuestionSource
             source_id="internal_signal_loop",
             name="SignalLoop internal authored",
             url="internal://signalloop/question-bank",
-            license="Proprietary",
+            license="Apache-2.0",
             recommended_use="internal_authored",
             attribution_required=False,
-            notes="SignalLoop-authored or reviewed AI-draft questions.",
+            notes="SignalLoop-authored or reviewed AI-draft questions released with the project license.",
             status="approved_for_drafts",
         )
         session.add(internal)

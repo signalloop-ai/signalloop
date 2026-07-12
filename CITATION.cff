@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+title: SignalLoop
+message: "If you use SignalLoop in research, teaching, or public demos, please cite this project."
+type: software
+authors:
+  - family-names: Makam
+    given-names: Sreenivas
+  - name: Hrithesh
+abstract: "AI-native software engineering candidate evaluator with constrained AI collaboration, evidence capture, and role-guided assessment matching."
+license: Apache-2.0
+repository-code: "https://github.com/smakam/signalloop"
+date-released: 2026-07-12

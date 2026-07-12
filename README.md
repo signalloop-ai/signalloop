@@ -4,6 +4,9 @@ SignalLoop is an AI-native candidate evaluator for software engineering hiring.
 
 The MVP evaluates whether candidates can solve a realistic backend engineering task while using a constrained AI collaborator. It captures evidence of framing, AI usage, verification behavior, design judgment, and final ownership, then generates an Engineering Evidence Report for employer review.
 
+SignalLoop is open-sourced under Apache-2.0. Assessment and question-bank content may carry
+additional source-license and attribution metadata; see `THIRD_PARTY_NOTICES.md`.
+
 ## Status
 
 Phases 1 through 12 of the original MVP plan are complete and should be treated as historical implementation context.
@@ -32,6 +35,23 @@ employer blueprint composition, mixed-question candidate delivery, or report sco
 
 Future problem: compose comparable role-level assessments from an approved, calibrated question
 bank without resume-driven scored-question selection or unreviewed AI-generated content.
+
+## Open-Source Boundary
+
+This repository is intended as a reference implementation and demo foundation.
+
+- Original SignalLoop application code, docs, and internally authored assessment material are
+  Apache-2.0 unless a file states otherwise.
+- Imported or adapted question-bank material retains its upstream license and attribution
+  requirements.
+- Included FastAPI assessment packs are public demo/reference content. Because hidden tests,
+  scoring rubrics, and evaluator notes are public in this repository, they should not be reused
+  as secure production hiring inventory.
+- Production adopters should author and calibrate private assessment packs before using
+  SignalLoop for real hiring decisions.
+
+See `AUTHORS.md`, `CITATION.cff`, `NOTICE`, `THIRD_PARTY_NOTICES.md`, and
+`docs/release/open-source-release-plan.md`.
 
 ## Coding Agent Reading Order
 
