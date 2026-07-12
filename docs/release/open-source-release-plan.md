@@ -34,7 +34,7 @@ directory says otherwise.
 
 Recommended GitHub setup:
 
-1. Create a free GitHub organization for the project.
+1. Create a free GitHub organization named `signalloop-ai`.
 2. Add both original collaborators as owners or maintainers.
 3. Transfer the repository into the organization before making it public.
 4. Keep `AUTHORS.md` and `CITATION.cff` in the repository.
@@ -46,7 +46,8 @@ repository started in a personal account.
 ## Before Making The Repo Public
 
 - Confirm `AUTHORS.md` and `CITATION.cff` still match both authors' preferred public names.
-- Confirm `CITATION.cff` uses the final organization repository URL.
+- Confirm `CITATION.cff` still uses the final organization repository URL:
+  `https://github.com/signalloop-ai/signalloop`.
 - Run a secret scan across git history and the current tree.
 - Remove or rewrite any generated artifacts, local pitch-deck outputs, personal
   email addresses, invite tokens, and screenshots that should not be public.

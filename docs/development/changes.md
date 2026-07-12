@@ -40,6 +40,9 @@ open-source release metadata had not been added yet.
 **Follow-up items:** Update the final GitHub organization URL in `CITATION.cff`, run a
 secret/history scan, and sanitize demo/blog artifacts before making the repository public.
 
+**Update:** Planned GitHub organization namespace selected as `signalloop-ai`; `CITATION.cff`
+now points to `https://github.com/signalloop-ai/signalloop`.
+
 ---
 
 ## 2026-07-12 — Guided role matching contextual family precedence

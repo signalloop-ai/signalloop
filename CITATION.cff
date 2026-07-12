@@ -10,5 +10,5 @@ authors:
     alias: rdhoot
 abstract: "AI-native software engineering candidate evaluator with constrained AI collaboration, evidence capture, and role-guided assessment matching."
 license: Apache-2.0
-repository-code: "https://github.com/smakam/signalloop"
+repository-code: "https://github.com/signalloop-ai/signalloop"
 date-released: 2026-07-12
