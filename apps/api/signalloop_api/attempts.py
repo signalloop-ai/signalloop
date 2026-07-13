@@ -246,6 +246,7 @@ def candidate_attempt_response(session: Session, attempt: AssessmentAttempt) -> 
         expires_at=utc_isoformat(attempt.expires_at),
         submitted_at=utc_isoformat(attempt.submitted_at),
         submission_mode=attempt.submission_mode,
+        webcam_consent=attempt.webcam_consent,
         files=files,
         initial_files=starter_files,
     )

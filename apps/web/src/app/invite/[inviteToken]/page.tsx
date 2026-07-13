@@ -36,6 +36,7 @@ type CandidateAttempt = {
   expires_at: string | null;
   submitted_at: string | null;
   submission_mode: string | null;
+  webcam_consent: boolean | null;
   files: Record<string, string>;
   initial_files: Record<string, string>;
 };
@@ -311,6 +312,7 @@ export default function CandidateWorkspace() {
         setActivePath(Object.keys(body.files).sort()[0] ?? "");
         setSubmitted(body.status === "submitted");
         setAccepted(Boolean(body.started_at) || body.status === "submitted");
+        setWebcamConsent(body.webcam_consent === false ? false : null);
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : "Invite load failed");
       } finally {
@@ -580,6 +582,7 @@ export default function CandidateWorkspace() {
       setActivePath(Object.keys(body.files).sort()[0] ?? "");
       setSubmitted(body.status === "submitted");
       setAccepted(true);
+      setWebcamConsent(body.webcam_consent === false ? false : null);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Accept failed");
     }

@@ -34,6 +34,31 @@ Open-source release preparation started:
 - internally authored question-bank source metadata now uses `Apache-2.0` instead of
   `Proprietary`.
 
+Closeout browser hardening is implemented locally:
+
+- candidate invite responses now include persisted webcam consent,
+- a previously declined webcam choice survives page reloads without prompting again,
+- a previously granted choice still prompts after reload so a new camera stream is established
+  instead of silently disabling snapshot capture,
+- the live hosted smoke spec now handles the optional webcam step, current submission-modal
+  order, and the compact hidden-test status pill.
+
+Hosted candidate smoke on 2026-07-13 reached the Render web/API and direct execution backend:
+the workspace loaded, public tests executed, the AI anti-enumeration redirect appeared, final
+submission completed, and hidden evaluation returned a result. The local smoke-spec corrections
+still need deployment followed by one fresh-invite production rerun before the hosted checklist is
+formally green.
+
+Closeout validation:
+
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` -> 297 passed, 51 skipped.
+- `cd apps/worker && UV_CACHE_DIR=.uv-cache uv run pytest` -> 23 passed.
+- `cd apps/api && DATABASE_URL=sqlite:////tmp/signalloop_closeout_webcam.db UV_CACHE_DIR=.uv-cache uv run alembic upgrade head` -> passed.
+- `cd apps/web && npm run typecheck` -> passed.
+- `cd apps/web && npm run lint` -> passed with 4 known warnings.
+- `cd apps/web && npm run build` -> passed.
+- `cd apps/web && npm run test:e2e -- --workers=1` -> 35 passed, 2 skipped.
+
 Phase 6A question-bank foundation is implemented locally:
 
 - approved question bank as the unit of assessment content,

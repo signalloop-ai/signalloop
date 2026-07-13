@@ -51,6 +51,7 @@ class CandidateAttemptResponse(BaseModel):
     expires_at: Optional[str]
     submitted_at: Optional[str]
     submission_mode: Optional[str]
+    webcam_consent: Optional[bool]
     files: dict[str, str]
     initial_files: dict[str, str]
 

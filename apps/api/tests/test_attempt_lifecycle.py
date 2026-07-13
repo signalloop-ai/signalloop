@@ -101,6 +101,24 @@ def test_candidate_accept_starts_attempt_timer(
         assert attempt.expires_at > attempt.started_at
 
 
+def test_candidate_invite_returns_persisted_webcam_consent(
+    client: TestClient,
+) -> None:
+    created = client.post("/assessment-attempts", json={}).json()
+    invite_url = f"/candidate/invites/{created['invite_token']}"
+    client.post(f"{invite_url}/accept")
+
+    consent_response = client.patch(
+        f"{invite_url}/webcam-consent",
+        json={"consented": False},
+    )
+    response = client.get(invite_url)
+
+    assert consent_response.status_code == 204
+    assert response.status_code == 200
+    assert response.json()["webcam_consent"] is False
+
+
 def test_candidate_snapshot_persists_edited_files_and_marks_in_progress(
     client: TestClient,
     session_factory: sessionmaker[Session],

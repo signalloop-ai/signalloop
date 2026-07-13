@@ -559,6 +559,70 @@ test("declining webcam consent posts to API and shows workspace", async ({ page 
   expect((consentPayload as unknown as Record<string, unknown>).consented).toBe(false);
 });
 
+test("persisted declined webcam consent skips prompt on reload", async ({ page }) => {
+  await page.route("**/candidate/invites/playwright-token", async (route) => {
+    if (route.request().method() !== "GET") { await route.continue(); return; }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ ...startedAttempt, webcam_consent: false }),
+    });
+  });
+  await page.route("**/candidate/invites/playwright-token/snapshots", async (route) => {
+    await route.fulfill({ contentType: "application/json", status: 201, body: JSON.stringify({ snapshot_id: 1, attempt_id: 42, kind: "autosave", status: "in_progress" }) });
+  });
+
+  await page.goto("/invite/playwright-token");
+
+  await expect(page.locator(".workspace-shell")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("heading", { name: "Optional webcam" })).not.toBeVisible();
+});
+
+test("persisted granted webcam consent re-prompts to restore camera stream", async ({ page }) => {
+  let consentPayload: Record<string, unknown> | null = null;
+
+  await page.addInitScript(() => {
+    sessionStorage.setItem("getUserMediaCalls", "0");
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: async () => {
+          const calls = Number(sessionStorage.getItem("getUserMediaCalls") ?? "0");
+          sessionStorage.setItem("getUserMediaCalls", String(calls + 1));
+          return new MediaStream();
+        },
+      },
+    });
+  });
+  await page.route("**/candidate/invites/playwright-token", async (route) => {
+    if (route.request().method() !== "GET") { await route.continue(); return; }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ ...startedAttempt, webcam_consent: true }),
+    });
+  });
+  await page.route("**/candidate/invites/playwright-token/snapshots", async (route) => {
+    await route.fulfill({ contentType: "application/json", status: 201, body: JSON.stringify({ snapshot_id: 1, attempt_id: 42, kind: "autosave", status: "in_progress" }) });
+  });
+  await page.route("**/candidate/invites/playwright-token/webcam-consent", async (route) => {
+    consentPayload = (await route.request().postDataJSON()) as Record<string, unknown>;
+    await route.fulfill({ status: 204 });
+  });
+
+  await page.goto("/invite/playwright-token");
+
+  await expect(page.getByRole("heading", { name: "Optional webcam" })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "Allow camera" }).click();
+  await expect(page.getByRole("heading", { name: "Align your camera" })).toBeVisible();
+  await page.getByRole("button", { name: "Camera looks good — start" }).click();
+
+  await expect(page.locator(".workspace-shell")).toBeVisible({ timeout: 5_000 });
+  await expect.poll(
+    () => page.evaluate(() => Number(sessionStorage.getItem("getUserMediaCalls") ?? "0")),
+  ).toBe(1);
+  expect(consentPayload).not.toBeNull();
+  expect((consentPayload as unknown as Record<string, unknown>).consented).toBe(true);
+});
+
 test("proctoring events batch endpoint is called when focus is lost and submission happens", async ({ page }) => {
   const proctoringBatches: unknown[] = [];
 

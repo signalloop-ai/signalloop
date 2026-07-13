@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const inviteToken = process.env.LIVE_INVITE_TOKEN;
 
@@ -9,6 +9,18 @@ function lap(label: string, start: number): number {
   const now = Date.now();
   console.log(`[smoke] ${label}: ${now - start}ms`);
   return now;
+}
+
+async function passOptionalWebcamStep(
+  page: Page,
+  nextStep: Locator,
+  timeout = 30_000,
+): Promise<void> {
+  const webcamHeading = page.getByRole("heading", { name: "Optional webcam" });
+  await expect(webcamHeading.or(nextStep)).toBeVisible({ timeout });
+  if (await webcamHeading.isVisible()) {
+    await page.getByRole("button", { name: "Skip", exact: true }).click();
+  }
 }
 
 test("live candidate flow reaches API and worker services", async ({ page }) => {
@@ -36,7 +48,9 @@ test("live candidate flow reaches API and worker services", async ({ page }) => 
 
   // Step 1: Load invite page
   await page.goto(`/invite/${inviteToken}`);
-  await expect(page.getByRole("heading", { name: /FastAPI/ })).toBeVisible();
+  const assessmentHeading = page.getByRole("heading", { name: /FastAPI/ });
+  await passOptionalWebcamStep(page, assessmentHeading);
+  await expect(assessmentHeading).toBeVisible({ timeout: 30_000 });
   t = lap("page load → heading visible", t0);
 
   // Step 2: Accept rules → workspace ready (skip if attempt already started)
@@ -47,7 +61,9 @@ test("live candidate flow reaches API and worker services", async ({ page }) => 
   } else {
     console.log("[smoke] attempt already started — skipping accept step");
   }
-  await expect(page.getByRole("button", { name: "task_api/main.py" })).toBeVisible({ timeout: 10_000 });
+  const mainFileButton = page.getByRole("button", { name: "task_api/main.py" });
+  await passOptionalWebcamStep(page, mainFileButton);
+  await expect(mainFileButton).toBeVisible({ timeout: 10_000 });
   t = lap("workspace files visible", t);
 
   // Step 3: Run tests → result status (worker execution)
@@ -65,16 +81,16 @@ test("live candidate flow reaches API and worker services", async ({ page }) => 
   await expect(page.getByText("I cannot enumerate all defects")).toBeVisible({ timeout: 30_000 });
   t = lap("AI query → response visible", t);
 
-  // Step 5: Fill form + open confirm modal
-  await page.getByLabel("What did you change?").fill("Live smoke final implementation summary.");
+  // Step 5: Open confirm modal + fill form
   await page.getByRole("button", { name: "Submit" }).click();
   await expect(page.getByRole("heading", { name: "Submit final attempt?" })).toBeVisible();
-  t = lap("fill form → confirm modal open", t);
+  await page.getByLabel("What did you change?").fill("Live smoke final implementation summary.");
+  t = lap("confirm modal open → form filled", t);
 
   // Step 6: Submit final → hidden test execution completes
   await page.getByRole("button", { name: "Submit final" }).click();
   await expect(page.getByText("submitted", { exact: true })).toBeVisible({ timeout: 290_000 });
-  await expect(page.getByText(/(All hidden tests passed|Some hidden tests failed)/).first()).toBeVisible();
+  await expect(page.locator(".status-pill").filter({ hasText: /Hidden: (passed|failed)/ })).toBeVisible();
   t = lap("submit final → hidden tests complete", t);
 
   await expect(page.getByRole("button", { name: "Run Tests" })).toBeDisabled();

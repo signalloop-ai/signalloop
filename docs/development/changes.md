@@ -5,6 +5,46 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-07-13 — Persisted webcam decline and live smoke alignment
+
+**Symptom:** A hosted candidate smoke reached the optional webcam screen after rules acceptance,
+and the same prompt returned on every fresh page even after the candidate declined and the API
+persisted that choice. The live smoke spec also used the pre-modal submission order and expected
+older hidden-test result copy.
+
+**Root cause:** The candidate invite response omitted `webcam_consent`, so the web workspace
+always initialized consent as unanswered. The live smoke spec had not been updated when the
+optional webcam step, modal-based submission review, and compact hidden-test status pill were
+introduced.
+
+**Files changed:**
+- `apps/api/signalloop_api/schemas.py` — exposes persisted webcam consent in the candidate-safe
+  invite response.
+- `apps/api/signalloop_api/attempts.py` — maps the attempt's consent value into invite responses.
+- `apps/api/tests/test_attempt_lifecycle.py` — verifies the public consent PATCH -> invite GET
+  persistence seam.
+- `apps/web/src/app/invite/[inviteToken]/page.tsx` — restores a persisted decline on load/accept;
+  prior grants still re-prompt so an active media stream is re-established after reload.
+- `apps/web/tests/e2e/phase-3-proctoring.spec.ts` — covers reload after a persisted decline.
+- `apps/web/tests/e2e/live-full-stack-smoke.spec.ts` — handles optional webcam consent, current
+  submission-modal order, and current hidden-test status copy.
+- `CURRENT_STATE.md` — records the closeout hardening and validation status.
+- `docs/development/changes.md` — records this fix for handoff.
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest` passed, 297 tests with 51 skipped.
+- `cd apps/worker && UV_CACHE_DIR=.uv-cache uv run pytest` passed, 23 tests.
+- `cd apps/api && DATABASE_URL=sqlite:////tmp/signalloop_closeout_webcam.db UV_CACHE_DIR=.uv-cache uv run alembic upgrade head` passed.
+- `cd apps/web && npm run typecheck` passed.
+- `cd apps/web && npm run lint` passed with 4 known warnings.
+- `cd apps/web && npm run build` passed.
+- `cd apps/web && npm run test:e2e -- --workers=1` passed, 35 tests with 2 live tests skipped.
+
+**Follow-up items:** Deploy the API/web changes, create a fresh throwaway invite, and rerun the
+corrected hosted smoke spec so the production command itself finishes green.
+
+---
+
 ## 2026-07-12 — Open-source release scaffold
 
 **Symptom:** The project was ready to move from implementation closeout into public-release
