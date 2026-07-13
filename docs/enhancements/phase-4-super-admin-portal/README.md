@@ -95,7 +95,7 @@ built.
 ## Deployment notes
 
 - `SUPER_ADMIN_EMAILS` must be set in the Render environment (and locally in
-  `.env`). Example: `SUPER_ADMIN_EMAILS=redacted-personal-email@example.com`
+  `.env`). Example: `SUPER_ADMIN_EMAILS=admin@example.com`
 - Migration `0008_add_employer_role` is additive (nullable column) and safe to
   run on a live database without downtime.
 - No new infrastructure, no new external services.

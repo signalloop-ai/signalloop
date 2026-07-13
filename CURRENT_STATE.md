@@ -471,7 +471,7 @@ UX polish close-out).
   `/admin/reports/[attemptId]` (full evidence report view, admin can see any
   employer's report). Layout reuses employer-portal styling, no invite
   creation controls visible.
-- **Admin email**: `redacted-personal-email@example.com` (set in `SUPER_ADMIN_EMAILS`).
+- **Admin email**: configured via `SUPER_ADMIN_EMAILS`.
 - **API test suite**: 12 admin endpoint tests added
   (`tests/test_admin_endpoints.py`); all pass. Full suite 336 passed, 11
   skipped, 1 pre-existing unrelated failure (AI policy paste heuristic).

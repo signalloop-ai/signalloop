@@ -51,7 +51,7 @@ Comma-separated list of email addresses. Case-insensitive (lowercased on load
 and on comparison). Example:
 
 ```
-SUPER_ADMIN_EMAILS=redacted-personal-email@example.com
+SUPER_ADMIN_EMAILS=admin@example.com
 ```
 
 ### `.env.example` and `.env.render-supabase.example`

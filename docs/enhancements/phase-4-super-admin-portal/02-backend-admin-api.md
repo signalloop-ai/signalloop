@@ -117,7 +117,7 @@ Returns the current admin's identity for frontend routing.
 ```json
 {
   "id": 17,
-  "email": "redacted-personal-email@example.com",
+  "email": "admin@example.com",
   "role": "super_admin"
 }
 ```

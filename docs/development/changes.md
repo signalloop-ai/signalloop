@@ -502,7 +502,7 @@ the synthetic address if the lookup fails (auth still succeeds; user just isn't 
 admin). This also corrects employer emails (previously stored as `@clerk.local`).
 
 Verified end-to-end against the real Clerk API: the admin account
-(`redacted-personal-email@example.com`) resolves and assigns `super_admin`. Added
+configured in `SUPER_ADMIN_EMAILS` resolves and assigns `super_admin`. Added
 `tests/test_auth_email_resolution.py` (4 tests: primary-email selection, caching,
 no-secret, API-failure). API suite: **261 passed**.
 
@@ -2690,7 +2690,7 @@ Phase 3 migrations `0006`/`0007` are on `proctoring_events` /
 - `cd apps/web && npm run lint` → 3 errors, 4 warnings (same count as before changes; all pre-existing `react-hooks/set-state-in-effect` pattern used across the existing employer/invite pages).
 
 **Follow-up items:**
-- Set `SUPER_ADMIN_EMAILS=redacted-personal-email@example.com` in the Render environment
+- Set `SUPER_ADMIN_EMAILS` in the Render environment
   (and in local `.env`) before testing admin login.
 - Deploy to Render to validate hosted admin flow end-to-end.
 - Consider extracting the shared evidence-report rendering into a single
