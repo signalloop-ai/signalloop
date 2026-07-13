@@ -15,6 +15,10 @@ Post-MVP Phases 2-5 are implemented. Phase 6A question-bank governance is comple
 experimental foundation. The current workstream is project closeout and open-source release
 preparation; question-level adaptive assessment composition is deferred future work.
 
+The repository has been transferred to the joint GitHub organization
+`signalloop-ai/signalloop` and should remain private until hosted smoke testing, secret/history
+cleanup, and final demo/README review are complete.
+
 Current capabilities:
 
 - Candidate invite links and browser workspace.
@@ -36,6 +40,29 @@ employer blueprint composition, mixed-question candidate delivery, or report sco
 Future problem: compose comparable role-level assessments from an approved, calibrated question
 bank without resume-driven scored-question selection or unreviewed AI-generated content.
 
+## For Readers
+
+SignalLoop explores a simple product thesis: when candidates can use AI, coding assessments
+should measure framing, verification, judgment, collaboration, and ownership instead of only
+measuring whether code appears at the end.
+
+The current release is intentionally narrow. It demonstrates a constrained AI collaborator,
+evidence capture, deterministic reports, and role-guided matching to existing FastAPI assessment
+packs. It does not yet generate mixed question-level assessments from the Phase 6A question bank.
+
+## For Developers
+
+Use this repository as a runnable reference implementation. The fastest path is:
+
+1. Start Postgres.
+2. Run API migrations.
+3. Start the worker.
+4. Start the API.
+5. Start the web app.
+6. Create an employer invite and run a candidate attempt.
+
+The detailed command sequence is below.
+
 ## Open-Source Boundary
 
 This repository is intended as a reference implementation and demo foundation.
@@ -47,6 +74,9 @@ This repository is intended as a reference implementation and demo foundation.
 - Included FastAPI assessment packs are public demo/reference content. Because hidden tests,
   scoring rubrics, and evaluator notes are public in this repository, they should not be reused
   as secure production hiring inventory.
+- Included role/JD upload fixtures under
+  `docs/enhancements/phase-5-role-adaptive-assessment/sample-upload-files/` are public demo
+  fixtures for guided role matching, including text-based PDFs and DOCX files.
 - Production adopters should author and calibrate private assessment packs before using
   SignalLoop for real hiring decisions.
 

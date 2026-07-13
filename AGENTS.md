@@ -195,3 +195,13 @@ When bugs are found or fixed, or any non-trivial change is made outside a planne
 
 Include: date, symptom, root cause, files changed, and any follow-up items. This file
 is the canonical record for inter-agent handoff on post-MVP work.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs live as GitHub issues in `signalloop-ai/signalloop`, managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.

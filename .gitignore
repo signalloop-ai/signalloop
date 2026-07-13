@@ -26,6 +26,7 @@ build/
 .opencode/
 .codex/
 .agents/
+opencode.json
 
 # Logs and editor noise
 *.log
@@ -48,6 +49,7 @@ htmlcov/
 *.tar
 *.tar.gz
 .opencode
+outputs/
 
 # Demo video voiceover artifacts (generated)
 docs/marketing/voiceover/

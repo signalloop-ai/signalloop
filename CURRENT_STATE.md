@@ -31,6 +31,8 @@ Open-source release preparation started:
 - NOTICE and third-party assessment/question-bank source notes,
 - contribution and security guidance,
 - release checklist under `docs/release/open-source-release-plan.md`,
+- GitHub organization transfer to `signalloop-ai/signalloop`,
+- Render API service repaired after repo transfer so it uses Python runtime instead of Docker,
 - internally authored question-bank source metadata now uses `Apache-2.0` instead of
   `Proprietary`.
 
@@ -45,9 +47,9 @@ Closeout browser hardening is implemented locally:
 
 Hosted candidate smoke on 2026-07-13 reached the Render web/API and direct execution backend:
 the workspace loaded, public tests executed, the AI anti-enumeration redirect appeared, final
-submission completed, and hidden evaluation returned a result. The local smoke-spec corrections
-still need deployment followed by one fresh-invite production rerun before the hosted checklist is
-formally green.
+submission completed, and hidden evaluation returned a result. After deployment of the smoke-spec
+and webcam-consent fixes, a fresh production invite rerun passed on attempt 34 with persisted
+`webcam_consent=false`.
 
 Closeout validation:
 

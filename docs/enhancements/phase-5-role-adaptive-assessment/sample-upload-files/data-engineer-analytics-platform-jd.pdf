@@ -1,0 +1,82 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 1266 >>
+stream
+BT
+/F1 18 Tf
+72 740 Td
+(Data Engineer - Analytics Platform) Tj
+/F1 10 Tf
+0 -22 Td
+(SignalLoop adaptive-builder sample JD) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Role Overview) Tj
+0 -15 Td
+(We are hiring a Data Engineer to build reliable analytics pipelines for revenue, product) Tj
+0 -15 Td
+(usage, and operational reporting across Snowflake and BigQuery environments.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Responsibilities) Tj
+0 -15 Td
+(Own SQL transformations, Airflow orchestration, dbt models, data quality checks, dashboard) Tj
+0 -15 Td
+(reliability, lineage documentation, and incident debugging for broken data workflows.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Required Skills) Tj
+0 -15 Td
+(Advanced SQL, Airflow, dbt, Snowflake, BigQuery, dimensional modeling, data quality) Tj
+0 -15 Td
+(testing, pipeline observability, stakeholder communication, and AI-assisted debugging.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Experience) Tj
+0 -15 Td
+(4 to 6 years of data engineering experience with production ownership of batch pipelines) Tj
+0 -15 Td
+(and analytics models.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Assessment Signals) Tj
+0 -15 Td
+(We want to test logical reasoning, debugging, systems thinking, chaos tolerance, trade-off) Tj
+0 -15 Td
+(judgment, and communication quality.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1629
+%%EOF

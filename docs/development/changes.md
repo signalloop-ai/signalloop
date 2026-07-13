@@ -45,6 +45,50 @@ corrected hosted smoke spec so the production command itself finishes green.
 
 ---
 
+## 2026-07-13 — Open-source cleanup and hosted deployment repair
+
+**Symptom:** After the GitHub organization transfer, Render API deploys failed because the API
+service was configured as Docker and looked for a root `Dockerfile`. The project also still had
+local/generated artifacts in the working tree that should not be part of the open-source release.
+
+**Root cause:** The Render API service runtime had changed from Python to Docker during the source
+reconnect. The repo also contained local tooling/deck outputs and an unrelated marketing draft
+that were never intended as SignalLoop release artifacts.
+
+**Files changed:**
+- `.gitignore`
+- `README.md`
+- `CURRENT_STATE.md`
+- `docs/development/changes.md`
+- `docs/release/open-source-release-plan.md`
+- `docs/enhancements/phase-5-role-adaptive-assessment/sample-upload-files/README.md`
+- `docs/enhancements/phase-5-role-adaptive-assessment/sample-upload-files/frontend-platform-engineer-jd.docx`
+- `docs/enhancements/phase-5-role-adaptive-assessment/sample-upload-files/frontend-platform-engineer-jd.pdf`
+- `docs/enhancements/phase-5-role-adaptive-assessment/sample-upload-files/data-engineer-analytics-platform-jd.docx`
+- `docs/enhancements/phase-5-role-adaptive-assessment/sample-upload-files/data-engineer-analytics-platform-jd.pdf`
+
+**Removed local/untracked artifacts:**
+- `docs/marketing/blog-ccr-setup.md`
+- `opencode.json`
+- `outputs/`
+
+**Validation:**
+- Render API service `signalloop-api` patched back to `runtime=python`.
+- Render API deploy `dep-d9a76t7avr4c73anfjv0` completed with status `live`.
+- `https://signalloop-api.onrender.com/health` -> 200 `{"status":"ok"}`.
+- `https://signalloop-web.onrender.com/employer` -> HTTP 200.
+- After the webcam-consent fix was deployed, a fresh hosted candidate smoke passed against
+  production attempt `34`: workspace loaded, public tests executed, the AI anti-enumeration
+  redirect appeared, final submission completed, hidden status rendered, and the persisted invite
+  response showed `webcam_consent=false`.
+
+**Follow-up items:** Revoke or rotate the Render CLI token used for the repair; confirm `rdhoot`
+accepted the GitHub invite and has the intended access level; run final secret/history scan before
+making the repository public; complete the remaining release-demo checks for employer report
+generation and guided role matching.
+
+---
+
 ## 2026-07-12 — Open-source release scaffold
 
 **Symptom:** The project was ready to move from implementation closeout into public-release
