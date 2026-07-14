@@ -43,7 +43,9 @@ Closeout browser hardening is implemented locally:
 - a previously granted choice still prompts after reload so a new camera stream is established
   instead of silently disabling snapshot capture,
 - the live hosted smoke spec now handles the optional webcam step, current submission-modal
-  order, and the compact hidden-test status pill.
+  order, and the compact hidden-test status pill,
+- the candidate editor no longer flags valid multi-line Python generator expressions as possible
+  missing-colon diagnostics.
 
 Hosted candidate smoke on 2026-07-13 reached the Render web/API and direct execution backend:
 the workspace loaded, public tests executed, the AI anti-enumeration redirect appeared, final

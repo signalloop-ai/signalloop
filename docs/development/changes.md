@@ -5,6 +5,27 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-07-14 — Candidate editor false Python diagnostic cleanup
+
+**Symptom:** The candidate editor showed `task_api/main.py` with a red error marker and yellow
+editor squiggles for valid multi-line Python generator expressions, such as `any(...)` clauses
+containing `for member in members`.
+
+**Root cause:** The lightweight browser-side Python diagnostics treated any trimmed line beginning
+with `for` as a block statement requiring a trailing colon, even when that line was inside an open
+parenthesized expression. The file-tree badge also rendered all editor diagnostics with the red
+error style, including warnings.
+
+**Files changed:**
+- `apps/web/src/app/invite/[inviteToken]/page.tsx`
+- `docs/development/changes.md`
+
+**Validation:** `cd apps/web && npm run build` passed.
+
+**Follow-up items:** None.
+
+---
+
 ## 2026-07-14 — Super admin dark-theme readability cleanup
 
 **Symptom:** The hosted super admin roster was difficult to read in the dark theme. Employer rows

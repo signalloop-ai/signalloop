@@ -154,6 +154,7 @@ function diagnosticsForPython(path: string, content: string): SyntaxDiagnostic[]
 
   lines.forEach((line, index) => {
     const lineNumber = index + 1;
+    const bracketDepthAtLineStart = stack.length;
     let inSingle = false;
     let inDouble = false;
 
@@ -179,7 +180,7 @@ function diagnosticsForPython(path: string, content: string): SyntaxDiagnostic[]
 
     const stripped = line.trim();
     const needsColon = /^(async\s+def|def|class|if|elif|else|for|while|try|except|finally|with)\b/.test(stripped);
-    if (needsColon && !stripped.endsWith(":") && !stripped.endsWith("\\")) {
+    if (bracketDepthAtLineStart === 0 && needsColon && !stripped.endsWith(":") && !stripped.endsWith("\\")) {
       diagnostics.push({
         path,
         lineNumber,
@@ -395,6 +396,15 @@ export default function CandidateWorkspace() {
       referenced.add(diagnostic.path);
     }
     return referenced;
+  }, [syntaxDiagnostics]);
+  const diagnosticSeverityByFile = useMemo(() => {
+    const severityByFile = new Map<string, SyntaxDiagnostic["severity"]>();
+    for (const diagnostic of syntaxDiagnostics) {
+      if (diagnostic.severity === "error" || !severityByFile.has(diagnostic.path)) {
+        severityByFile.set(diagnostic.path, diagnostic.severity);
+      }
+    }
+    return severityByFile;
   }, [syntaxDiagnostics]);
 
   const reviewAnsweredCount = submissionReview.changed.trim().length > 0 ? 1 : 0;
@@ -1238,7 +1248,18 @@ export default function CandidateWorkspace() {
               >
                 <FileCode2 size={16} aria-hidden="true" />
                 <span>{path}</span>
-                {filesWithDiagnostics.has(path) ? <span className="file-marker error" title="Syntax diagnostics">!</span> : null}
+                {filesWithDiagnostics.has(path) ? (
+                  <span
+                    className={`file-marker ${diagnosticSeverityByFile.get(path) === "error" ? "error" : "warn"}`}
+                    title={
+                      diagnosticSeverityByFile.get(path) === "error"
+                        ? "Editor diagnostic"
+                        : "Editor warning"
+                    }
+                  >
+                    !
+                  </span>
+                ) : null}
                 {filesWithOutputReferences.has(path) ? <span className="file-marker warn" title="Referenced in public output">↗</span> : null}
               </button>
             ))}
