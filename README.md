@@ -7,6 +7,17 @@ The MVP evaluates whether candidates can solve a realistic backend engineering t
 SignalLoop is open-sourced under Apache-2.0. Assessment and question-bank content may carry
 additional source-license and attribution metadata; see `THIRD_PARTY_NOTICES.md`.
 
+## Demo
+
+Watch the end-to-end SignalLoop workflow:
+
+1. Super admin overview across employers, candidates, submissions, and the question bank.
+2. Employer assessment setup from role/job-description requirements.
+3. Candidate assessment in a Monaco workspace with a constrained AI collaborator.
+4. Employer evidence-report review with score, integrity signals, and recommendation.
+
+[Watch the demo video](docs/assets/demo/signalloop-demo.mp4)
+
 ## Status
 
 Phases 1 through 12 of the original MVP plan are complete and should be treated as historical implementation context.
@@ -82,6 +93,12 @@ This repository is intended as a reference implementation and demo foundation.
 
 See `AUTHORS.md`, `CITATION.cff`, `NOTICE`, `THIRD_PARTY_NOTICES.md`, and
 `docs/release/open-source-release-plan.md`.
+
+## Maintainers and Authors
+
+SignalLoop is joint work by Sreenivas Makam and Ritesh Dhoot (`rdhoot`).
+
+See `AUTHORS.md` and `CITATION.cff` for public authorship metadata.
 
 ## Coding Agent Reading Order
 

@@ -5,6 +5,28 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-07-14 — Add public demo video and README release metadata
+
+**Symptom:** The GitHub README did not yet surface the final end-to-end demo video, and
+collaborator visibility depended on separate metadata files.
+
+**Root cause:** The release README predated the final four-part demo edit and GitHub-org closeout
+polish.
+
+**Files changed:**
+- `README.md`
+- `docs/assets/demo/signalloop-demo.mp4`
+- `docs/release/open-source-release-plan.md`
+- `CURRENT_STATE.md`
+- `docs/development/changes.md`
+
+**Validation:** Documentation-only change; verified the demo asset exists locally.
+
+**Follow-up items:** Keep GitHub About metadata aligned with the README description, homepage,
+and topics before making the repository public.
+
+---
+
 ## 2026-07-14 — Candidate editor false Python diagnostic cleanup
 
 **Symptom:** The candidate editor showed `task_api/main.py` with a red/warning marker and yellow

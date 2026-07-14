@@ -104,6 +104,8 @@ Core argument:
 
 Demo scope:
 
+- view the short end-to-end demo at `docs/assets/demo/signalloop-demo.mp4`,
+- show super admin cross-employer visibility and question-bank governance,
 - create employer invite,
 - open candidate workspace,
 - run public tests,
