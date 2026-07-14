@@ -180,7 +180,8 @@ function diagnosticsForPython(path: string, content: string): SyntaxDiagnostic[]
 
     const stripped = line.trim();
     const needsColon = /^(async\s+def|def|class|if|elif|else|for|while|try|except|finally|with)\b/.test(stripped);
-    if (bracketDepthAtLineStart === 0 && needsColon && !stripped.endsWith(":") && !stripped.endsWith("\\")) {
+    const insideBracketContinuation = bracketDepthAtLineStart > 0 || stack.length > bracketDepthAtLineStart;
+    if (!insideBracketContinuation && needsColon && !stripped.endsWith(":") && !stripped.endsWith("\\")) {
       diagnostics.push({
         path,
         lineNumber,
