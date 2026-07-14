@@ -5,6 +5,28 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-07-14 — Super admin dark-theme readability cleanup
+
+**Symptom:** The hosted super admin roster was difficult to read in the dark theme. Employer rows
+rendered with browser-default link colors, so visited/unvisited emails and numeric counts appeared
+purple/blue against the navy background. Link-styled command buttons could also inherit default
+anchor decoration. The header also did not make the signed-in super-admin state explicit for demos.
+
+**Root cause:** The admin roster uses row-level Next.js `Link` elements, but the admin-specific
+row styles did not override default anchor and visited-anchor colors after the Calibr dark
+redesign.
+
+**Files changed:**
+- `apps/web/src/app/globals.css`
+- `apps/web/src/app/admin/layout.tsx`
+- `docs/development/changes.md`
+
+**Validation:** `cd apps/web && npm run build` passed.
+
+**Follow-up items:** None.
+
+---
+
 ## 2026-07-13 — Persisted webcam decline and live smoke alignment
 
 **Symptom:** A hosted candidate smoke reached the optional webcam screen after rules acceptance,

@@ -17,10 +17,11 @@ const Logo = () => (
 );
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { isLoaded, isSignedIn } = useUser();
+  const { isLoaded, isSignedIn, user } = useUser();
   const { getToken } = useAuth();
   const router = useRouter();
   const [authState, setAuthState] = useState<"loading" | "admin" | "not_admin" | "signed_out">("loading");
+  const signedInEmail = user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses[0]?.emailAddress;
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
@@ -99,7 +100,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <p>Super Admin Portal</p>
           </div>
         </div>
-        <UserButton />
+        <div className="action-row">
+          <div className="admin-identity">
+            <span className="status-pill ready">Super Admin</span>
+            {signedInEmail ? <span className="attempt-sent-at">{signedInEmail}</span> : null}
+          </div>
+          <UserButton />
+        </div>
       </header>
       {children}
     </>

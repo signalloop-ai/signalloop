@@ -140,12 +140,17 @@ button:disabled {
   justify-content: center;
   min-height: 38px;
   padding: 8px 12px;
+  text-decoration: none;
 }
 
 .command-button.primary {
   background: var(--accent);
   color: #ffffff;
   transition: background 120ms ease;
+}
+
+.command-button.primary:visited {
+  color: #ffffff;
 }
 
 .command-button.primary:not(:disabled):hover {
@@ -157,6 +162,10 @@ button:disabled {
   border-color: var(--border);
   color: var(--text);
   transition: border-color 120ms ease, background 120ms ease;
+}
+
+.command-button.secondary:visited {
+  color: var(--text);
 }
 
 .command-button.secondary:not(:disabled):hover {
@@ -1584,6 +1593,45 @@ button:disabled {
     minmax(96px, 0.9fr) minmax(56px, 0.5fr) minmax(74px, 0.6fr)
     minmax(64px, 0.5fr) minmax(74px, 0.6fr);
   min-width: 960px;
+}
+
+.admin-employer-row,
+.admin-employer-row:visited {
+  color: var(--t0);
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-employer-row:hover,
+.admin-employer-row:focus-visible {
+  background: var(--bg3);
+  border-color: var(--b2);
+}
+
+.admin-employer-row:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.admin-employer-row > span {
+  color: var(--t0);
+}
+
+.admin-employer-row .attempt-email-meta > span:first-child {
+  color: var(--t0);
+  font-weight: 600;
+}
+
+.admin-employer-row .attempt-sent-at {
+  color: var(--t1);
+}
+
+.admin-identity {
+  align-items: flex-end;
+  display: grid;
+  gap: 3px;
+  justify-items: end;
+  min-width: 0;
 }
 
 /* Super-admin employer-detail attempts table has 6 columns: Candidate, Status,
