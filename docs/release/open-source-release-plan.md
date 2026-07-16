@@ -1,6 +1,6 @@
 # Open-Source Release Plan
 
-Status: release candidate; three external gates remain before visibility change.
+Status: release candidate; two external gates remain before visibility change.
 
 ## Release Boundary
 
@@ -58,10 +58,12 @@ repository started in a personal account.
   with no leaks; the current-tree scan is also clean.
 - [x] Remove generated artifacts, personal email addresses, and live invite values from the
   current tree. The remaining localhost invite in the demo runbook is now an explicit placeholder.
-- [ ] Rewrite the published git history to remove the previously sanitized personal Gmail
-  addresses, the old localhost invite token whose status is unknown, and private-pilot AWS
-  account/network identifiers; alternatively, explicitly accept that disclosure before changing
-  visibility. A rewrite requires a coordinated force-push and replacement release tag.
+- [x] Rewrite the published git history to remove personal Gmail addresses, the old localhost
+  invite token whose status is unknown, and private-pilot AWS account/network identifiers.
+  Completed 2026-07-16 for `main`, `phase2`, and `v0.1.0` using exact old-value force-push leases.
+  The current release tree remained unchanged; the rewritten history passed targeted disclosure,
+  Gitleaks 8.30.1, and strict Git object-integrity checks. A verified pre-rewrite rollback bundle
+  is stored locally at `/private/tmp/signalloop-pre-public-history.bundle`.
 - [x] Confirm `.env` is ignored and not tracked.
 - [x] Confirm release-facing docs contain no private Render, Clerk, Supabase, email, or
   environment-specific AWS account/network identifiers.
@@ -72,9 +74,8 @@ repository started in a personal account.
   Playwright release suite.
 - [ ] Perform one final Clerk-authenticated hosted employer report and guided-role review from the
   Codex desktop app, which has Browser control. The VS Code extension does not.
-- [x] Preserve the existing signed `v0.1.0` pilot tag. Use `v0.1.1` for the public release
-  candidate rather than moving a published tag if history is preserved. If history is rewritten,
-  replace the old private pilot tag only as part of the coordinated force-push.
+- [x] Replace the private pilot `v0.1.0` tag only as part of the coordinated history rewrite.
+  Use a new `v0.1.1` tag for the public release rather than moving `v0.1.0` again.
 - [ ] After the repository becomes public, enable GitHub private vulnerability reporting and
   secret scanning, then publish the `v0.1.1` GitHub release.
 

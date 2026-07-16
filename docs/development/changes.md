@@ -5,6 +5,34 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-07-16 — Sanitize published Git history before public release
+
+**Symptom:** The current release tree was sanitized, but manual review found personal Gmail
+addresses, an old localhost invite token of unknown status, and private-pilot AWS identifiers in
+older commits reachable from the published refs.
+
+**Root cause:** Earlier private-pilot documentation and deployment examples committed live
+environment identifiers before later commits replaced them with public placeholders. Current-tree
+secret scans cannot detect non-secret identifiers that remain in old Git blobs.
+
+**Refs changed:** Rewrote and force-pushed `main`, `phase2`, and `v0.1.0` using exact old-value
+leases. Commit authorship metadata was preserved. The current `main` tree remained byte-for-byte
+identical. A complete verified pre-rewrite bundle is stored at
+`/private/tmp/signalloop-pre-public-history.bundle` with SHA-256
+`55d2eee0ce59fb3abc30f9701e560a1c6729d744e4f3e43462ac6e2546a1f8a9`.
+
+**Validation:**
+- Targeted disclosure scan passed across every reachable rewritten commit.
+- Gitleaks 8.30.1 scanned 91 rewritten commits with no leaks found.
+- `git fsck --full --strict --no-dangling` passed.
+- Live GitHub refs matched the verified rewritten `main`, `phase2`, and `v0.1.0` objects after
+  push.
+
+**Follow-up items:** Rotate/revoke the Render CLI repair credential and complete one final
+Clerk-authenticated hosted employer report/guided-role review before changing visibility.
+
+---
+
 ## 2026-07-16 — Public-release candidate audit and infrastructure sanitization
 
 **Symptom:** The repository had a clean application test baseline, but public-release artifacts
@@ -35,9 +63,9 @@ longer covered the current cold Clerk development bootstrap.
   `docs/assets/blog/signalloop-three-layer-architecture.png`.
 
 **Validation:**
-- Gitleaks 8.30.1: 90 commits scanned, no secret leaks found. Manual review separately found
-  non-secret personal/infrastructure identifiers in older commits, so history rewriting remains a
-  release gate.
+- Gitleaks 8.30.1: 90 pre-rewrite commits scanned, no secret leaks found. Manual review separately
+  found non-secret personal/infrastructure identifiers in older commits; the subsequent history
+  rewrite entry above records their removal and post-rewrite validation.
 - `cd apps/api && uv run pytest` -> 297 passed, 51 skipped.
 - `cd apps/worker && uv run pytest` -> 23 passed.
 - Alembic SQLite migration chain -> passed through `0012_concept_question_types`.
@@ -46,8 +74,7 @@ longer covered the current cold Clerk development bootstrap.
 - Hosted API health -> `{"status":"ok"}`; hosted employer page -> HTTP 200.
 - Publication PNG -> visually inspected at 2880 x 1640; layout and text are clean.
 
-**Follow-up items:** Approve and coordinate a history rewrite/force-push (or explicitly accept the
-historical disclosure), rotate/revoke the Render CLI repair credential, complete one final
+**Follow-up items:** Rotate/revoke the Render CLI repair credential, complete one final
 Clerk-authenticated hosted employer report/guided-role review in the Codex desktop app, then change
 GitHub visibility, enable native security features, and publish the `v0.1.1` release.
 

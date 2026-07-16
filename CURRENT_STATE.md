@@ -39,13 +39,17 @@ The 2026-07-16 public-release candidate audit is complete locally:
 - Hosted reachability was rechecked: API health returned `{"status":"ok"}` and the employer page
   returned HTTP 200.
 
-Gitleaks found no secret material, but manual history review found sanitized personal account
-identifiers, a localhost invite token of unknown status, and environment-specific AWS identifiers
-in older commits. Remaining external gates before changing visibility are an approved history
-rewrite/force-push (or explicit acceptance of that disclosure), rotating/revoking the Render CLI
-repair credential, and completing one final Clerk-authenticated employer report/guided-role review
-from a browser-capable Codex app session. The VS Code extension cannot provide Codex Browser
-control.
+Gitleaks found no secret material, but manual history review found personal account identifiers, a
+localhost invite token of unknown status, and environment-specific AWS identifiers in older
+commits. On 2026-07-16, the published `main`, `phase2`, and `v0.1.0` refs were rewritten and
+force-pushed with exact old-value leases. The current release tree remained byte-for-byte
+unchanged, the targeted disclosure scan passed across every reachable commit, and Gitleaks 8.30.1
+reported no leaks across the rewritten 91-commit history. A verified pre-rewrite rollback bundle is
+stored locally at `/private/tmp/signalloop-pre-public-history.bundle`.
+
+Remaining external gates before changing visibility are rotating/revoking the Render CLI repair
+credential and completing one final Clerk-authenticated employer report/guided-role review from a
+browser-capable Codex app session. The VS Code extension cannot provide Codex Browser control.
 
 Open-source release preparation started:
 
