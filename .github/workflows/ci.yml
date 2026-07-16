@@ -27,7 +27,7 @@ jobs:
           python-version: "3.11"
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v8
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
           cache-dependency-glob: apps/${{ matrix.component }}/uv.lock
@@ -76,4 +76,7 @@ jobs:
 
       - name: Build
         working-directory: apps/web
+        env:
+          # Structurally valid, non-production key used only to exercise Clerk-wrapped routes.
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_c2lnbmFsbG9vcC5leGFtcGxlLmNvbSQ
         run: npm run build
