@@ -1,6 +1,6 @@
 # Open-Source Release Plan
 
-Status: release candidate; two external gates remain before visibility change.
+Status: complete; repository public and `v0.1.1` published on 2026-07-16.
 
 ## Release Boundary
 
@@ -36,7 +36,8 @@ GitHub setup:
 
 1. GitHub organization selected: `signalloop-ai`.
 2. Repository transferred to `https://github.com/signalloop-ai/signalloop`.
-3. Keep the repository private until the checklist below is complete.
+3. The repository remained private until the checklist below was complete, then became public on
+   2026-07-16.
 4. Add both original collaborators as owners or maintainers.
 5. Keep `AUTHORS.md` and `CITATION.cff` in the repository.
 6. Publish blog posts with both collaborators credited.
@@ -52,8 +53,8 @@ repository started in a personal account.
   `https://github.com/signalloop-ai/signalloop`.
 - [x] Confirm Ritesh Dhoot (`rdhoot`) has accepted the org/repo invite and has the intended access
   level. Verified 2026-07-16: organization member and repository admin; no pending invitation.
-- [ ] Revoke or rotate the Render CLI token used during the Render runtime repair. This requires
-  the Render account/dashboard login and must be completed by an account owner.
+- [x] Revoke or rotate the Render CLI token used during the Render runtime repair. Account owner
+  confirmed completion on 2026-07-16.
 - [x] Run a secret scan across git history and the current tree. Gitleaks 8.30.1 scanned 90 commits
   with no leaks; the current-tree scan is also clean.
 - [x] Remove generated artifacts, personal email addresses, and live invite values from the
@@ -72,12 +73,13 @@ repository started in a personal account.
   repair. Attempt 34 passed on 2026-07-13; API/web reachability was reconfirmed 2026-07-16.
 - [x] Review employer report generation and guided role matching through the complete local
   Playwright release suite.
-- [ ] Perform one final Clerk-authenticated hosted employer report and guided-role review from the
-  Codex desktop app, which has Browser control. The VS Code extension does not.
+- [x] Perform one final Clerk-authenticated hosted employer report and guided-role review. User
+  confirmed completion from the Codex app session on 2026-07-16.
 - [x] Replace the private pilot `v0.1.0` tag only as part of the coordinated history rewrite.
   Use a new `v0.1.1` tag for the public release rather than moving `v0.1.0` again.
-- [ ] After the repository becomes public, enable GitHub private vulnerability reporting and
-  secret scanning, then publish the `v0.1.1` GitHub release.
+- [x] Make the repository public, enable secret scanning, push protection, Dependabot security
+  updates, and private vulnerability reporting, then publish the `v0.1.1` GitHub release.
+  Completed 2026-07-16.
 
 ## 2026-07-16 Release-Candidate Validation
 
@@ -90,6 +92,8 @@ repository started in a personal account.
 - Playwright: 35 passed, 2 credential-dependent live tests skipped.
 - Hosted reachability: API health returned `{"status":"ok"}`; employer page returned HTTP 200.
 - GitHub CI workflow added for API/worker tests, migrations, and web typecheck/lint/build.
+- GitHub Actions run `29484828469` passed all three jobs after pinning `setup-uv` to the verified
+  `v8.3.2` commit and supplying a non-production Clerk publishable key for the CI build.
 
 ## Cleanup Decisions
 

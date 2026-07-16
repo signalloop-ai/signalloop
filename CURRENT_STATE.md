@@ -22,7 +22,7 @@ full design history, and `docs/prompts/ai-collaborator-policy.md` for the curren
 
 ## Current phase
 
-**Active workstream:** project closeout and open-source release preparation.
+**Active workstream:** public-release closeout and post-release monitoring.
 
 The 2026-07-16 public-release candidate audit is complete locally:
 
@@ -47,9 +47,12 @@ unchanged, the targeted disclosure scan passed across every reachable commit, an
 reported no leaks across the rewritten 91-commit history. A verified pre-rewrite rollback bundle is
 stored locally at `/private/tmp/signalloop-pre-public-history.bundle`.
 
-Remaining external gates before changing visibility are rotating/revoking the Render CLI repair
-credential and completing one final Clerk-authenticated employer report/guided-role review from a
-browser-capable Codex app session. The VS Code extension cannot provide Codex Browser control.
+The account owner confirmed completion of the Render credential rotation/revocation and final
+Clerk-authenticated employer report/guided-role review on 2026-07-16. GitHub Actions run
+`29484828469` then passed API/worker tests, the migration chain, and web typecheck/lint/build.
+The repository is now public at `https://github.com/signalloop-ai/signalloop`; secret scanning,
+push protection, Dependabot security updates, and private vulnerability reporting are enabled.
+The public `v0.1.1` release was published from the green CI commit.
 
 Open-source release preparation started:
 

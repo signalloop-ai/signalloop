@@ -5,6 +5,35 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-07-16 — Publish v0.1.1 and enable repository security controls
+
+**Symptom:** The first GitHub Actions runs failed before public release. API and worker jobs could
+not resolve the nonexistent floating `astral-sh/setup-uv@v8` tag, while the web production build
+prerendered `/admin` without a Clerk publishable key and therefore without `ClerkProvider`.
+
+**Root cause:** `setup-uv` publishes the `v8.3.2` tag but no floating `v8` ref. Local web builds
+inherited Clerk configuration that was not present on a clean GitHub-hosted runner.
+
+**Files changed:** `.github/workflows/ci.yml` pins `setup-uv` to commit
+`11f9893b081a58869d3b5fccaea48c9e9e46f990` (`v8.3.2`) and supplies a structurally valid,
+non-production Clerk publishable key only to the CI build step. `CURRENT_STATE.md` and
+`docs/release/open-source-release-plan.md` record the completed release.
+
+**Validation:**
+- Local CI YAML parse and web production build passed.
+- GitHub Actions run `29484828469` passed API tests, worker tests, the full migration chain, web
+  typecheck, lint, and production build.
+- Hosted API health returned `{"status":"ok"}` and the employer page returned HTTP 200 immediately
+  before publication.
+- GitHub reports the repository as public with secret scanning, push protection, Dependabot
+  security updates, and private vulnerability reporting enabled.
+- GitHub release `v0.1.1` is published from the green CI commit.
+
+**Follow-up items:** Collaborators with pre-rewrite clones should re-clone or explicitly reset to
+the rewritten history before pushing. Continue normal post-release issue and dependency triage.
+
+---
+
 ## 2026-07-16 — Sanitize published Git history before public release
 
 **Symptom:** The current release tree was sanitized, but manual review found personal Gmail
@@ -28,8 +57,7 @@ identical. A complete verified pre-rewrite bundle is stored at
 - Live GitHub refs matched the verified rewritten `main`, `phase2`, and `v0.1.0` objects after
   push.
 
-**Follow-up items:** Rotate/revoke the Render CLI repair credential and complete one final
-Clerk-authenticated hosted employer report/guided-role review before changing visibility.
+**Follow-up items:** Completed later on 2026-07-16; see the public-release entry above.
 
 ---
 
