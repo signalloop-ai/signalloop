@@ -5,6 +5,27 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-07-16 — Fix GitHub README inline demo playback
+
+**Symptom:** GitHub stripped the README's HTML `<video>` element, leaving an empty paragraph
+instead of an inline demo player.
+
+**Root cause:** GitHub's README renderer does not preserve repository-relative HTML video embeds.
+GitHub-hosted user-attachment URLs are rendered using its native inline media player.
+
+**Files changed:**
+- `README.md` — replaces the stripped HTML element with the GitHub user-attachment URL and keeps
+  the repository MP4 as a direct fallback.
+- `CURRENT_STATE.md` — records the GitHub-native playback approach.
+- `docs/development/changes.md` — records this release-polish fix.
+
+**Validation:** Uploaded `docs/assets/demo/signalloop-demo.mp4` through the GitHub README editor;
+the final README rendering was verified on GitHub after push.
+
+**Follow-up items:** None.
+
+---
+
 ## 2026-07-14 — Add public demo video and README release metadata
 
 **Symptom:** The GitHub README did not yet surface the final end-to-end demo video, and

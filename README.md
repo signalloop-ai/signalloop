@@ -16,9 +16,9 @@ Watch the end-to-end SignalLoop workflow:
 3. Candidate assessment in a Monaco workspace with a constrained AI collaborator.
 4. Employer evidence-report review with score, integrity signals, and recommendation.
 
-<video src="docs/assets/demo/signalloop-demo.mp4" controls width="100%"></video>
+https://github.com/user-attachments/assets/af7447b7-1725-4af2-add4-6d0c082c331b
 
-If GitHub does not render the inline player in your view, use the direct file link:
+If the inline player is unavailable in your view, use the repository file:
 [Watch or download the demo video](docs/assets/demo/signalloop-demo.mp4).
 
 ## Status

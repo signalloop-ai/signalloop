@@ -32,6 +32,8 @@ Open-source release preparation started:
 - contribution and security guidance,
 - release checklist under `docs/release/open-source-release-plan.md`,
 - README demo section with the final end-to-end demo video under `docs/assets/demo/`,
+- GitHub-native inline README playback through a user-attachment URL, with the repository MP4
+  retained as the download fallback,
 - GitHub organization transfer to `signalloop-ai/signalloop`,
 - Render API service repaired after repo transfer so it uses Python runtime instead of Docker,
 - internally authored question-bank source metadata now uses `Apache-2.0` instead of
