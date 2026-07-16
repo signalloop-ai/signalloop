@@ -119,7 +119,7 @@ If `webcam_consent = false` or `null`, the thumbnail strip is replaced with
 ## Acceptance criteria
 
 - Consent screen shows before workspace loads; choice is persisted.
-- Snapshots upload to `s3://SIGNALLOOP_RUN_BUCKET/snapshots/{attempt_id}/`.
+- Snapshots upload to `s3://<SIGNALLOOP_RUN_BUCKET>/snapshots/{attempt_id}/`.
 - At least one periodic snapshot per 5-minute window appears in S3.
 - Submission snapshot captured immediately before submit call.
 - Employer report shows thumbnail strip for consented attempts.

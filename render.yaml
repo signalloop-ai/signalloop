@@ -23,11 +23,11 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
-        value: gpt-5
+        value: gpt-4o
       - key: CLERK_SECRET_KEY
         sync: false
       - key: EXECUTION_BACKEND
-        value: ecs_fargate
+        value: direct
       - key: EXECUTION_WORKER_URL
         sync: false
       - key: ASSESSMENT_RUNTIME_IMAGE
@@ -36,30 +36,6 @@ services:
         value: "90"
       - key: WORKER_REQUEST_RETRIES
         value: "1"
-      - key: AWS_REGION
-        value: ap-south-1
-      - key: AWS_ACCESS_KEY_ID
-        sync: false
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false
-      - key: AWS_ECS_CLUSTER
-        value: signalloop
-      - key: AWS_ECS_RUNNER_TASK_DEFINITION
-        value: signalloop-assessment-runner
-      - key: AWS_ECS_RUNNER_CONTAINER
-        value: runner
-      - key: AWS_ECS_SUBNET_IDS
-        value: subnet-REPLACE_ME,subnet-REPLACE_ME,subnet-REPLACE_ME
-      - key: AWS_ECS_SECURITY_GROUP_IDS
-        value: sg-REPLACE_ME
-      - key: AWS_ECS_ASSIGN_PUBLIC_IP
-        value: ENABLED
-      - key: AWS_ECS_WAITER_DELAY_SECONDS
-        value: "6"
-      - key: AWS_ECS_WAITER_MAX_ATTEMPTS
-        value: "20"
-      - key: SIGNALLOOP_RUN_BUCKET
-        value: signalloop-runner-payloads
       - key: RATE_LIMIT_ENABLED
         value: "true"
       - key: RATE_LIMIT_PER_MINUTE

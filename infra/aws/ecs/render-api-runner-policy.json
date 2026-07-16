@@ -10,9 +10,9 @@
         "ecs:StopTask"
       ],
       "Resource": [
-        "arn:aws:ecs:ap-south-1:ACCOUNT_ID:cluster/signalloop",
-        "arn:aws:ecs:ap-south-1:ACCOUNT_ID:task-definition/signalloop-assessment-runner:*",
-        "arn:aws:ecs:ap-south-1:ACCOUNT_ID:task/signalloop/*"
+        "arn:aws:ecs:REGION:ACCOUNT_ID:cluster/signalloop",
+        "arn:aws:ecs:REGION:ACCOUNT_ID:task-definition/signalloop-assessment-runner:*",
+        "arn:aws:ecs:REGION:ACCOUNT_ID:task/signalloop/*"
       ]
     },
     {

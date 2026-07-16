@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: ${{ matrix.component }} tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [api, worker]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/${{ matrix.component }}/uv.lock
+
+      - name: Install dependencies
+        working-directory: apps/${{ matrix.component }}
+        run: uv sync --frozen
+
+      - name: Run tests
+        working-directory: apps/${{ matrix.component }}
+        run: uv run pytest
+
+      - name: Validate migration chain
+        if: matrix.component == 'api'
+        working-directory: apps/api
+        env:
+          DATABASE_URL: sqlite:///${{ runner.temp }}/signalloop_migration_check.db
+        run: uv run alembic upgrade head
+
+  web:
+    name: web checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: apps/web
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: apps/web
+        run: npm run lint
+
+      - name: Build
+        working-directory: apps/web
+        run: npm run build

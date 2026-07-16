@@ -8,7 +8,8 @@ This document covers the Phase 11 pilot deployment shape:
 - Supabase provides Postgres.
 - Clerk provides employer login.
 - Local Docker remains the development execution worker.
-- Production execution is planned for AWS ECS/Fargate per-run tasks and is not implemented in Phase 11.
+- The hosted pilot uses `EXECUTION_BACKEND=direct`. An ECS/Fargate provider exists for isolated
+  per-run execution, but operators must provision and configure their own AWS resources.
 
 Render is not used for the execution worker because the worker architecture must not depend on Docker-in-Docker or a host Docker socket in a managed web-service container.
 
@@ -108,13 +109,13 @@ DATABASE_URL=postgresql://...
 PUBLIC_BASE_URL=https://YOUR-WEB-SERVICE.onrender.com
 CORS_ORIGINS=https://YOUR-WEB-SERVICE.onrender.com
 OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-5
+OPENAI_MODEL=gpt-4o
 CLERK_SECRET_KEY=...
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...
 CLERK_JWT_ISSUER=https://YOUR-CLERK-DOMAIN
 CLERK_JWKS_URL=https://YOUR-CLERK-DOMAIN/.well-known/jwks.json
-EXECUTION_BACKEND=http_worker
-EXECUTION_WORKER_URL=https://YOUR-EXECUTION-RUNTIME
+EXECUTION_BACKEND=direct
+EXECUTION_WORKER_URL=
 ASSESSMENT_RUNTIME_IMAGE=signalloop-python-assessment:3.11
 WORKER_REQUEST_TIMEOUT_SECONDS=90
 WORKER_REQUEST_RETRIES=1
@@ -122,11 +123,11 @@ RATE_LIMIT_ENABLED=true
 RATE_LIMIT_PER_MINUTE=120
 ```
 
-For a controlled hosted smoke before AWS resources are ready, keep
-`EXECUTION_BACKEND=http_worker` and point `EXECUTION_WORKER_URL` to a trusted staging
-worker. Do not expose a raw worker as the long-term production candidate execution path.
-For production execution, set `EXECUTION_BACKEND=ecs_fargate` and use the ECS/Fargate
-runner path described in `docs/deployment/aws-ecs-fargate-execution.md`.
+Use `EXECUTION_BACKEND=direct` only for a controlled pilot; it runs untrusted candidate code in
+the API service process and is not a production isolation boundary. For production execution,
+set `EXECUTION_BACKEND=ecs_fargate` and configure the per-run runner path described in
+`docs/deployment/aws-ecs-fargate-execution.md`. `http_worker` remains available for trusted local
+or staging environments with a separately managed worker.
 
 ## Render Web Service
 

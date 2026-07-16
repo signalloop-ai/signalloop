@@ -5,6 +5,54 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-07-16 — Public-release candidate audit and infrastructure sanitization
+
+**Symptom:** The repository had a clean application test baseline, but public-release artifacts
+still contained environment-specific AWS account/network identifiers, conflicting descriptions of
+the current hosted execution backend, stale validation counts, and no GitHub Actions CI. The full
+Playwright release run also exposed report-test timeouts while Clerk's development bundle was
+bootstrapping.
+
+**Root cause:** Deployment files mixed reusable templates with values rendered for the private
+pilot environment. Documentation recorded several historical execution configurations without
+clearly distinguishing the current `direct` pilot path from the optional ECS/Fargate isolation
+provider. The `gpt-4o` template correction aligns examples with the already selected pilot model;
+it does not change the live service configuration. Playwright's five-second assertion window no
+longer covered the current cold Clerk development bootstrap.
+
+**Files changed:**
+- Public metadata and guidance: `README.md`, `CITATION.cff`, `SECURITY.md`, `CURRENT_STATE.md`,
+  `docs/release/open-source-release-plan.md`, `docs/development/testing.md`,
+  `docs/development/known-limitations.md`.
+- Deployment templates and docs: `.env.local.example`, `.env.render-supabase.example`,
+  `render.yaml`, `.gitignore`, `docs/architecture/technical-product-architecture-spec.md`,
+  `docs/deployment/aws-ecs-fargate-execution.md`,
+  `docs/deployment/render-supabase-clerk.md`, `infra/aws/ecs/*.json`.
+- Validation/release automation: `.github/workflows/ci.yml`,
+  `apps/web/playwright.config.ts`.
+- Publication assets: `docs/marketing/constrain-adapt-evaluate-blog.md`,
+  `docs/assets/blog/signalloop-three-layer-architecture.svg`,
+  `docs/assets/blog/signalloop-three-layer-architecture.png`.
+
+**Validation:**
+- Gitleaks 8.30.1: 90 commits scanned, no secret leaks found. Manual review separately found
+  non-secret personal/infrastructure identifiers in older commits, so history rewriting remains a
+  release gate.
+- `cd apps/api && uv run pytest` -> 297 passed, 51 skipped.
+- `cd apps/worker && uv run pytest` -> 23 passed.
+- Alembic SQLite migration chain -> passed through `0012_concept_question_types`.
+- Web typecheck -> passed; lint -> passed with four known warnings; build -> passed.
+- Affected employer/proctoring report Playwright tests -> 15 passed after timeout stabilization.
+- Hosted API health -> `{"status":"ok"}`; hosted employer page -> HTTP 200.
+- Publication PNG -> visually inspected at 2880 x 1640; layout and text are clean.
+
+**Follow-up items:** Approve and coordinate a history rewrite/force-push (or explicitly accept the
+historical disclosure), rotate/revoke the Render CLI repair credential, complete one final
+Clerk-authenticated hosted employer report/guided-role review in the Codex desktop app, then change
+GitHub visibility, enable native security features, and publish the `v0.1.1` release.
+
+---
+
 ## 2026-07-16 — Fix GitHub README inline demo playback
 
 **Symptom:** GitHub stripped the README's HTML `<video>` element, leaving an empty paragraph
@@ -1825,7 +1873,7 @@ be completed before broader external pilot usage.
 1. Production execution is blocked by AWS IAM.
    - Public test execution returned `AccessDenied` on `s3:PutObject`.
    - The Render API IAM user `signalloop-render-api` cannot write run payloads to
-     `s3://SIGNALLOOP_RUN_BUCKET/runs/...`.
+     `s3://<SIGNALLOOP_RUN_BUCKET>/runs/...`.
    - ECS did not start because the API failed before `RunTask`.
 2. Hosted final submission can leave an attempt submitted without a hidden test run.
    - The UI submit request timed out while waiting for the hidden evaluation status.
@@ -1855,7 +1903,7 @@ be completed before broader external pilot usage.
 - This means the API can write the input payload and reach the wait/read stage, but the
   runner task did not produce the expected output object.
 - Next check CloudWatch logs for `/ecs/signalloop-assessment-runner` and verify the ECS
-  task role can read and write `arn:aws:s3:::SIGNALLOOP_RUN_BUCKET/runs/*`.
+  task role can read and write `arn:aws:s3:::<SIGNALLOOP_RUN_BUCKET>/runs/*`.
 
 **Update after linux/amd64 runner image fix:**
 

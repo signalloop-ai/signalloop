@@ -12,7 +12,7 @@ uv run pytest
 Expected current result:
 
 ```text
-76 passed, 11 skipped
+297 passed, 51 skipped
 ```
 
 Run the Alembic migration chain against a disposable SQLite database:
@@ -22,7 +22,7 @@ cd apps/api
 DATABASE_URL=sqlite:////tmp/signalloop_migration_check.db uv run alembic upgrade head
 ```
 
-The migration chain should apply through `0005_add_evaluator_feedback_mode`.
+The migration chain should apply through `0012_concept_question_types`.
 
 ## Worker
 
@@ -34,7 +34,7 @@ uv run pytest
 Expected current result:
 
 ```text
-22 passed
+23 passed
 ```
 
 The worker tests validate path filtering, public and hidden test endpoints, structured results, and configurable CORS origins.
@@ -59,7 +59,7 @@ PLAYWRIGHT_SKIP_WEBSERVER=1 npm run test:e2e -- --workers=1
 Expected current Playwright result:
 
 ```text
-17 passed, 2 skipped
+35 passed, 2 skipped
 ```
 
 The skipped tests are live-service tests. They require real local services and invite tokens:
@@ -85,7 +85,7 @@ RUN_LIVE_AI_TESTS=1 uv run pytest tests/test_live_ai_policy.py -q
 Expected latest live result:
 
 ```text
-8 passed
+48 passed
 ```
 
 Real Postgres schema health checks are opt-in:
@@ -140,4 +140,15 @@ dependencies and will make public/hidden runs fail before tests are collected.
 
 ## Hosted Smoke
 
-Render/Supabase/Clerk hosted smoke is complete. End-to-end validation (attempt 8, 2026-06-18) confirmed: public test execution via ECS/Fargate, final submission, hidden evaluation, report generation, and employer report rendering all worked with no browser console errors against the Supabase-backed hosted stack. Use `docs/deployment/render-supabase-clerk.md` for deployment reference.
+Render/Supabase/Clerk hosted smoke has covered both execution configurations used during the
+pilot:
+
+- Attempt 8 on 2026-06-18 confirmed public execution through ECS/Fargate, final submission,
+  hidden evaluation, report generation, and employer report rendering.
+- Attempt 34 on 2026-07-13 confirmed the current `direct` pilot path after the GitHub organization
+  transfer and Render runtime repair: workspace load, public tests, AI policy redirect, final
+  submission, hidden evaluation status, and persisted webcam decline.
+
+Before changing repository visibility, perform one final Clerk-authenticated employer report and
+guided-role review from a browser-capable session. Use
+`docs/deployment/render-supabase-clerk.md` for deployment reference.

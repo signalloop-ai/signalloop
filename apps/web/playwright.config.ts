@@ -7,7 +7,9 @@ export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 30_000,
   expect: {
-    timeout: 5_000,
+    // Clerk's development bootstrap can take several seconds before mocked employer
+    // routes become active, especially when its browser bundle is cold.
+    timeout: 15_000,
   },
   use: {
     baseURL,

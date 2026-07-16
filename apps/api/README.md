@@ -52,7 +52,7 @@ Set these environment variables to use OpenAI:
 
 ```sh
 OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-5
+OPENAI_MODEL=gpt-4o
 ```
 
 ## Phase 8 final submission endpoint

@@ -92,7 +92,8 @@ submission review. Shows:
 
 ## Deployment notes
 
-- S3 bucket: same bucket used by the ECS runner (`signalloop-runner-payloads`), new prefix `snapshots/`.
+- S3 bucket: the operator-configured ECS runner bucket (`SIGNALLOOP_RUN_BUCKET`), using the
+  `snapshots/` prefix.
 - Render already has `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, and `S3_BUCKET`
   environment variables set. No new infrastructure needed.
 - `EXECUTION_BACKEND=direct` (current Render config) does not affect snapshot upload — presigned

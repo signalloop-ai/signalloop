@@ -605,7 +605,7 @@ This is pilot-only; switch to `ecs_fargate` for production to restore isolation.
 - Employer auth: Clerk.
 - Local execution: Docker worker (`http_worker` backend) or `direct`.
 - Hosted candidate execution: `direct` (pilot); `ecs_fargate` (production path).
-- File storage: AWS S3 (`signalloop-runner-payloads` bucket).
+- File storage: an operator-configured AWS S3 bucket (`SIGNALLOOP_RUN_BUCKET`).
   - `runs/` prefix: ECS runner test payloads and outputs.
   - `snapshots/` prefix: Phase 3 webcam snapshots.
 - Backend switches via `EXECUTION_BACKEND` env var (`apps/api/signalloop_api/execution.py`).

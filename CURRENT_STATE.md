@@ -24,6 +24,29 @@ full design history, and `docs/prompts/ai-collaborator-policy.md` for the curren
 
 **Active workstream:** project closeout and open-source release preparation.
 
+The 2026-07-16 public-release candidate audit is complete locally:
+
+- Gitleaks 8.30.1 scanned the full 90-commit history with no leaks found.
+- The current tree contains no tracked `.env`, personal email address, live invite token, or
+  environment-rendered AWS task definition.
+- AWS account, subnet, security-group, bucket, and role values were replaced with operator
+  placeholders in public deployment templates.
+- `rdhoot` is an accepted `signalloop-ai` organization member with repository admin access.
+- GitHub Actions CI now covers API/worker tests, the migration chain, and web
+  typecheck/lint/build.
+- The release-facing deployment docs now consistently state that the hosted pilot uses
+  `EXECUTION_BACKEND=direct`; ECS/Fargate is the operator-configured production isolation path.
+- Hosted reachability was rechecked: API health returned `{"status":"ok"}` and the employer page
+  returned HTTP 200.
+
+Gitleaks found no secret material, but manual history review found sanitized personal account
+identifiers, a localhost invite token of unknown status, and environment-specific AWS identifiers
+in older commits. Remaining external gates before changing visibility are an approved history
+rewrite/force-push (or explicit acceptance of that disclosure), rotating/revoking the Render CLI
+repair credential, and completing one final Clerk-authenticated employer report/guided-role review
+from a browser-capable Codex app session. The VS Code extension cannot provide Codex Browser
+control.
+
 Open-source release preparation started:
 
 - repository-level Apache-2.0 license file,

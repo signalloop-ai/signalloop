@@ -1,6 +1,6 @@
 # Open-Source Release Plan
 
-Status: active release-prep checklist.
+Status: release candidate; three external gates remain before visibility change.
 
 ## Release Boundary
 
@@ -36,7 +36,7 @@ GitHub setup:
 
 1. GitHub organization selected: `signalloop-ai`.
 2. Repository transferred to `https://github.com/signalloop-ai/signalloop`.
-3. Keep the repository private until cleanup and hosted smoke testing are complete.
+3. Keep the repository private until the checklist below is complete.
 4. Add both original collaborators as owners or maintainers.
 5. Keep `AUTHORS.md` and `CITATION.cff` in the repository.
 6. Publish blog posts with both collaborators credited.
@@ -46,23 +46,49 @@ repository started in a personal account.
 
 ## Before Making The Repo Public
 
-- Confirm `AUTHORS.md` and `CITATION.cff` still match both authors' preferred public names.
-- Confirm `CITATION.cff` still uses the final organization repository URL:
+- [x] Confirm `AUTHORS.md` and `CITATION.cff` match the public names already used in the README
+  and project metadata.
+- [x] Confirm `CITATION.cff` uses the final organization repository URL:
   `https://github.com/signalloop-ai/signalloop`.
-- Confirm Ritesh Dhoot (`rdhoot`) has accepted the org/repo invite and has the intended access
-  level.
-- Revoke or rotate the Render CLI token used during the Render runtime repair.
-- Run a secret scan across git history and the current tree.
-- Remove or rewrite any generated artifacts, local pitch-deck outputs, personal email addresses,
-  invite tokens, and screenshots that should not be public.
-- Confirm `.env` is ignored and not tracked.
-- Confirm demo docs do not include private Render, Clerk, Supabase, or email
-  details.
-- Run the local validation commands listed in `README.md`.
-- Run a hosted smoke test after the GitHub org transfer and Render source/runtime repair.
-  Candidate flow smoke passed on 2026-07-13 with production attempt `34`; employer report
-  generation and guided role-matching demo checks still need final release review.
-- Tag an initial release such as `v0.1.0`.
+- [x] Confirm Ritesh Dhoot (`rdhoot`) has accepted the org/repo invite and has the intended access
+  level. Verified 2026-07-16: organization member and repository admin; no pending invitation.
+- [ ] Revoke or rotate the Render CLI token used during the Render runtime repair. This requires
+  the Render account/dashboard login and must be completed by an account owner.
+- [x] Run a secret scan across git history and the current tree. Gitleaks 8.30.1 scanned 90 commits
+  with no leaks; the current-tree scan is also clean.
+- [x] Remove generated artifacts, personal email addresses, and live invite values from the
+  current tree. The remaining localhost invite in the demo runbook is now an explicit placeholder.
+- [ ] Rewrite the published git history to remove the previously sanitized personal Gmail
+  addresses, the old localhost invite token whose status is unknown, and private-pilot AWS
+  account/network identifiers; alternatively, explicitly accept that disclosure before changing
+  visibility. A rewrite requires a coordinated force-push and replacement release tag.
+- [x] Confirm `.env` is ignored and not tracked.
+- [x] Confirm release-facing docs contain no private Render, Clerk, Supabase, email, or
+  environment-specific AWS account/network identifiers.
+- [x] Run the local validation commands listed in `README.md`.
+- [x] Run hosted candidate smoke after the GitHub organization transfer and Render runtime
+  repair. Attempt 34 passed on 2026-07-13; API/web reachability was reconfirmed 2026-07-16.
+- [x] Review employer report generation and guided role matching through the complete local
+  Playwright release suite.
+- [ ] Perform one final Clerk-authenticated hosted employer report and guided-role review from the
+  Codex desktop app, which has Browser control. The VS Code extension does not.
+- [x] Preserve the existing signed `v0.1.0` pilot tag. Use `v0.1.1` for the public release
+  candidate rather than moving a published tag if history is preserved. If history is rewritten,
+  replace the old private pilot tag only as part of the coordinated force-push.
+- [ ] After the repository becomes public, enable GitHub private vulnerability reporting and
+  secret scanning, then publish the `v0.1.1` GitHub release.
+
+## 2026-07-16 Release-Candidate Validation
+
+- API: 297 passed, 51 skipped.
+- Worker: 23 passed.
+- Alembic: complete SQLite migration chain through `0012_concept_question_types`.
+- Web typecheck: passed.
+- Web lint: passed with four known warnings and no errors.
+- Web production build: passed.
+- Playwright: 35 passed, 2 credential-dependent live tests skipped.
+- Hosted reachability: API health returned `{"status":"ok"}`; employer page returned HTTP 200.
+- GitHub CI workflow added for API/worker tests, migrations, and web typecheck/lint/build.
 
 ## Cleanup Decisions
 

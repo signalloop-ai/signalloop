@@ -4,7 +4,7 @@ SignalLoop is an AI-native candidate evaluator for software engineering hiring.
 
 The MVP evaluates whether candidates can solve a realistic backend engineering task while using a constrained AI collaborator. It captures evidence of framing, AI usage, verification behavior, design judgment, and final ownership, then generates an Engineering Evidence Report for employer review.
 
-SignalLoop is open-sourced under Apache-2.0. Assessment and question-bank content may carry
+SignalLoop is licensed under Apache-2.0. Assessment and question-bank content may carry
 additional source-license and attribution metadata; see `THIRD_PARTY_NOTICES.md`.
 
 ## Demo
@@ -29,9 +29,9 @@ Post-MVP Phases 2-5 are implemented. Phase 6A question-bank governance is comple
 experimental foundation. The current workstream is project closeout and open-source release
 preparation; question-level adaptive assessment composition is deferred future work.
 
-The repository has been transferred to the joint GitHub organization
-`signalloop-ai/signalloop` and should remain private until hosted smoke testing, secret/history
-cleanup, and final demo/README review are complete.
+The repository is maintained under the joint GitHub organization
+`signalloop-ai/signalloop`. The release candidate has completed hosted candidate smoke testing,
+full-history secret scanning, deployment-template sanitization, and final demo/README review.
 
 Current capabilities:
 
@@ -43,7 +43,8 @@ Current capabilities:
 - Deterministic Engineering Evidence Report generation.
 - Employer portal with Clerk login.
 - Pilot hardening: audit events, validation/fallback error responses, retry-bounded hidden worker calls, basic rate limiting, and deployment env templates.
-- Hosted Render/Supabase/Clerk deployment with AWS ECS/Fargate public/hidden execution validated for pilot use.
+- Hosted Render/Supabase/Clerk pilot using direct execution, with an optional AWS ECS/Fargate
+  per-run execution provider for operators who configure isolated production infrastructure.
 - Guided role matching from role/JD requirements to the closest registered Standard or Advanced
   FastAPI assessment, with explicit unsupported-coverage results.
 - Super-admin question-bank provenance, draft import/generation, review, and approval workflows.

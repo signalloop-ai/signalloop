@@ -5,12 +5,13 @@ implementation, not a hardened production SaaS.
 
 ## Reporting Security Issues
 
-Before the public release, report security issues privately to the maintainers
-listed in `AUTHORS.md`.
+Do not open a public issue for a suspected vulnerability. Use GitHub's private
+vulnerability reporting flow:
 
-After the repository is moved to a GitHub organization, enable private
-vulnerability reporting and update this file with the organization security
-contact.
+https://github.com/signalloop-ai/signalloop/security/advisories/new
+
+If that flow is unavailable, contact the maintainers listed in `AUTHORS.md`
+through their GitHub profiles without including exploit details in a public thread.
 
 ## Important Boundaries
 

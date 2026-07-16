@@ -51,5 +51,8 @@ htmlcov/
 .opencode
 outputs/
 
+# Environment-rendered infrastructure files
+infra/aws/ecs/task-definition.runner.json
+
 # Demo video voiceover artifacts (generated)
 docs/marketing/voiceover/
