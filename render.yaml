@@ -25,7 +25,7 @@ services:
       - key: OPENAI_MODEL
         value: gpt-4o
       - key: REPORT_ADVISORY_ENABLED
-        value: false
+        value: "true"
       - key: REPORT_ADVISORY_MODEL
         value: gpt-5.6
       - key: REPORT_ADVISORY_TIMEOUT_SECONDS
