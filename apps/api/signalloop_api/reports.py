@@ -23,6 +23,11 @@ from signalloop_api.config import settings
 from signalloop_api.database import get_session
 from signalloop_api.integrity_config import INTEGRITY_THRESHOLDS
 from signalloop_api.models import AIInteraction, AssessmentAttempt, CodeSnapshot, Employer, EvidenceReport, ProctoringEvent, TestRun
+from signalloop_api.report_advisory import (
+    ReportAdvisoryProvider,
+    generate_report_advisory,
+    get_report_advisory_provider,
+)
 from signalloop_api.schemas import EvidenceReportResponse
 
 logger = logging.getLogger(__name__)
@@ -756,10 +761,7 @@ def build_favo(
 def llm_assisted_review_status() -> dict:
     return {
         "status": "not_run",
-        "reason": (
-            "LLM-assisted report review is intentionally disabled in the local deterministic test path. "
-            "Enable only after adding a bounded report-review prompt and ADR-approved safety boundary."
-        ),
+        "reason": "GPT-5.6 report advisory has not been requested for this report.",
         "provider_configured": bool(settings.openai_api_key),
     }
 
@@ -1193,6 +1195,7 @@ def generate_evidence_report(
     session: Session = Depends(get_session),
     current_employer: Employer = Depends(get_current_employer),
     verification_runner: CandidateVerificationRunner = Depends(get_candidate_verification_runner),
+    advisory_provider: ReportAdvisoryProvider = Depends(get_report_advisory_provider),
 ) -> EvidenceReportResponse:
     attempt, snapshots, test_runs, ai_interactions, proctoring_events = load_report_inputs(session, attempt_id)
     ensure_employer_owns_attempt(attempt, current_employer)
@@ -1206,6 +1209,7 @@ def generate_evidence_report(
         report = build_report(attempt, snapshots, test_runs, ai_interactions, proctoring_events)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    report["llm_assisted_review"] = generate_report_advisory(report, advisory_provider)
 
     recommendation = report["overall_recommendation"]
     score_total = report["scores"]["total"]

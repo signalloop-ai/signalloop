@@ -22,7 +22,15 @@ full design history, and `docs/prompts/ai-collaborator-policy.md` for the curren
 
 ## Current phase
 
-**Active workstream:** public-release closeout and post-release monitoring.
+**Active workstream:** bounded GPT-5.6 employer report advisory.
+
+The 2026-07-17 enhancement is implemented locally. Evidence-report generation can optionally call
+GPT-5.6 through a separate provider using only an explicit allowlist of process evidence. The
+advisory supplies a summary, evidence gaps, and interview focus; it cannot change scores, FAVO,
+integrity labels, follow-up generation, or recommendations. Hidden tests, seeded issue areas,
+scoring internals, submitted code, evaluator notes, reference solutions, and proctoring artifacts
+are excluded. The feature is disabled by default and fails open. See
+`docs/enhancements/build-week-gpt56-advisory.md` and ADR 0009.
 
 The 2026-07-16 public-release candidate audit is complete locally:
 
@@ -571,14 +579,13 @@ UX polish close-out).
 
 ## What does not exist yet
 
-- External LLM-assisted report review is not invoked yet; reports include
-  `llm_assisted_review.status=not_run` until a bounded prompt and safety boundary are
-  added.
+- The bounded GPT-5.6 report advisory is implemented locally but is not yet enabled or validated
+  on the hosted pilot.
 
 ## Next task
 
-**All phases complete and merged to `main`.** No active build task. Candidate-facing,
-employer, and admin flows are working on the hosted pilot.
+**Complete hosted validation of the bounded GPT-5.6 report advisory.** Candidate-facing, employer,
+and admin flows otherwise remain working on the hosted pilot.
 
 Optional follow-ups (not blocking the pilot):
 - Production execution isolation: move hosted execution from `direct` to `ecs_fargate`

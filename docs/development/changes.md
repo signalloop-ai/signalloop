@@ -5,6 +5,43 @@ post-MVP validation. Read this before touching the files listed under each entry
 
 ---
 
+## 2026-07-17 — Add bounded GPT-5.6 employer report advisory
+
+**Symptom:** Evidence reports exposed an `llm_assisted_review` placeholder but did not provide the
+bounded advisory synthesis planned for ambiguous process evidence. Sending the complete report to
+an external model would have crossed the evaluator-artifact safety boundary.
+
+**Root cause:** No approved report-review prompt, provider, input allowlist, fail-open behavior, or
+architecture decision existed.
+
+**Files changed:**
+- `apps/api/signalloop_api/report_advisory.py` — added the separate Responses API provider,
+  structured advisory schema, safe evidence allowlist, and fail-open behavior.
+- `apps/api/signalloop_api/config.py` and environment/deployment templates — added
+  disabled-by-default advisory configuration.
+- `apps/api/signalloop_api/reports.py` — invokes the advisory after deterministic report creation.
+- `apps/web/src/app/employer/types.ts`, `apps/web/src/app/_components/EvidenceReportView.tsx` —
+  render the completed advisory as explicitly non-scoring.
+- `apps/api/tests/test_evidence_report.py` — covers persistence, protected-section exclusion, and
+  provider failure behavior.
+- ADR 0009 and related state, architecture, report, enhancement, and README documentation — record
+  the approved boundary and usage.
+
+**Validation:**
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest tests/test_evidence_report.py -q` — 13 passed.
+- `cd apps/web && npm run typecheck` — passed.
+- `cd apps/api && UV_CACHE_DIR=.uv-cache uv run pytest -q` — 300 passed, 51 skipped.
+- `cd apps/web && npm run lint` — passed with four existing warnings and no errors.
+- `cd apps/web && npm run build` — passed.
+- Synthetic live Responses API smoke — `gpt-5.6` returned schema-valid advisory output with
+  `score_impact=none`, three evidence gaps, and three interview focus areas.
+- Hosted Clerk smoke — dedicated email/password judge account signed in without Google or an OTP,
+  opened an isolated employer workspace, and was denied super-admin routing.
+
+**Follow-up items:** Enable the feature in the hosted API environment, generate one real report,
+confirm the rendered advisory and unchanged deterministic score/recommendation, then capture the
+final demo cut.
+
 ## 2026-07-16 — Publish v0.1.1 and enable repository security controls
 
 **Symptom:** The first GitHub Actions runs failed before public release. API and worker jobs could

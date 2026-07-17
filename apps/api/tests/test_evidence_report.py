@@ -11,6 +11,11 @@ from signalloop_api.auth import get_current_employer
 from signalloop_api.database import get_session
 from signalloop_api.main import app
 from signalloop_api.models import Employer, EvidenceReport
+from signalloop_api.report_advisory import (
+    build_safe_report_evidence,
+    generate_report_advisory,
+    get_report_advisory_provider,
+)
 from signalloop_api.reports import get_candidate_verification_runner
 from signalloop_api.submissions import get_hidden_test_runner
 
@@ -57,6 +62,30 @@ class FakeCandidateVerificationRunner:
             "stderr": "",
             "duration_ms": 30,
         }
+
+
+class FakeReportAdvisoryProvider:
+    def __init__(self) -> None:
+        self.evidence: dict | None = None
+
+    def review(self, evidence: dict) -> dict:
+        self.evidence = evidence
+        return {
+            "status": "completed",
+            "reason": "Bounded GPT-5.6 advisory generated from allowlisted process evidence.",
+            "provider_configured": True,
+            "model": "gpt-5.6",
+            "summary": "The candidate showed an iterative, test-oriented workflow.",
+            "evidence_gaps": ["The report does not establish production operating experience."],
+            "interview_focus": ["Ask the candidate to explain the verification strategy."],
+            "score_impact": "none",
+        }
+
+
+class FailingReportAdvisoryProvider:
+    def review(self, evidence: dict) -> dict:
+        del evidence
+        raise RuntimeError("provider unavailable")
 
 
 @pytest.fixture()
@@ -164,6 +193,78 @@ def test_generate_evidence_report_persists_required_sections(
         evidence_report = session.scalar(select(EvidenceReport).where(EvidenceReport.attempt_id == attempt_id))
         assert evidence_report is not None
         assert evidence_report.report["metadata"]["attempt_id"] == attempt_id
+
+
+def test_generate_evidence_report_persists_bounded_advisory(client: TestClient) -> None:
+    provider = FakeReportAdvisoryProvider()
+    app.dependency_overrides[get_report_advisory_provider] = lambda: provider
+    attempt_id = create_submitted_attempt(client)
+
+    response = client.post(f"/assessment-attempts/{attempt_id}/evidence-report")
+
+    assert response.status_code == 201
+    advisory = response.json()["report"]["llm_assisted_review"]
+    assert advisory["status"] == "completed"
+    assert advisory["model"] == "gpt-5.6"
+    assert advisory["score_impact"] == "none"
+    assert provider.evidence is not None
+    assert set(provider.evidence) == {
+        "assessment",
+        "timing",
+        "public_verification",
+        "candidate_tests",
+        "ai_collaboration",
+        "favo_labels",
+        "submission_review",
+        "role_context",
+    }
+
+
+def test_safe_report_evidence_excludes_protected_report_sections() -> None:
+    report = {
+        "metadata": {"assessment": {"title": "Assessment", "version": "v1"}, "timing": {}},
+        "public_test_results": {"run_count": 1, "last_run_summary": {"status": "passed"}},
+        "candidate_tests": {},
+        "ai_collaboration": {},
+        "favo": {"verify": {"label": "strong", "evidence": "hidden status failed"}},
+        "submission_review": {},
+        "hidden_test_results": {"secret": "must not leave the report"},
+        "scores": {"total": 99},
+        "rubric_weights": {"private": 100},
+        "overall_recommendation": "strong_advance",
+        "submitted_code": {"files": {"main.py": "secret code"}},
+        "integrity_score": {"label": "high"},
+        "proctoring_signals": {"snapshots": ["private image"]},
+    }
+
+    evidence = build_safe_report_evidence(report)
+    serialized = str(evidence)
+
+    for protected_value in (
+        "must not leave the report",
+        "strong_advance",
+        "secret code",
+        "private image",
+        "hidden status failed",
+    ):
+        assert protected_value not in serialized
+    assert "scores" not in evidence
+    assert "rubric_weights" not in evidence
+    assert "hidden_test_results" not in evidence
+
+
+def test_report_advisory_failure_does_not_block_deterministic_report() -> None:
+    result = generate_report_advisory(
+        {"metadata": {}, "public_test_results": {}},
+        FailingReportAdvisoryProvider(),
+    )
+
+    assert result == {
+        "status": "unavailable",
+        "reason": "The advisory model was unavailable; the deterministic report is complete.",
+        "provider_configured": True,
+        "score_impact": "none",
+    }
 
 
 def test_get_evidence_report_returns_existing_report(client: TestClient) -> None:

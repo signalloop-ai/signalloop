@@ -24,6 +24,12 @@ services:
         sync: false
       - key: OPENAI_MODEL
         value: gpt-4o
+      - key: REPORT_ADVISORY_ENABLED
+        value: false
+      - key: REPORT_ADVISORY_MODEL
+        value: gpt-5.6
+      - key: REPORT_ADVISORY_TIMEOUT_SECONDS
+        value: 30
       - key: CLERK_SECRET_KEY
         sync: false
       - key: EXECUTION_BACKEND

@@ -1,6 +1,6 @@
 # 07 - Reporting And FAVO Updates
 
-Status: completed locally, except external LLM-assisted review execution.
+Status: completed locally; bounded non-scoring GPT-5.6 advisory added 2026-07-17.
 
 ## Goal
 
@@ -124,9 +124,10 @@ Numeric scoring remains deterministic. Reports now include:
 - `feature_design_implementation`,
 - `llm_assisted_review` status.
 
-External LLM-assisted report review is not invoked in the local deterministic path. The
-report includes an explicit `llm_assisted_review.status=not_run` section until a bounded
-review prompt and safety boundary are added and approved.
+An optional GPT-5.6 advisory was added after Phase 2 under ADR 0009. It receives only an explicit
+allowlist of process evidence, produces a short non-scoring synthesis, and cannot alter
+deterministic scoring, FAVO, integrity labels, or recommendations. It remains `not_run` when
+disabled or unconfigured and fails open as `unavailable`.
 
 ## Local Validation
 

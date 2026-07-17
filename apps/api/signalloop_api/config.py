@@ -94,6 +94,11 @@ class Settings:
         self.openai_api_key = getenv("OPENAI_API_KEY")
         self.openai_model = getenv("OPENAI_MODEL", "gpt-4o")
         self.openai_classifier_model = getenv("OPENAI_CLASSIFIER_MODEL", "gpt-4o-mini")
+        self.report_advisory_enabled = parse_bool(getenv("REPORT_ADVISORY_ENABLED"), default=False)
+        self.report_advisory_model = getenv("REPORT_ADVISORY_MODEL", "gpt-5.6")
+        self.report_advisory_timeout_seconds = parse_int(
+            getenv("REPORT_ADVISORY_TIMEOUT_SECONDS"), default=30
+        )
         self.clerk_secret_key = getenv("CLERK_SECRET_KEY")
         self.environment = getenv("SIGNALLOOP_ENV", "local")
         self.clerk_publishable_key = getenv("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY")

@@ -48,12 +48,36 @@ Current capabilities:
 - Guided role matching from role/JD requirements to the closest registered Standard or Advanced
   FastAPI assessment, with explicit unsupported-coverage results.
 - Super-admin question-bank provenance, draft import/generation, review, and approval workflows.
+- Optional bounded GPT-5.6 employer advisory that summarizes allowlisted process evidence without
+  changing deterministic scores, FAVO, integrity labels, or recommendations.
 
 Guided role matching does not assemble new questions. Phase 6A questions are not connected to
 employer blueprint composition, mixed-question candidate delivery, or report scoring.
 
 Future problem: compose comparable role-level assessments from an approved, calibrated question
 bank without resume-driven scored-question selection or unreviewed AI-generated content.
+
+## OpenAI Build Week Extension
+
+SignalLoop was already a working proof of concept before the July 13, 2026 submission window. Work
+completed during Build Week is separated here so judges can distinguish the existing system from
+the new work:
+
+- **Product improvements:** candidate-editor diagnostic fixes, admin readability polish, and the
+  new bounded GPT-5.6 employer-report advisory.
+- **Release and security hardening:** GitHub Actions CI, release validation, full-history Gitleaks
+  scanning, disclosure and deployment-template sanitization, repository security controls, hosted
+  validation, and the public `v0.1.1` release.
+- **Submission evidence:** the narrated end-to-end demo, README presentation, architecture visual,
+  and public YouTube/GitHub media were produced during the window with Codex assistance.
+
+Codex was used throughout implementation, repository inspection, debugging, test execution,
+release/security review, documentation, browser validation, and demo production. The collaborators
+made the product and safety decisions—most importantly, keeping the GPT-5.6 advisory non-scoring
+and preventing evaluator-only material from entering its prompt. GPT-5.6 is used through the
+Responses API to synthesize only an allowlisted evidence payload into a summary, evidence gaps,
+and interview focus. Dated commits and Codex session records provide the submission-period audit
+trail; the bounded feature design is documented in ADR 0009.
 
 ## For Readers
 

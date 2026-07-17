@@ -319,7 +319,7 @@ Sections:
 10. AI collaboration (flagged prompts, paste detection, large paste events)
 11. Unified integrity score (low/medium/high/critical — combines AI signals + proctoring signals)
 12. FAVO interpretation (Frame/Ask/Verify/Own derived from evidence)
-13. LLM-assisted review status (`not_run` until bounded prompt is added)
+13. Optional bounded GPT-5.6 advisory (non-scoring; `not_run` when disabled)
 14. Process evidence (snapshots, test runs)
 15. Proctoring Signals (focus-loss events, fullscreen exits, webcam snapshot strip)
 16. Submission Review
@@ -526,10 +526,17 @@ primarily for debugging latency and deciding where optimization gives the highes
 
 ### LLM-assisted review
 
-Not yet invoked. Reports include `llm_assisted_review.status = "not_run"` until a bounded
-review prompt and ADR-approved safety boundary are added. The LLM reviewer must not receive
-hidden test source, reference solutions, evaluator notes, or scoring internals beyond the
-bounded evidence needed for the review task.
+The optional GPT-5.6 advisory uses a separate provider and an explicit allowlist constructed from
+aggregate public verification, candidate-test counts, AI collaboration counts, FAVO labels,
+structured submission-review text, timing, and role-coverage context. The complete report is never
+sent to the provider. Hidden tests, seeded issue areas, reference solutions, evaluator notes,
+submitted code, scoring/rubric internals, recommendations, integrity details, and proctoring
+artifacts are excluded.
+
+The structured response contains only a short summary, evidence gaps, and interview focus. It is
+non-scoring and cannot alter FAVO, integrity labels, follow-up generation, or recommendations.
+Disabled/unconfigured environments report `status = "not_run"`; provider failures report
+`status = "unavailable"` without blocking deterministic report generation. See ADR 0009.
 
 ### Submission review
 

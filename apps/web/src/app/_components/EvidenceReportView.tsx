@@ -389,6 +389,34 @@ export function EvidenceReportView({ report }: { report: EvidenceReportResponse 
         ) : null}
       </section>
 
+      {r.llm_assisted_review?.status === "completed" ? (
+        <section className="employer-section followup-callout">
+          <SectionTitle
+            title="GPT-5.6 advisory review"
+            subtitle="Non-scoring synthesis from allowlisted process evidence; human review remains required"
+          />
+          <p className="report-copy">{r.llm_assisted_review.summary}</p>
+          <div className="report-grid" style={{ marginTop: 12 }}>
+            <article>
+              <p className="report-label">Evidence gaps</p>
+              {r.llm_assisted_review.evidence_gaps?.length ? (
+                <ul className="report-list">
+                  {r.llm_assisted_review.evidence_gaps.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              ) : <p className="report-copy report-muted">No additional gaps identified.</p>}
+            </article>
+            <article>
+              <p className="report-label">Interview focus</p>
+              {r.llm_assisted_review.interview_focus?.length ? (
+                <ul className="report-list">
+                  {r.llm_assisted_review.interview_focus.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              ) : <p className="report-copy report-muted">No additional focus areas identified.</p>}
+            </article>
+          </div>
+        </section>
+      ) : null}
+
       {r.adaptive_context ? (
         <section className="employer-section">
           <SectionTitle

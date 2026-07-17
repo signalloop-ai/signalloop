@@ -55,6 +55,17 @@ OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-4o
 ```
 
+Optionally enable the non-scoring GPT-5.6 employer report advisory:
+
+```sh
+REPORT_ADVISORY_ENABLED=true
+REPORT_ADVISORY_MODEL=gpt-5.6
+REPORT_ADVISORY_TIMEOUT_SECONDS=30
+```
+
+The advisory uses an explicit process-evidence allowlist and fails open; deterministic report
+generation does not depend on the model call.
+
 ## Phase 8 final submission endpoint
 
 Final submission captures an immutable final code snapshot, final explanation, and decision log. The API then runs evaluator-only hidden tests through the worker and returns only a coarse hidden test status to the candidate.

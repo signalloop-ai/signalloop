@@ -189,6 +189,11 @@ export type EvidenceReportResponse = {
       status: string;
       reason: string;
       provider_configured: boolean;
+      model?: string;
+      summary?: string;
+      evidence_gaps?: string[];
+      interview_focus?: string[];
+      score_impact?: "none";
     };
     adaptive_context?: {
       blueprint_id: number;
