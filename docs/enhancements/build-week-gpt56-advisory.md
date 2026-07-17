@@ -1,7 +1,7 @@
 # Build Week GPT-5.6 Report Advisory
 
-Status: implemented and locally validated; hosted feature deployment and final demo validation
-pending. The restricted Clerk judge account and email/password login were validated on 2026-07-17.
+Status: implemented and validated locally and on the hosted pilot on 2026-07-17. The restricted
+Clerk judge account and email/password login were also validated.
 
 ## Goal
 
@@ -14,7 +14,7 @@ process evidence without changing the deterministic evaluation.
 - Explicit allowlist; the complete report is never sent to the provider.
 - Structured output: summary, evidence gaps, and interview focus.
 - Non-scoring employer-report section.
-- Disabled-by-default configuration and fail-open behavior.
+- Opt-in configuration and fail-open behavior; enabled for the hosted pilot.
 - Focused API safety/persistence tests and web type validation.
 
 ## Out of Scope
@@ -41,5 +41,7 @@ report remains complete and marks the advisory as unavailable.
 - `cd apps/web && npm run typecheck`
 - Synthetic live `gpt-5.6` Responses API call returned schema-valid, non-scoring output.
 - Restricted Clerk judge account completed hosted email/password login and remained employer-only.
-- Generate a submitted-attempt report with the feature enabled and confirm the advisory renders.
-- Confirm the stored score and recommendation are unchanged by advisory availability.
+- Hosted Attempt #40 completed the invite, candidate submission, hidden evaluation, and employer
+  report flow. Regenerating the report with the feature enabled rendered the GPT-5.6 advisory.
+- The advisory was visibly labeled non-scoring and limited to summary, evidence gaps, and interview
+  focus. The deterministic result remained 8/100 with recommendation `do not advance`.

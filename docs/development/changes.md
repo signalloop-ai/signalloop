@@ -37,10 +37,13 @@ architecture decision existed.
   `score_impact=none`, three evidence gaps, and three interview focus areas.
 - Hosted Clerk smoke — dedicated email/password judge account signed in without Google or an OTP,
   opened an isolated employer workspace, and was denied super-admin routing.
+- Hosted end-to-end smoke — Attempt #40 completed invitation, candidate submission, hidden
+  evaluation, deterministic report generation, and employer report rendering.
+- Hosted advisory regeneration — after enabling `REPORT_ADVISORY_ENABLED` in the Render Blueprint,
+  the report rendered the GPT-5.6 summary, evidence gaps, and interview focus with the explicit
+  non-scoring label. The deterministic result remained 8/100 and `do not advance`.
 
-**Follow-up items:** Enable the feature in the hosted API environment, generate one real report,
-confirm the rendered advisory and unchanged deterministic score/recommendation, then capture the
-final demo cut.
+**Follow-up items:** Capture the final demo cut and complete the Devpost submission.
 
 ## 2026-07-16 — Publish v0.1.1 and enable repository security controls
 

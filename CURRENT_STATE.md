@@ -22,14 +22,17 @@ full design history, and `docs/prompts/ai-collaborator-policy.md` for the curren
 
 ## Current phase
 
-**Active workstream:** bounded GPT-5.6 employer report advisory.
+**Completed workstream:** bounded GPT-5.6 employer report advisory.
 
-The 2026-07-17 enhancement is implemented locally. Evidence-report generation can optionally call
+The 2026-07-17 enhancement is implemented and validated locally and on the hosted pilot.
+Evidence-report generation can optionally call
 GPT-5.6 through a separate provider using only an explicit allowlist of process evidence. The
 advisory supplies a summary, evidence gaps, and interview focus; it cannot change scores, FAVO,
 integrity labels, follow-up generation, or recommendations. Hidden tests, seeded issue areas,
 scoring internals, submitted code, evaluator notes, reference solutions, and proctoring artifacts
-are excluded. The feature is disabled by default and fails open. See
+are excluded. The feature is opt-in, enabled on the hosted pilot, and fails open. Hosted Attempt
+40 rendered the non-scoring advisory while retaining its deterministic 8/100 score and
+`do not advance` recommendation. See
 `docs/enhancements/build-week-gpt56-advisory.md` and ADR 0009.
 
 The 2026-07-16 public-release candidate audit is complete locally:
@@ -577,15 +580,16 @@ UX polish close-out).
   `ecs_fargate` path.
 - All work merged to `main`. API suite 261 passed; live AI suite 48 passed; web build + e2e pass.
 
-## What does not exist yet
+## Hosted advisory status
 
-- The bounded GPT-5.6 report advisory is implemented locally but is not yet enabled or validated
-  on the hosted pilot.
+- The bounded GPT-5.6 report advisory is enabled and validated on the hosted pilot.
+- A restricted Clerk email/password judge account is validated for evaluator access and remains
+  isolated from super-admin routes.
 
 ## Next task
 
-**Complete hosted validation of the bounded GPT-5.6 report advisory.** Candidate-facing, employer,
-and admin flows otherwise remain working on the hosted pilot.
+**Complete the Build Week demo cut and Devpost submission.** The bounded advisory and the
+candidate-facing, employer, and restricted judge flows are working on the hosted pilot.
 
 Optional follow-ups (not blocking the pilot):
 - Production execution isolation: move hosted execution from `direct` to `ecs_fargate`
